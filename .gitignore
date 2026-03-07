@@ -1,0 +1,14 @@
+# Lean 4
+build/
+lake-packages/
+lake-manifest.json
+.lake/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+*.swp
+*~
