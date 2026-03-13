@@ -201,4 +201,58 @@ def castBitPreserving32 (x : Int32) : Prop :=
 def castBitPreserving64 (x : Int64) : Prop :=
   x.toUInt64.toBitVec = x.toBitVec
 
+/-! ================================================================ -/
+/-! ## Register-Width Sign Extension                                  -/
+/-! ================================================================ -/
+
+-- In-register sign extension: interpret the low N bits of a wide register
+-- as a signed value and sign-extend to the full register width.
+-- Useful for packed-type loads and bit field signed interpretation.
+
+/-- Sign-extend the low 8 bits of a UInt32 to 32 bits. -/
+@[inline] def UInt32.signExtend8 (x : UInt32) : UInt32 :=
+  let bv := x.toBitVec
+  let low := bv &&& 0xFF#32
+  UInt32.fromBitVec (if low &&& 0x80#32 != 0#32 then low ||| 0xFFFFFF00#32 else low)
+
+/-- Sign-extend the low 16 bits of a UInt32 to 32 bits. -/
+@[inline] def UInt32.signExtend16 (x : UInt32) : UInt32 :=
+  let bv := x.toBitVec
+  let low := bv &&& 0xFFFF#32
+  UInt32.fromBitVec (if low &&& 0x8000#32 != 0#32 then low ||| 0xFFFF0000#32 else low)
+
+/-- Sign-extend the low 8 bits of a UInt64 to 64 bits. -/
+@[inline] def UInt64.signExtend8 (x : UInt64) : UInt64 :=
+  let bv := x.toBitVec
+  let low := bv &&& 0xFF#64
+  UInt64.fromBitVec (if low &&& 0x80#64 != 0#64 then low ||| 0xFFFFFFFFFFFFFF00#64 else low)
+
+/-- Sign-extend the low 16 bits of a UInt64 to 64 bits. -/
+@[inline] def UInt64.signExtend16 (x : UInt64) : UInt64 :=
+  let bv := x.toBitVec
+  let low := bv &&& 0xFFFF#64
+  UInt64.fromBitVec (if low &&& 0x8000#64 != 0#64 then low ||| 0xFFFFFFFFFFFF0000#64 else low)
+
+/-- Sign-extend the low 32 bits of a UInt64 to 64 bits. -/
+@[inline] def UInt64.signExtend32 (x : UInt64) : UInt64 :=
+  let bv := x.toBitVec
+  let low := bv &&& 0xFFFFFFFF#64
+  UInt64.fromBitVec (if low &&& 0x80000000#64 != 0#64 then low ||| 0xFFFFFFFF00000000#64 else low)
+
+/-- Register-width sign extension matches `BitVec.signExtend` on the truncated input. -/
+def signExtend8To32Spec (x : UInt32) : Prop :=
+  x.signExtend8.toBitVec = BitVec.signExtend 32 (x.toBitVec.truncate 8)
+
+def signExtend16To32Spec (x : UInt32) : Prop :=
+  x.signExtend16.toBitVec = BitVec.signExtend 32 (x.toBitVec.truncate 16)
+
+def signExtend8To64Spec (x : UInt64) : Prop :=
+  x.signExtend8.toBitVec = BitVec.signExtend 64 (x.toBitVec.truncate 8)
+
+def signExtend16To64Spec (x : UInt64) : Prop :=
+  x.signExtend16.toBitVec = BitVec.signExtend 64 (x.toBitVec.truncate 16)
+
+def signExtend32To64Spec (x : UInt64) : Prop :=
+  x.signExtend32.toBitVec = BitVec.signExtend 64 (x.toBitVec.truncate 32)
+
 end Radix
