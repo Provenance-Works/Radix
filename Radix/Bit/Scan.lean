@@ -83,6 +83,10 @@ namespace UInt8
 @[inline] def bitReverse (x : UInt8) : UInt8 :=
   fromBitVec (bitReverseLoop x.toBitVec 8 0 (0#8))
 
+/-- Hamming distance: popcount of XOR (FR-002.3). -/
+@[inline] def hammingDistance (x y : UInt8) : UInt8 :=
+  popcount ⟨x.val ^^^ y.val⟩
+
 end UInt8
 
 /-! ================================================================ -/
@@ -102,6 +106,10 @@ namespace UInt16
 
 @[inline] def bitReverse (x : UInt16) : UInt16 :=
   fromBitVec (bitReverseLoop x.toBitVec 16 0 (0#16))
+
+/-- Hamming distance: popcount of XOR (FR-002.3). -/
+@[inline] def hammingDistance (x y : UInt16) : UInt16 :=
+  popcount ⟨x.val ^^^ y.val⟩
 
 end UInt16
 
@@ -123,6 +131,10 @@ namespace UInt32
 @[inline] def bitReverse (x : UInt32) : UInt32 :=
   fromBitVec (bitReverseLoop x.toBitVec 32 0 (0#32))
 
+/-- Hamming distance: popcount of XOR (FR-002.3). -/
+@[inline] def hammingDistance (x y : UInt32) : UInt32 :=
+  popcount ⟨x.val ^^^ y.val⟩
+
 end UInt32
 
 /-! ================================================================ -/
@@ -142,6 +154,10 @@ namespace UInt64
 
 @[inline] def bitReverse (x : UInt64) : UInt64 :=
   fromBitVec (bitReverseLoop x.toBitVec 64 0 (0#64))
+
+/-- Hamming distance: popcount of XOR (FR-002.3). -/
+@[inline] def hammingDistance (x y : UInt64) : UInt64 :=
+  popcount ⟨x.val ^^^ y.val⟩
 
 end UInt64
 
@@ -163,6 +179,10 @@ namespace Int8
 @[inline] def bitReverse (x : Int8) : Int8 :=
   ⟨(Radix.UInt8.bitReverse ⟨x.val⟩).val⟩
 
+/-- Hamming distance: popcount of XOR (FR-002.3). -/
+@[inline] def hammingDistance (x y : Int8) : Int8 :=
+  popcount ⟨x.val ^^^ y.val⟩
+
 end Int8
 
 /-! ================================================================ -/
@@ -182,6 +202,10 @@ namespace Int16
 
 @[inline] def bitReverse (x : Int16) : Int16 :=
   ⟨(Radix.UInt16.bitReverse ⟨x.val⟩).val⟩
+
+/-- Hamming distance: popcount of XOR (FR-002.3). -/
+@[inline] def hammingDistance (x y : Int16) : Int16 :=
+  popcount ⟨x.val ^^^ y.val⟩
 
 end Int16
 
@@ -203,6 +227,10 @@ namespace Int32
 @[inline] def bitReverse (x : Int32) : Int32 :=
   ⟨(Radix.UInt32.bitReverse ⟨x.val⟩).val⟩
 
+/-- Hamming distance: popcount of XOR (FR-002.3). -/
+@[inline] def hammingDistance (x y : Int32) : Int32 :=
+  popcount ⟨x.val ^^^ y.val⟩
+
 end Int32
 
 /-! ================================================================ -/
@@ -223,6 +251,62 @@ namespace Int64
 @[inline] def bitReverse (x : Int64) : Int64 :=
   ⟨(Radix.UInt64.bitReverse ⟨x.val⟩).val⟩
 
+/-- Hamming distance: popcount of XOR (FR-002.3). -/
+@[inline] def hammingDistance (x y : Int64) : Int64 :=
+  popcount ⟨x.val ^^^ y.val⟩
+
 end Int64
+
+/-! ================================================================ -/
+/-! ## UWord Bit Scanning                                             -/
+/-! ================================================================ -/
+
+namespace UWord
+
+variable {w : Nat} [PlatformWidth w]
+
+@[inline] def clz (x : UWord w) : UWord w :=
+  ⟨BitVec.ofNat w (clzLoop x.val w 0)⟩
+
+@[inline] def ctz (x : UWord w) : UWord w :=
+  ⟨BitVec.ofNat w (ctzLoop x.val w 0)⟩
+
+@[inline] def popcount (x : UWord w) : UWord w :=
+  ⟨BitVec.ofNat w (popcountLoop x.val w 0 0)⟩
+
+@[inline] def bitReverse (x : UWord w) : UWord w :=
+  ⟨bitReverseLoop x.val w 0 (0#w)⟩
+
+/-- Hamming distance: popcount of XOR (FR-002.3). -/
+@[inline] def hammingDistance (x y : UWord w) : UWord w :=
+  popcount ⟨x.val ^^^ y.val⟩
+
+end UWord
+
+/-! ================================================================ -/
+/-! ## IWord Bit Scanning                                             -/
+/-! ================================================================ -/
+
+namespace IWord
+
+variable {w : Nat} [PlatformWidth w]
+
+@[inline] def clz (x : IWord w) : IWord w :=
+  ⟨BitVec.ofNat w (clzLoop x.val w 0)⟩
+
+@[inline] def ctz (x : IWord w) : IWord w :=
+  ⟨BitVec.ofNat w (ctzLoop x.val w 0)⟩
+
+@[inline] def popcount (x : IWord w) : IWord w :=
+  ⟨BitVec.ofNat w (popcountLoop x.val w 0 0)⟩
+
+@[inline] def bitReverse (x : IWord w) : IWord w :=
+  ⟨bitReverseLoop x.val w 0 (0#w)⟩
+
+/-- Hamming distance: popcount of XOR (FR-002.3). -/
+@[inline] def hammingDistance (x y : IWord w) : IWord w :=
+  popcount ⟨x.val ^^^ y.val⟩
+
+end IWord
 
 end Radix
