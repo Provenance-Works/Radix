@@ -134,4 +134,10 @@ def insertBits (x bits : BitVec n) (lo hi : Nat) (_h : lo ≤ hi ∧ hi ≤ n) :
   let mask := (BitVec.allOnes n >>> (n - width)) <<< lo
   (x &&& ~~~mask) ||| ((bits <<< lo) &&& mask)
 
+/-! ## 6. Hamming Distance Specification -/
+
+/-- Hamming distance: number of bit positions where two vectors differ.
+    Equals popcount of their XOR (FR-002.3). -/
+def hammingDistance (x y : BitVec n) : Nat := popcount (bxor x y)
+
 end Radix.Bit.Spec
