@@ -1,0 +1,143 @@
+# Component Architecture
+
+> **Audience**: Developers, Contributors
+
+## Component Overview
+
+Radix consists of 8 modules, each providing a distinct set of systems programming primitives. All modules follow the three-layer architecture (Spec → Impl → Bridge).
+
+```mermaid
+graph TD
+    subgraph "Pure Modules (Layers 2-3 only)"
+        Word["Word<br/>Fixed-width integers<br/>10 types, 5 arithmetic modes"]
+        Bit["Bit<br/>Bitwise operations<br/>AND/OR/XOR/NOT, shifts, rotates, scan"]
+        Bytes["Bytes<br/>Byte order<br/>Endianness, bswap, ByteSlice"]
+        Memory["Memory<br/>Abstract memory<br/>Buffer, Ptr, Layout"]
+        Binary["Binary<br/>Format DSL<br/>Parser, Serializer, LEB128"]
+    end
+    subgraph "Effectful Modules (Layers 1-3)"
+        System["System<br/>OS interface<br/>File I/O, Error, FD"]
+    end
+    subgraph "Model Modules (Layers 1-3)"
+        Concurrency["Concurrency<br/>Atomic ops model<br/>C11 memory ordering"]
+        BareMetal["BareMetal<br/>No-OS support<br/>Linker, Startup, GCFree"]
+    end
+    Bit --> Word
+    Bytes --> Word
+    Bytes --> Bit
+    Memory --> Word
+    Memory --> Bytes
+    Binary --> Word
+    Binary --> Memory
+    Binary --> Bit
+    Binary --> Bytes
+    System --> Word
+    System --> Bytes
+    System --> Memory
+    style Word fill:#4CAF50,color:white
+    style Bit fill:#66BB6A,color:white
+    style Bytes fill:#42A5F5,color:white
+    style Memory fill:#29B6F6,color:white
+    style Binary fill:#26C6DA,color:white
+    style System fill:#FFA726,color:white
+    style Concurrency fill:#AB47BC,color:white
+    style BareMetal fill:#8D6E63,color:white
+```
+
+## Module Details
+
+### Word — Fixed-Width Integer Types and Arithmetic
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `Word.Spec` | 3 | Mathematical specifications using `BitVec n` |
+| `Word.UInt` | 2 | `UInt8`, `UInt16`, `UInt32`, `UInt64` wrapping Lean 4 built-ins |
+| `Word.Int` | 2 | `Int8`, `Int16`, `Int32`, `Int64` via two's complement |
+| `Word.Size` | 2 | `UWord`, `IWord` — platform-width types (32/64 parametric) |
+| `Word.Arith` | 2 | Wrapping, Saturating, Checked, Overflowing arithmetic |
+| `Word.Conv` | 2 | Width conversions, sign conversions, sign-extend |
+| `Word.Lemmas.*` | 3 | Ring, Overflow, BitVec, Conv proofs |
+
+**Key design**: Types wrap Lean 4 built-in `UIntN` for zero-cost abstraction (NFR-002). Layer 3 specs use `BitVec n`. Equivalence is proven in `Word.Lemmas.BitVec`.
+
+### Bit — Bitwise Operations
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `Bit.Spec` | 3 | Bitwise operation specifications |
+| `Bit.Ops` | 2 | AND, OR, XOR, NOT, shifts, rotates |
+| `Bit.Scan` | 2 | `clz`, `ctz`, `popcount`, `bitReverse`, `hammingDistance` |
+| `Bit.Field` | 2 | `testBit`, `setBit`, `clearBit`, `toggleBit`, `extractBits`, `insertBits` |
+| `Bit.Lemmas` | 3 | Boolean algebra, De Morgan, shift identities, field round-trips |
+
+**Key design**: All shift/rotate operations normalize count by `count % bitWidth` (Rust semantics, FR-002.1a).
+
+### Bytes — Byte Order Operations
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `Bytes.Spec` | 3 | Endianness and byte swap specifications |
+| `Bytes.Order` | 2 | `bswap`, `toBigEndian`/`fromBigEndian`, `toLittleEndian`/`fromLittleEndian` |
+| `Bytes.Slice` | 2 | `ByteSlice` — bounds-checked `ByteArray` view with endian-aware reads |
+| `Bytes.Lemmas` | 3 | `bswap` involution, BE/LE round-trip, signed type round-trips |
+
+### Memory — Abstract Memory Model
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `Memory.Spec` | 3 | Region, alignment, disjointness definitions |
+| `Memory.Model` | 2 | `Buffer` — `ByteArray`-based memory with proof-carrying read/write |
+| `Memory.Ptr` | 2 | `Ptr n` — byte-width–parametric pointer abstraction |
+| `Memory.Layout` | 2 | `FieldDesc`, `LayoutDesc` — packed struct layout computation |
+| `Memory.Lemmas` | 3 | Buffer size preservation, region disjointness, alignment proofs |
+
+### Binary — Binary Format DSL
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `Binary.Spec` | 3 | `FormatSpec` and validity conditions |
+| `Binary.Format` | 2 | `Format` inductive — DSL for describing binary layouts |
+| `Binary.Parser` | 2 | Format-driven parser with endianness support |
+| `Binary.Serial` | 2 | Format-driven serializer |
+| `Binary.Leb128` | 2 | LEB128 variable-length integer encoding/decoding |
+| `Binary.Leb128.Spec` | 3 | LEB128 mathematical specification |
+| `Binary.Leb128.Lemmas` | 3 | Round-trip proofs, size bounds |
+| `Binary.Lemmas` | 3 | Format proofs, parser/serializer properties |
+
+### System — System Call Interface
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `System.Spec` | 3 | `FileState` state machine, pre/postconditions, `ReadSpec`/`WriteSpec` |
+| `System.Error` | 2 | `SysError` inductive (10 variants), `fromIOError` mapping |
+| `System.FD` | 2 | `FD` (file descriptor), `Ownership`, `OpenMode`, `withFile` bracket |
+| `System.IO` | 1 | `sysRead`, `sysWrite`, `sysSeek`, file convenience functions |
+| `System.Assumptions` | 1 | `trust_*` axioms citing POSIX.1-2024 |
+
+### Concurrency — Atomic Operations Model
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `Concurrency.Spec` | 3 | `MemoryOrder`, `MemoryEvent`, `happensBefore`, `isDataRace`, `isLinearizable` |
+| `Concurrency.Ordering` | 2 | Ordering strength comparison, strengthen, combine |
+| `Concurrency.Atomic` | 2 | `AtomicCell`, atomic load/store/CAS, fetch operations |
+| `Concurrency.Lemmas` | 3 | Ordering strength proofs, DRF proofs, linearizability |
+| `Concurrency.Assumptions` | 1 | `trust_atomic_word_access`, `trust_cas_atomicity`, etc. |
+
+### BareMetal — Bare Metal Support
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `BareMetal.Spec` | 3 | `Platform`, `RegionKind`, `MemoryMap`, `StartupPhase`, `BootInvariant` |
+| `BareMetal.GCFree` | 2 | `Lifetime`, `ForbiddenPattern`, `GCFreeConstraint`, stack analysis |
+| `BareMetal.Linker` | 2 | `LinkerScript`, `Section`, `Symbol`, address alignment |
+| `BareMetal.Startup` | 2 | `StartupAction`, minimal/full startup actions, validation |
+| `BareMetal.Lemmas` | 3 | Region disjointness, memory map, alignment, startup proofs |
+| `BareMetal.Assumptions` | 1 | `trust_reset_entry`, `trust_bss_zeroed`, etc. |
+
+## Related Documents
+
+- [Architecture Overview](README.md) — High-level architecture
+- [Module Dependencies](module-dependency.md) — Dependency graph
+- [Data Model](data-model.md) — Core data structures
+- [API Reference](../reference/api/) — Detailed API per module
