@@ -1,0 +1,133 @@
+# Architecture Overview
+
+> **Audience**: Developers, Architects, Contributors
+
+## System Context
+
+Radix is a formally verified low-level systems programming library for Lean 4. It provides C-equivalent capabilities — fixed-width integers, bitwise operations, byte order conversions, memory abstractions, binary format DSL, system I/O, concurrency models, and bare-metal support — all with Mathlib-grade formal proofs.
+
+```mermaid
+graph TD
+    UserCode["User Code<br/>(Lean 4 Application)"] -->|"imports"| Radix["Radix Library"]
+    Radix -->|"depends on"| Mathlib["Mathlib<br/>(BitVec, Algebraic Structures)"]
+    Radix -->|"Layer 1 wraps"| Lean4IO["Lean 4 Runtime<br/>(IO.FS, IO.Process)"]
+    Lean4IO -->|"delegates to"| OS["Operating System<br/>(POSIX / Linux)"]
+    style Radix fill:#4CAF50,color:white
+    style Mathlib fill:#2196F3,color:white
+    style Lean4IO fill:#FF9800,color:white
+    style OS fill:#9E9E9E,color:white
+```
+
+## Three-Layer Architecture
+
+Radix adopts a three-layer architecture inspired by seL4, CertiKOS, and F*/Low*:
+
+```mermaid
+graph TD
+    subgraph "Layer 3: Verified Specification"
+        L3["Pure mathematical definitions and theorems.<br/>No executable code — only specifications and proofs.<br/><i>'What does correct behavior mean?'</i>"]
+    end
+    subgraph "Layer 2: Verified Implementation"
+        L2["Pure Lean 4 implementations proven to satisfy Layer 3 specs.<br/>Computable functions with attached correctness proofs.<br/><i>'An implementation that is provably correct.'</i>"]
+    end
+    subgraph "Layer 1: System Bridge"
+        L1["Wrappers around Lean 4 built-in IO APIs.<br/>Contains named trusted assumptions (axiom declarations).<br/><i>'The minimal trusted boundary.'</i>"]
+    end
+    subgraph "Hardware / OS"
+        HW["Operating System via Lean 4 Runtime"]
+    end
+    L3 --- L2
+    L2 --- L1
+    L1 --- HW
+    style L3 fill:#4CAF50,color:white
+    style L2 fill:#2196F3,color:white
+    style L1 fill:#FF9800,color:white
+    style HW fill:#9E9E9E,color:white
+```
+
+### Layer Interaction Rules
+
+1. Layer 3 (Spec) **MUST NOT** import Layers 2 or 1
+2. Layer 2 (Impl) **MUST** import Layer 3 (to prove conformance to specs)
+3. Layer 2 (Impl) **MUST NOT** import Layer 1 (pure computation, no IO)
+4. Layer 1 (Bridge) **MUST** import Layer 3 (to state which spec it implements)
+5. Layer 1 (Bridge) **MAY** import Layer 2 (to reuse verified pure logic)
+
+### How Each Module Maps to Layers
+
+| Module | Layer 3 (Spec) | Layer 2 (Impl) | Layer 1 (Bridge) |
+|--------|---------------|----------------|-----------------|
+| Word | `Word.Spec` | `Word.UInt`, `Word.Int`, `Word.Arith`, `Word.Conv`, `Word.Size` | — |
+| Bit | `Bit.Spec` | `Bit.Ops`, `Bit.Scan`, `Bit.Field` | — |
+| Bytes | `Bytes.Spec` | `Bytes.Order`, `Bytes.Slice` | — |
+| Memory | `Memory.Spec` | `Memory.Model`, `Memory.Ptr`, `Memory.Layout` | — |
+| Binary | `Binary.Spec`, `Leb128.Spec` | `Binary.Format`, `Binary.Parser`, `Binary.Serial`, `Leb128` | — |
+| System | `System.Spec` | `System.Error`, `System.FD` | `System.IO`, `System.Assumptions` |
+| Concurrency | `Concurrency.Spec` | `Concurrency.Ordering`, `Concurrency.Atomic` | `Concurrency.Assumptions` |
+| BareMetal | `BareMetal.Spec` | `BareMetal.GCFree`, `BareMetal.Linker`, `BareMetal.Startup` | `BareMetal.Assumptions` |
+
+> **Note:** Word through Binary are **pure** modules (Layers 2–3 only). System, Concurrency, and BareMetal have Layer 1 components.
+
+## Module Dependency Graph
+
+```mermaid
+graph TD
+    Bit["Bit<br/>(Bitwise Ops)"] --> Word["Word<br/>(Fixed-Width Integers)"]
+    Bytes["Bytes<br/>(Byte Order)"] --> Word
+    Bytes --> Bit
+    Memory["Memory<br/>(Abstract Memory)"] --> Word
+    Memory --> Bytes
+    Binary["Binary<br/>(Format DSL)"] --> Word
+    Binary --> Memory
+    Binary --> Bit
+    Binary --> Bytes
+    System["System<br/>(OS Interface)"] --> Word
+    System --> Bytes
+    System --> Memory
+    Concurrency["Concurrency<br/>(Atomic Ops)"] -.->|"models only"| Word
+    BareMetal["BareMetal<br/>(No-OS Support)"] -.->|"models only"| Memory
+    style Word fill:#4CAF50,color:white
+    style Bit fill:#4CAF50,color:white
+    style Bytes fill:#2196F3,color:white
+    style Memory fill:#2196F3,color:white
+    style Binary fill:#2196F3,color:white
+    style System fill:#FF9800,color:white
+    style Concurrency fill:#9C27B0,color:white
+    style BareMetal fill:#9C27B0,color:white
+```
+
+Dependencies flow upward from `Word`. Each higher module builds on lower ones.
+
+## Trusted Computing Base (TCB)
+
+The TCB is the set of components whose correctness is **assumed, not proven**:
+
+| Component | Status |
+|-----------|--------|
+| Lean 4 compiler and runtime | Accepted as platform |
+| Lean 4's built-in IO implementation | Trusted via named axioms |
+| Lean 4's default axioms (`propext`, `Quot.sound`, `Classical.choice`) | Standard |
+| `trust_*` axioms in `System.Assumptions` | Audited per release |
+| `trust_*` axioms in `Concurrency.Assumptions` | Audited per release |
+| `trust_*` axioms in `BareMetal.Assumptions` | Audited per release |
+
+**Explicitly NOT in the TCB:**
+- Mathlib (formally verified)
+- Radix Layers 2–3 (proven)
+- Radix Layer 1 Lean 4 code (verified; only the *assumption about IO behavior* is in the TCB)
+
+## Key Design Decisions
+
+| Decision | Summary | ADR |
+|----------|---------|-----|
+| Three-layer architecture | Maximize verified code, minimize trusted code | [ADR-001](../../spec/adr/0001-three-layer-architecture.md) |
+| Build on Mathlib BitVec | Use `BitVec n` as spec-level canonical representation | [ADR-002](../../spec/adr/0002-build-on-mathlib-bitvec.md) |
+| Signed integers via two's complement | Wrap unsigned types, interpret MSB as sign | [ADR-003](../../spec/adr/0003-signed-integers-twos-complement.md) |
+
+## Related Documents
+
+- [Components](components.md) — Detailed component breakdown
+- [Module Dependencies](module-dependency.md) — Full dependency graph
+- [Data Model](data-model.md) — Core data structures
+- [Data Flow](data-flow.md) — Data flow through the system
+- [Design Principles](../design/principles.md) — Guiding philosophy
