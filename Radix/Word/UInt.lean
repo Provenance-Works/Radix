@@ -58,7 +58,7 @@ instance {n : Nat} : OfNat UInt8 n := ⟨⟨OfNat.ofNat n⟩⟩
 @[inline] def toBitVec (x : UInt8) : BitVec 8 := x.val.toBitVec
 
 /-- Convert from `BitVec 8`. -/
-@[inline] def fromBitVec (bv : BitVec 8) : UInt8 := ⟨⟨bv.toFin⟩⟩
+@[inline] def fromBitVec (bv : BitVec 8) : UInt8 := ⟨.ofBitVec bv⟩
 
 /-- Convert to `Nat`. -/
 @[inline] def toNat (x : UInt8) : Nat := x.val.toNat
@@ -97,7 +97,7 @@ instance {n : Nat} : OfNat UInt16 n := ⟨⟨OfNat.ofNat n⟩⟩
 @[inline] def toBuiltin (x : UInt16) : _root_.UInt16 := x.val
 @[inline] def fromBuiltin (x : _root_.UInt16) : UInt16 := ⟨x⟩
 @[inline] def toBitVec (x : UInt16) : BitVec 16 := x.val.toBitVec
-@[inline] def fromBitVec (bv : BitVec 16) : UInt16 := ⟨⟨bv.toFin⟩⟩
+@[inline] def fromBitVec (bv : BitVec 16) : UInt16 := ⟨.ofBitVec bv⟩
 @[inline] def toNat (x : UInt16) : Nat := x.val.toNat
 
 @[inline] instance : Add UInt16 := ⟨fun a b => ⟨a.val + b.val⟩⟩
@@ -130,7 +130,7 @@ instance {n : Nat} : OfNat UInt32 n := ⟨⟨OfNat.ofNat n⟩⟩
 @[inline] def toBuiltin (x : UInt32) : _root_.UInt32 := x.val
 @[inline] def fromBuiltin (x : _root_.UInt32) : UInt32 := ⟨x⟩
 @[inline] def toBitVec (x : UInt32) : BitVec 32 := x.val.toBitVec
-@[inline] def fromBitVec (bv : BitVec 32) : UInt32 := ⟨⟨bv.toFin⟩⟩
+@[inline] def fromBitVec (bv : BitVec 32) : UInt32 := ⟨.ofBitVec bv⟩
 @[inline] def toNat (x : UInt32) : Nat := x.val.toNat
 
 @[inline] instance : Add UInt32 := ⟨fun a b => ⟨a.val + b.val⟩⟩
@@ -163,7 +163,7 @@ instance {n : Nat} : OfNat UInt64 n := ⟨⟨OfNat.ofNat n⟩⟩
 @[inline] def toBuiltin (x : UInt64) : _root_.UInt64 := x.val
 @[inline] def fromBuiltin (x : _root_.UInt64) : UInt64 := ⟨x⟩
 @[inline] def toBitVec (x : UInt64) : BitVec 64 := x.val.toBitVec
-@[inline] def fromBitVec (bv : BitVec 64) : UInt64 := ⟨⟨bv.toFin⟩⟩
+@[inline] def fromBitVec (bv : BitVec 64) : UInt64 := ⟨.ofBitVec bv⟩
 @[inline] def toNat (x : UInt64) : Nat := x.val.toNat
 
 @[inline] instance : Add UInt64 := ⟨fun a b => ⟨a.val + b.val⟩⟩
