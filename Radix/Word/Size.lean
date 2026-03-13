@@ -3,6 +3,7 @@ Copyright (c) 2026 Radix Contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Radix.Word.UInt
+import Radix.Word.Spec
 
 /-!
 # Platform-Width Types (Layer 2)
@@ -30,69 +31,105 @@ class PlatformWidth (n : Nat) where
   isValid : n = 32 ∨ n = 64
 
 /-- Default instance: resolve to host platform width.
-    For cross-compilation, provide an explicit instance instead. -/
+    For cross-compilation, provide an explicit instance instead.
+    `native_decide` is appropriate here: it is a closed ground proposition
+    on `System.Platform.numBits` (always 32 or 64 in supported toolchains). -/
 instance : PlatformWidth System.Platform.numBits where
   isValid := by native_decide
 
-/-- Unsigned platform-width integer wrapping Lean 4's `USize`.
+/-- Unsigned platform-width integer.
     All definitions and proofs are parametric over `platformWidth`. -/
-structure UWord where
-  val : _root_.USize
+structure UWord (w : Nat := System.Platform.numBits) [PlatformWidth w] where
+  val : BitVec w
   deriving DecidableEq
 
 namespace UWord
 
-instance : Inhabited UWord := ⟨⟨0⟩⟩
-instance : BEq UWord := ⟨fun a b => a.val == b.val⟩
-instance : Ord UWord := ⟨fun a b => compare a.val b.val⟩
-instance : ToString UWord := ⟨fun a => toString a.val⟩
-instance : Repr UWord := ⟨fun a n => reprPrec a.val n⟩
-instance {n : Nat} : OfNat UWord n := ⟨⟨OfNat.ofNat n⟩⟩
+variable {w : Nat} [PlatformWidth w]
 
-@[inline] def toBuiltin (x : UWord) : USize := x.val
-@[inline] def fromBuiltin (x : USize) : UWord := ⟨x⟩
-@[inline] def toNat (x : UWord) : Nat := x.val.toNat
+instance : Inhabited (UWord w) := ⟨⟨0⟩⟩
+instance : BEq (UWord w) := ⟨fun a b => a.val == b.val⟩
+instance : Ord (UWord w) := ⟨fun a b => compare a.val.toNat b.val.toNat⟩
+instance : ToString (UWord w) := ⟨fun a => toString a.val.toNat⟩
+instance : Repr (UWord w) := ⟨fun a _ => Repr.addAppParen ("UWord.mk " ++ repr a.val) 0⟩
+instance {n : Nat} : OfNat (UWord w) n := ⟨⟨BitVec.ofNat w n⟩⟩
 
-/-- Convert to `BitVec System.Platform.numBits`. -/
-@[inline] def toBitVec (x : UWord) : BitVec System.Platform.numBits :=
-  x.val.toBitVec
+@[inline] def toNat (x : UWord w) : Nat := x.val.toNat
 
-@[inline] instance : Add UWord := ⟨fun a b => ⟨a.val + b.val⟩⟩
-@[inline] instance : Sub UWord := ⟨fun a b => ⟨a.val - b.val⟩⟩
-@[inline] instance : Mul UWord := ⟨fun a b => ⟨a.val * b.val⟩⟩
+/-- Convert to `BitVec w`. -/
+@[inline] def toBitVec (x : UWord w) : BitVec w :=
+  x.val
+
+@[inline] def fromBitVec (x : BitVec w) : UWord w := ⟨x⟩
+
+@[inline] instance : Add (UWord w) := ⟨fun a b => ⟨a.val + b.val⟩⟩
+@[inline] instance : Sub (UWord w) := ⟨fun a b => ⟨a.val - b.val⟩⟩
+@[inline] instance : Mul (UWord w) := ⟨fun a b => ⟨a.val * b.val⟩⟩
+
+@[inline] def maxVal : UWord w := ⟨BitVec.ofNat w (2^w - 1)⟩
+@[inline] def minVal : UWord w := ⟨0⟩
 
 end UWord
 
-/-- Signed platform-width integer wrapping Lean 4's `USize` (2's complement).
+/-- Signed platform-width integer (2's complement).
     Sign is determined by the MSB of the underlying unsigned value. -/
-structure IWord where
-  val : _root_.USize
+structure IWord (w : Nat := System.Platform.numBits) [PlatformWidth w] where
+  val : BitVec w
   deriving DecidableEq
 
 namespace IWord
 
-instance : Inhabited IWord := ⟨⟨0⟩⟩
-instance : BEq IWord := ⟨fun a b => a.val == b.val⟩
-instance : Ord IWord := ⟨fun a b => compare a.val b.val⟩
-instance : ToString IWord := ⟨fun a => toString a.val.toBitVec.toInt⟩
-instance : Repr IWord := ⟨fun a _ => Repr.addAppParen ("IWord.mk " ++ repr a.val) 0⟩
-instance {n : Nat} : OfNat IWord n := ⟨⟨OfNat.ofNat n⟩⟩
+variable {w : Nat} [PlatformWidth w]
 
-@[inline] def toUWord (x : IWord) : UWord := ⟨x.val⟩
-@[inline] def fromUWord (x : UWord) : IWord := ⟨x.val⟩
+instance : Inhabited (IWord w) := ⟨⟨0⟩⟩
+instance : BEq (IWord w) := ⟨fun a b => a.val == b.val⟩
+instance : Ord (IWord w) := ⟨fun a b => compare a.val.toInt b.val.toInt⟩
+instance : ToString (IWord w) := ⟨fun a => toString a.val.toInt⟩
+instance : Repr (IWord w) := ⟨fun a _ => Repr.addAppParen ("IWord.mk " ++ repr a.val) 0⟩
+instance {n : Nat} : OfNat (IWord w) n := ⟨⟨BitVec.ofNat w n⟩⟩
+
+@[inline] def toUWord (x : IWord w) : UWord w := ⟨x.val⟩
+@[inline] def fromUWord (x : UWord w) : IWord w := ⟨x.val⟩
 
 /-- Interpret the underlying bits as a signed integer. -/
-@[inline] def toInt (x : IWord) : Int :=
-  x.val.toBitVec.toInt
+@[inline] def toInt (x : IWord w) : Int :=
+  x.val.toInt
 
-/-- Convert to `BitVec System.Platform.numBits`. -/
-@[inline] def toBitVec (x : IWord) : BitVec System.Platform.numBits :=
-  x.val.toBitVec
+/-- Convert to `BitVec w`. -/
+@[inline] def toBitVec (x : IWord w) : BitVec w :=
+  x.val
 
-@[inline] instance : Add IWord := ⟨fun a b => ⟨a.val + b.val⟩⟩
-@[inline] instance : Sub IWord := ⟨fun a b => ⟨a.val - b.val⟩⟩
-@[inline] instance : Mul IWord := ⟨fun a b => ⟨a.val * b.val⟩⟩
+@[inline] def fromBitVec (x : BitVec w) : IWord w := ⟨x⟩
+
+@[inline] instance : Add (IWord w) := ⟨fun a b => ⟨a.val + b.val⟩⟩
+@[inline] instance : Sub (IWord w) := ⟨fun a b => ⟨a.val - b.val⟩⟩
+@[inline] instance : Mul (IWord w) := ⟨fun a b => ⟨a.val * b.val⟩⟩
+@[inline] instance : Neg (IWord w) := ⟨fun a => ⟨0 - a.val⟩⟩
+
+@[inline] def maxVal : IWord w := ⟨BitVec.ofInt w (2^(w - 1) - 1)⟩
+@[inline] def minVal : IWord w := ⟨BitVec.ofInt w (-(2^(w - 1)))⟩
+
+@[inline] def overflowsAdd (x y : IWord w) : Bool :=
+  Word.Spec.signedAddOverflows x.toBitVec y.toBitVec
+@[inline] def overflowsSub (x y : IWord w) : Bool :=
+  Word.Spec.signedSubOverflows x.toBitVec y.toBitVec
+@[inline] def overflowsMul (x y : IWord w) : Bool :=
+  Word.Spec.signedMulOverflows x.toBitVec y.toBitVec
+@[inline] def divOverflows (x y : IWord w) : Bool :=
+  x == minVal && y == ⟨BitVec.ofInt w (-1)⟩
 
 end IWord
+
+/-! ## FixedWidth instances for platform-width types -/
+
+instance {w : Nat} [PlatformWidth w] : FixedWidth (UWord w) where
+  bitWidth := w
+  toBitVec := UWord.toBitVec
+  fromBitVec := UWord.fromBitVec
+
+instance {w : Nat} [PlatformWidth w] : FixedWidth (IWord w) where
+  bitWidth := w
+  toBitVec := IWord.toBitVec
+  fromBitVec := IWord.fromBitVec
 
 end Radix
