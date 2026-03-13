@@ -40,7 +40,11 @@ namespace Radix
 
 namespace UInt8
 
-/-! ### Tier 1: Proof-Carrying -/
+/-! ### Tier 1: Proof-Carrying
+
+Unsigned Tier 1 operations use `*Checked` (precondition: natural-number bound).
+Signed Tier 1 operations use `*Proof` (precondition: overflow predicate).
+The naming difference reflects different precondition styles, not semantics. -/
 
 /-- Addition with proof of no overflow. -/
 @[inline] def addChecked (x y : UInt8) (_h : x.toNat + y.toNat < 2 ^ 8) : UInt8 :=
@@ -55,11 +59,11 @@ namespace UInt8
   ⟨x.val * y.val⟩
 
 /-- Division with proof of nonzero divisor. -/
-@[inline] def divProof (x y : UInt8) (_h : y ≠ ⟨0⟩) : UInt8 :=
+@[inline] def div (x y : UInt8) (_h : y ≠ ⟨0⟩) : UInt8 :=
   ⟨x.val / y.val⟩
 
 /-- Remainder with proof of nonzero divisor. -/
-@[inline] def remProof (x y : UInt8) (_h : y ≠ ⟨0⟩) : UInt8 :=
+@[inline] def rem (x y : UInt8) (_h : y ≠ ⟨0⟩) : UInt8 :=
   ⟨x.val % y.val⟩
 
 /-! ### Tier 2: Wrapping -/
@@ -67,6 +71,7 @@ namespace UInt8
 @[inline] def wrappingAdd (x y : UInt8) : UInt8 := ⟨x.val + y.val⟩
 @[inline] def wrappingSub (x y : UInt8) : UInt8 := ⟨x.val - y.val⟩
 @[inline] def wrappingMul (x y : UInt8) : UInt8 := ⟨x.val * y.val⟩
+@[inline] def wrappingNeg (x : UInt8) : UInt8 := ⟨0 - x.val⟩
 
 /-! ### Tier 2: Saturating -/
 
@@ -121,14 +126,15 @@ namespace UInt16
   ⟨x.val - y.val⟩
 @[inline] def mulChecked (x y : UInt16) (_h : x.toNat * y.toNat < 2 ^ 16) : UInt16 :=
   ⟨x.val * y.val⟩
-@[inline] def divProof (x y : UInt16) (_h : y ≠ ⟨0⟩) : UInt16 :=
+@[inline] def div (x y : UInt16) (_h : y ≠ ⟨0⟩) : UInt16 :=
   ⟨x.val / y.val⟩
-@[inline] def remProof (x y : UInt16) (_h : y ≠ ⟨0⟩) : UInt16 :=
+@[inline] def rem (x y : UInt16) (_h : y ≠ ⟨0⟩) : UInt16 :=
   ⟨x.val % y.val⟩
 
 @[inline] def wrappingAdd (x y : UInt16) : UInt16 := ⟨x.val + y.val⟩
 @[inline] def wrappingSub (x y : UInt16) : UInt16 := ⟨x.val - y.val⟩
 @[inline] def wrappingMul (x y : UInt16) : UInt16 := ⟨x.val * y.val⟩
+@[inline] def wrappingNeg (x : UInt16) : UInt16 := ⟨0 - x.val⟩
 
 @[inline] def saturatingAdd (x y : UInt16) : UInt16 :=
   if x.toNat + y.toNat >= 2 ^ 16 then maxVal else ⟨x.val + y.val⟩
@@ -169,14 +175,15 @@ namespace UInt32
   ⟨x.val - y.val⟩
 @[inline] def mulChecked (x y : UInt32) (_h : x.toNat * y.toNat < 2 ^ 32) : UInt32 :=
   ⟨x.val * y.val⟩
-@[inline] def divProof (x y : UInt32) (_h : y ≠ ⟨0⟩) : UInt32 :=
+@[inline] def div (x y : UInt32) (_h : y ≠ ⟨0⟩) : UInt32 :=
   ⟨x.val / y.val⟩
-@[inline] def remProof (x y : UInt32) (_h : y ≠ ⟨0⟩) : UInt32 :=
+@[inline] def rem (x y : UInt32) (_h : y ≠ ⟨0⟩) : UInt32 :=
   ⟨x.val % y.val⟩
 
 @[inline] def wrappingAdd (x y : UInt32) : UInt32 := ⟨x.val + y.val⟩
 @[inline] def wrappingSub (x y : UInt32) : UInt32 := ⟨x.val - y.val⟩
 @[inline] def wrappingMul (x y : UInt32) : UInt32 := ⟨x.val * y.val⟩
+@[inline] def wrappingNeg (x : UInt32) : UInt32 := ⟨0 - x.val⟩
 
 @[inline] def saturatingAdd (x y : UInt32) : UInt32 :=
   if x.toNat + y.toNat >= 2 ^ 32 then maxVal else ⟨x.val + y.val⟩
@@ -217,14 +224,15 @@ namespace UInt64
   ⟨x.val - y.val⟩
 @[inline] def mulChecked (x y : UInt64) (_h : x.toNat * y.toNat < 2 ^ 64) : UInt64 :=
   ⟨x.val * y.val⟩
-@[inline] def divProof (x y : UInt64) (_h : y ≠ ⟨0⟩) : UInt64 :=
+@[inline] def div (x y : UInt64) (_h : y ≠ ⟨0⟩) : UInt64 :=
   ⟨x.val / y.val⟩
-@[inline] def remProof (x y : UInt64) (_h : y ≠ ⟨0⟩) : UInt64 :=
+@[inline] def rem (x y : UInt64) (_h : y ≠ ⟨0⟩) : UInt64 :=
   ⟨x.val % y.val⟩
 
 @[inline] def wrappingAdd (x y : UInt64) : UInt64 := ⟨x.val + y.val⟩
 @[inline] def wrappingSub (x y : UInt64) : UInt64 := ⟨x.val - y.val⟩
 @[inline] def wrappingMul (x y : UInt64) : UInt64 := ⟨x.val * y.val⟩
+@[inline] def wrappingNeg (x : UInt64) : UInt64 := ⟨0 - x.val⟩
 
 @[inline] def saturatingAdd (x y : UInt64) : UInt64 :=
   if x.toNat + y.toNat >= 2 ^ 64 then maxVal else ⟨x.val + y.val⟩
@@ -259,19 +267,21 @@ end UInt64
 
 namespace Int8
 
-private def overflowsAdd (x y : Int8) : Bool :=
-  let sum := x.toInt + y.toInt
-  sum < -128 || sum > 127
+def overflowsAdd (x y : Int8) : Bool :=
+  let sum := x.val + y.val
+  -- Overflow iff signs of x and y match but sign of sum differs
+  (x.val ^^^ sum) &&& (y.val ^^^ sum) >= 128
 
-private def overflowsSub (x y : Int8) : Bool :=
-  let diff := x.toInt - y.toInt
-  diff < -128 || diff > 127
+def overflowsSub (x y : Int8) : Bool :=
+  let diff := x.val - y.val
+  -- Overflow iff signs of x and y differ and sign of diff differs from x
+  (x.val ^^^ y.val) &&& (x.val ^^^ diff) >= 128
 
-private def overflowsMul (x y : Int8) : Bool :=
+def overflowsMul (x y : Int8) : Bool :=
   let prod := x.toInt * y.toInt
   prod < -128 || prod > 127
 
-private def divOverflows (x y : Int8) : Bool :=
+def divOverflows (x y : Int8) : Bool :=
   x == minVal && y == ⟨255⟩  -- y.toInt == -1
 
 /-! ### Tier 1: Proof-Carrying -/
@@ -282,9 +292,9 @@ private def divOverflows (x y : Int8) : Bool :=
   ⟨x.val - y.val⟩
 @[inline] def mulProof (x y : Int8) (_h : ¬(overflowsMul x y = true)) : Int8 :=
   ⟨x.val * y.val⟩
-@[inline] def divProof (x y : Int8) (_h : y ≠ ⟨0⟩) : Int8 :=
+@[inline] def div (x y : Int8) (_h : y ≠ ⟨0⟩) (_hov : ¬(divOverflows x y = true)) : Int8 :=
   fromBitVec (BitVec.sdiv x.toBitVec y.toBitVec)
-@[inline] def remProof (x y : Int8) (_h : y ≠ ⟨0⟩) : Int8 :=
+@[inline] def rem (x y : Int8) (_h : y ≠ ⟨0⟩) (_hov : ¬(divOverflows x y = true)) : Int8 :=
   fromBitVec (BitVec.srem x.toBitVec y.toBitVec)
 
 /-! ### Tier 2: Wrapping -/
@@ -292,6 +302,7 @@ private def divOverflows (x y : Int8) : Bool :=
 @[inline] def wrappingAdd (x y : Int8) : Int8 := ⟨x.val + y.val⟩
 @[inline] def wrappingSub (x y : Int8) : Int8 := ⟨x.val - y.val⟩
 @[inline] def wrappingMul (x y : Int8) : Int8 := ⟨x.val * y.val⟩
+@[inline] def wrappingNeg (x : Int8) : Int8 := ⟨0 - x.val⟩
 -- FR-001.2a: Wrapping signed div requires proof of nonzero (no wrapping for /0)
 -- MIN / -1 = MIN (wraps)
 @[inline] def wrappingDiv (x y : Int8) (_h : y ≠ ⟨0⟩) : Int8 :=
@@ -303,16 +314,16 @@ private def divOverflows (x y : Int8) : Bool :=
 /-! ### Tier 2: Saturating -/
 
 @[inline] def saturatingAdd (x y : Int8) : Int8 :=
-  let sum := x.toInt + y.toInt
-  if sum > 127 then maxVal
-  else if sum < -128 then minVal
-  else ⟨x.val + y.val⟩
+  let sum := x.val + y.val
+  if (x.val ^^^ sum) &&& (y.val ^^^ sum) >= 128 then
+    if x.val >= 128 then minVal else maxVal
+  else ⟨sum⟩
 
 @[inline] def saturatingSub (x y : Int8) : Int8 :=
-  let diff := x.toInt - y.toInt
-  if diff > 127 then maxVal
-  else if diff < -128 then minVal
-  else ⟨x.val - y.val⟩
+  let diff := x.val - y.val
+  if (x.val ^^^ y.val) &&& (x.val ^^^ diff) >= 128 then
+    if x.val >= 128 then minVal else maxVal
+  else ⟨diff⟩
 
 @[inline] def saturatingMul (x y : Int8) : Int8 :=
   let prod := x.toInt * y.toInt
@@ -382,40 +393,56 @@ end Int8
 
 namespace Int16
 
-private def overflowsAdd (x y : Int16) : Bool :=
-  let sum := x.toInt + y.toInt
-  sum < -(2 ^ 15 : Int) || sum > 2 ^ 15 - 1
+def overflowsAdd (x y : Int16) : Bool :=
+  let sum := x.val + y.val
+  (x.val ^^^ sum) &&& (y.val ^^^ sum) >= 32768
 
-private def overflowsSub (x y : Int16) : Bool :=
-  let diff := x.toInt - y.toInt
-  diff < -(2 ^ 15 : Int) || diff > 2 ^ 15 - 1
+def overflowsSub (x y : Int16) : Bool :=
+  let diff := x.val - y.val
+  (x.val ^^^ y.val) &&& (x.val ^^^ diff) >= 32768
 
-private def overflowsMul (x y : Int16) : Bool :=
+def overflowsMul (x y : Int16) : Bool :=
   let prod := x.toInt * y.toInt
   prod < -(2 ^ 15 : Int) || prod > 2 ^ 15 - 1
 
-private def divOverflows (x y : Int16) : Bool :=
+def divOverflows (x y : Int16) : Bool :=
   x == minVal && y == ⟨65535⟩
+
+/-! ### Tier 1: Proof-Carrying -/
+
+@[inline] def addProof (x y : Int16) (_h : ¬(overflowsAdd x y = true)) : Int16 :=
+  ⟨x.val + y.val⟩
+@[inline] def subProof (x y : Int16) (_h : ¬(overflowsSub x y = true)) : Int16 :=
+  ⟨x.val - y.val⟩
+@[inline] def mulProof (x y : Int16) (_h : ¬(overflowsMul x y = true)) : Int16 :=
+  ⟨x.val * y.val⟩
+@[inline] def div (x y : Int16) (_h : y ≠ ⟨0⟩) (_hov : ¬(divOverflows x y = true)) : Int16 :=
+  fromBitVec (BitVec.sdiv x.toBitVec y.toBitVec)
+@[inline] def rem (x y : Int16) (_h : y ≠ ⟨0⟩) (_hov : ¬(divOverflows x y = true)) : Int16 :=
+  fromBitVec (BitVec.srem x.toBitVec y.toBitVec)
+
+/-! ### Tier 2: Wrapping -/
 
 @[inline] def wrappingAdd (x y : Int16) : Int16 := ⟨x.val + y.val⟩
 @[inline] def wrappingSub (x y : Int16) : Int16 := ⟨x.val - y.val⟩
 @[inline] def wrappingMul (x y : Int16) : Int16 := ⟨x.val * y.val⟩
+@[inline] def wrappingNeg (x : Int16) : Int16 := ⟨0 - x.val⟩
 @[inline] def wrappingDiv (x y : Int16) (_h : y ≠ ⟨0⟩) : Int16 :=
   fromBitVec (BitVec.sdiv x.toBitVec y.toBitVec)
 @[inline] def wrappingRem (x y : Int16) (_h : y ≠ ⟨0⟩) : Int16 :=
   fromBitVec (BitVec.srem x.toBitVec y.toBitVec)
 
 @[inline] def saturatingAdd (x y : Int16) : Int16 :=
-  let sum := x.toInt + y.toInt
-  if sum > 2 ^ 15 - 1 then maxVal
-  else if sum < -(2 ^ 15 : Int) then minVal
-  else ⟨x.val + y.val⟩
+  let sum := x.val + y.val
+  if (x.val ^^^ sum) &&& (y.val ^^^ sum) >= 32768 then
+    if x.val >= 32768 then minVal else maxVal
+  else ⟨sum⟩
 
 @[inline] def saturatingSub (x y : Int16) : Int16 :=
-  let diff := x.toInt - y.toInt
-  if diff > 2 ^ 15 - 1 then maxVal
-  else if diff < -(2 ^ 15 : Int) then minVal
-  else ⟨x.val - y.val⟩
+  let diff := x.val - y.val
+  if (x.val ^^^ y.val) &&& (x.val ^^^ diff) >= 32768 then
+    if x.val >= 32768 then minVal else maxVal
+  else ⟨diff⟩
 
 @[inline] def saturatingMul (x y : Int16) : Int16 :=
   let prod := x.toInt * y.toInt
@@ -467,40 +494,56 @@ end Int16
 
 namespace Int32
 
-private def overflowsAdd (x y : Int32) : Bool :=
-  let sum := x.toInt + y.toInt
-  sum < -(2 ^ 31 : Int) || sum > 2 ^ 31 - 1
+def overflowsAdd (x y : Int32) : Bool :=
+  let sum := x.val + y.val
+  (x.val ^^^ sum) &&& (y.val ^^^ sum) >= 2147483648
 
-private def overflowsSub (x y : Int32) : Bool :=
-  let diff := x.toInt - y.toInt
-  diff < -(2 ^ 31 : Int) || diff > 2 ^ 31 - 1
+def overflowsSub (x y : Int32) : Bool :=
+  let diff := x.val - y.val
+  (x.val ^^^ y.val) &&& (x.val ^^^ diff) >= 2147483648
 
-private def overflowsMul (x y : Int32) : Bool :=
+def overflowsMul (x y : Int32) : Bool :=
   let prod := x.toInt * y.toInt
   prod < -(2 ^ 31 : Int) || prod > 2 ^ 31 - 1
 
-private def divOverflows (x y : Int32) : Bool :=
+def divOverflows (x y : Int32) : Bool :=
   x == minVal && y == ⟨4294967295⟩
+
+/-! ### Tier 1: Proof-Carrying -/
+
+@[inline] def addProof (x y : Int32) (_h : ¬(overflowsAdd x y = true)) : Int32 :=
+  ⟨x.val + y.val⟩
+@[inline] def subProof (x y : Int32) (_h : ¬(overflowsSub x y = true)) : Int32 :=
+  ⟨x.val - y.val⟩
+@[inline] def mulProof (x y : Int32) (_h : ¬(overflowsMul x y = true)) : Int32 :=
+  ⟨x.val * y.val⟩
+@[inline] def div (x y : Int32) (_h : y ≠ ⟨0⟩) (_hov : ¬(divOverflows x y = true)) : Int32 :=
+  fromBitVec (BitVec.sdiv x.toBitVec y.toBitVec)
+@[inline] def rem (x y : Int32) (_h : y ≠ ⟨0⟩) (_hov : ¬(divOverflows x y = true)) : Int32 :=
+  fromBitVec (BitVec.srem x.toBitVec y.toBitVec)
+
+/-! ### Tier 2: Wrapping -/
 
 @[inline] def wrappingAdd (x y : Int32) : Int32 := ⟨x.val + y.val⟩
 @[inline] def wrappingSub (x y : Int32) : Int32 := ⟨x.val - y.val⟩
 @[inline] def wrappingMul (x y : Int32) : Int32 := ⟨x.val * y.val⟩
+@[inline] def wrappingNeg (x : Int32) : Int32 := ⟨0 - x.val⟩
 @[inline] def wrappingDiv (x y : Int32) (_h : y ≠ ⟨0⟩) : Int32 :=
   fromBitVec (BitVec.sdiv x.toBitVec y.toBitVec)
 @[inline] def wrappingRem (x y : Int32) (_h : y ≠ ⟨0⟩) : Int32 :=
   fromBitVec (BitVec.srem x.toBitVec y.toBitVec)
 
 @[inline] def saturatingAdd (x y : Int32) : Int32 :=
-  let sum := x.toInt + y.toInt
-  if sum > 2 ^ 31 - 1 then maxVal
-  else if sum < -(2 ^ 31 : Int) then minVal
-  else ⟨x.val + y.val⟩
+  let sum := x.val + y.val
+  if (x.val ^^^ sum) &&& (y.val ^^^ sum) >= 2147483648 then
+    if x.val >= 2147483648 then minVal else maxVal
+  else ⟨sum⟩
 
 @[inline] def saturatingSub (x y : Int32) : Int32 :=
-  let diff := x.toInt - y.toInt
-  if diff > 2 ^ 31 - 1 then maxVal
-  else if diff < -(2 ^ 31 : Int) then minVal
-  else ⟨x.val - y.val⟩
+  let diff := x.val - y.val
+  if (x.val ^^^ y.val) &&& (x.val ^^^ diff) >= 2147483648 then
+    if x.val >= 2147483648 then minVal else maxVal
+  else ⟨diff⟩
 
 @[inline] def saturatingMul (x y : Int32) : Int32 :=
   let prod := x.toInt * y.toInt
@@ -552,40 +595,56 @@ end Int32
 
 namespace Int64
 
-private def overflowsAdd (x y : Int64) : Bool :=
-  let sum := x.toInt + y.toInt
-  sum < -(2 ^ 63 : Int) || sum > 2 ^ 63 - 1
+def overflowsAdd (x y : Int64) : Bool :=
+  let sum := x.val + y.val
+  (x.val ^^^ sum) &&& (y.val ^^^ sum) >= 9223372036854775808
 
-private def overflowsSub (x y : Int64) : Bool :=
-  let diff := x.toInt - y.toInt
-  diff < -(2 ^ 63 : Int) || diff > 2 ^ 63 - 1
+def overflowsSub (x y : Int64) : Bool :=
+  let diff := x.val - y.val
+  (x.val ^^^ y.val) &&& (x.val ^^^ diff) >= 9223372036854775808
 
-private def overflowsMul (x y : Int64) : Bool :=
+def overflowsMul (x y : Int64) : Bool :=
   let prod := x.toInt * y.toInt
   prod < -(2 ^ 63 : Int) || prod > 2 ^ 63 - 1
 
-private def divOverflows (x y : Int64) : Bool :=
+def divOverflows (x y : Int64) : Bool :=
   x == minVal && y == ⟨18446744073709551615⟩
+
+/-! ### Tier 1: Proof-Carrying -/
+
+@[inline] def addProof (x y : Int64) (_h : ¬(overflowsAdd x y = true)) : Int64 :=
+  ⟨x.val + y.val⟩
+@[inline] def subProof (x y : Int64) (_h : ¬(overflowsSub x y = true)) : Int64 :=
+  ⟨x.val - y.val⟩
+@[inline] def mulProof (x y : Int64) (_h : ¬(overflowsMul x y = true)) : Int64 :=
+  ⟨x.val * y.val⟩
+@[inline] def div (x y : Int64) (_h : y ≠ ⟨0⟩) (_hov : ¬(divOverflows x y = true)) : Int64 :=
+  fromBitVec (BitVec.sdiv x.toBitVec y.toBitVec)
+@[inline] def rem (x y : Int64) (_h : y ≠ ⟨0⟩) (_hov : ¬(divOverflows x y = true)) : Int64 :=
+  fromBitVec (BitVec.srem x.toBitVec y.toBitVec)
+
+/-! ### Tier 2: Wrapping -/
 
 @[inline] def wrappingAdd (x y : Int64) : Int64 := ⟨x.val + y.val⟩
 @[inline] def wrappingSub (x y : Int64) : Int64 := ⟨x.val - y.val⟩
 @[inline] def wrappingMul (x y : Int64) : Int64 := ⟨x.val * y.val⟩
+@[inline] def wrappingNeg (x : Int64) : Int64 := ⟨0 - x.val⟩
 @[inline] def wrappingDiv (x y : Int64) (_h : y ≠ ⟨0⟩) : Int64 :=
   fromBitVec (BitVec.sdiv x.toBitVec y.toBitVec)
 @[inline] def wrappingRem (x y : Int64) (_h : y ≠ ⟨0⟩) : Int64 :=
   fromBitVec (BitVec.srem x.toBitVec y.toBitVec)
 
 @[inline] def saturatingAdd (x y : Int64) : Int64 :=
-  let sum := x.toInt + y.toInt
-  if sum > 2 ^ 63 - 1 then maxVal
-  else if sum < -(2 ^ 63 : Int) then minVal
-  else ⟨x.val + y.val⟩
+  let sum := x.val + y.val
+  if (x.val ^^^ sum) &&& (y.val ^^^ sum) >= 9223372036854775808 then
+    if x.val >= 9223372036854775808 then minVal else maxVal
+  else ⟨sum⟩
 
 @[inline] def saturatingSub (x y : Int64) : Int64 :=
-  let diff := x.toInt - y.toInt
-  if diff > 2 ^ 63 - 1 then maxVal
-  else if diff < -(2 ^ 63 : Int) then minVal
-  else ⟨x.val - y.val⟩
+  let diff := x.val - y.val
+  if (x.val ^^^ y.val) &&& (x.val ^^^ diff) >= 9223372036854775808 then
+    if x.val >= 9223372036854775808 then minVal else maxVal
+  else ⟨diff⟩
 
 @[inline] def saturatingMul (x y : Int64) : Int64 :=
   let prod := x.toInt * y.toInt
@@ -637,19 +696,43 @@ end Int64
 
 namespace UWord
 
-@[inline] def wrappingAdd (x y : UWord) : UWord := ⟨x.val + y.val⟩
-@[inline] def wrappingSub (x y : UWord) : UWord := ⟨x.val - y.val⟩
-@[inline] def wrappingMul (x y : UWord) : UWord := ⟨x.val * y.val⟩
+variable {w : Nat} [PlatformWidth w]
 
-@[inline] def checkedDiv (x y : UWord) : Option UWord :=
+@[inline] def addChecked (x y : UWord w) (_h : x.toNat + y.toNat < 2 ^ w) : UWord w := ⟨x.val + y.val⟩
+@[inline] def subChecked (x y : UWord w) (_h : y.toNat ≤ x.toNat) : UWord w := ⟨x.val - y.val⟩
+@[inline] def mulChecked (x y : UWord w) (_h : x.toNat * y.toNat < 2 ^ w) : UWord w := ⟨x.val * y.val⟩
+@[inline] def div (x y : UWord w) (_h : y ≠ ⟨0⟩) : UWord w := ⟨x.val / y.val⟩
+@[inline] def rem (x y : UWord w) (_h : y ≠ ⟨0⟩) : UWord w := ⟨x.val % y.val⟩
+
+@[inline] def wrappingAdd (x y : UWord w) : UWord w := ⟨x.val + y.val⟩
+@[inline] def wrappingSub (x y : UWord w) : UWord w := ⟨x.val - y.val⟩
+@[inline] def wrappingMul (x y : UWord w) : UWord w := ⟨x.val * y.val⟩
+@[inline] def wrappingNeg (x : UWord w) : UWord w := ⟨0 - x.val⟩
+
+@[inline] def saturatingAdd (x y : UWord w) : UWord w :=
+  if x.toNat + y.toNat >= 2 ^ w then maxVal else ⟨x.val + y.val⟩
+@[inline] def saturatingSub (x y : UWord w) : UWord w :=
+  if x.toNat < y.toNat then minVal else ⟨x.val - y.val⟩
+@[inline] def saturatingMul (x y : UWord w) : UWord w :=
+  if x.toNat * y.toNat >= 2 ^ w then maxVal else ⟨x.val * y.val⟩
+
+@[inline] def checkedAdd (x y : UWord w) : Option (UWord w) :=
+  if x.toNat + y.toNat >= 2 ^ w then none else some ⟨x.val + y.val⟩
+@[inline] def checkedSub (x y : UWord w) : Option (UWord w) :=
+  if x.toNat < y.toNat then none else some ⟨x.val - y.val⟩
+@[inline] def checkedMul (x y : UWord w) : Option (UWord w) :=
+  if x.toNat * y.toNat >= 2 ^ w then none else some ⟨x.val * y.val⟩
+@[inline] def checkedDiv (x y : UWord w) : Option (UWord w) :=
   if y == ⟨0⟩ then none else some ⟨x.val / y.val⟩
-@[inline] def checkedRem (x y : UWord) : Option UWord :=
+@[inline] def checkedRem (x y : UWord w) : Option (UWord w) :=
   if y == ⟨0⟩ then none else some ⟨x.val % y.val⟩
 
-@[inline] def divProof (x y : UWord) (_h : y ≠ ⟨0⟩) : UWord :=
-  ⟨x.val / y.val⟩
-@[inline] def remProof (x y : UWord) (_h : y ≠ ⟨0⟩) : UWord :=
-  ⟨x.val % y.val⟩
+@[inline] def overflowingAdd (x y : UWord w) : UWord w × Bool :=
+  (⟨x.val + y.val⟩, x.toNat + y.toNat >= 2 ^ w)
+@[inline] def overflowingSub (x y : UWord w) : UWord w × Bool :=
+  (⟨x.val - y.val⟩, x.toNat < y.toNat)
+@[inline] def overflowingMul (x y : UWord w) : UWord w × Bool :=
+  (⟨x.val * y.val⟩, x.toNat * y.toNat >= 2 ^ w)
 
 end UWord
 
@@ -659,14 +742,85 @@ end UWord
 
 namespace IWord
 
-@[inline] def wrappingAdd (x y : IWord) : IWord := ⟨x.val + y.val⟩
-@[inline] def wrappingSub (x y : IWord) : IWord := ⟨x.val - y.val⟩
-@[inline] def wrappingMul (x y : IWord) : IWord := ⟨x.val * y.val⟩
+variable {w : Nat} [PlatformWidth w]
 
-@[inline] def wrappingDiv (x y : IWord) (_h : y ≠ ⟨0⟩) : IWord :=
-  ⟨⟨(BitVec.sdiv x.toBitVec y.toBitVec).toFin⟩⟩
-@[inline] def wrappingRem (x y : IWord) (_h : y ≠ ⟨0⟩) : IWord :=
-  ⟨⟨(BitVec.srem x.toBitVec y.toBitVec).toFin⟩⟩
+@[inline] def addProof (x y : IWord w) (_h : ¬(overflowsAdd x y = true)) : IWord w := ⟨x.val + y.val⟩
+@[inline] def subProof (x y : IWord w) (_h : ¬(overflowsSub x y = true)) : IWord w := ⟨x.val - y.val⟩
+@[inline] def mulProof (x y : IWord w) (_h : ¬(overflowsMul x y = true)) : IWord w := ⟨x.val * y.val⟩
+@[inline] def div (x y : IWord w) (_hy : y ≠ ⟨0⟩) (_hov : ¬(divOverflows x y = true)) : IWord w :=
+  ⟨BitVec.sdiv x.toBitVec y.toBitVec⟩
+@[inline] def rem (x y : IWord w) (_hy : y ≠ ⟨0⟩) (_hov : ¬(divOverflows x y = true)) : IWord w :=
+  ⟨BitVec.srem x.toBitVec y.toBitVec⟩
+
+@[inline] def wrappingAdd (x y : IWord w) : IWord w := ⟨x.val + y.val⟩
+@[inline] def wrappingSub (x y : IWord w) : IWord w := ⟨x.val - y.val⟩
+@[inline] def wrappingMul (x y : IWord w) : IWord w := ⟨x.val * y.val⟩
+@[inline] def wrappingNeg (x : IWord w) : IWord w := ⟨0 - x.val⟩
+
+@[inline] def saturatingAdd (x y : IWord w) : IWord w :=
+  let sum := x.val + y.val
+  if Word.Spec.signedAddOverflows x.val y.val then
+    if x.val.msb then minVal else maxVal
+  else ⟨sum⟩
+
+@[inline] def saturatingSub (x y : IWord w) : IWord w :=
+  let diff := x.val - y.val
+  if Word.Spec.signedSubOverflows x.val y.val then
+    if x.val.msb then minVal else maxVal
+  else ⟨diff⟩
+
+@[inline] def saturatingMul (x y : IWord w) : IWord w :=
+  let prod := x.val * y.val
+  if Word.Spec.signedMulOverflows x.val y.val then
+    -- Determine direction: overflow is positive if sign(x) XOR sign(y) = positive
+    if x.val.msb != y.val.msb then minVal else maxVal
+  else ⟨prod⟩
+
+@[inline] def checkedAdd (x y : IWord w) : Option (IWord w) :=
+  if overflowsAdd x y then none else some ⟨x.val + y.val⟩
+@[inline] def checkedSub (x y : IWord w) : Option (IWord w) :=
+  if overflowsSub x y then none else some ⟨x.val - y.val⟩
+@[inline] def checkedMul (x y : IWord w) : Option (IWord w) :=
+  if overflowsMul x y then none else some ⟨x.val * y.val⟩
+@[inline] def checkedDiv (x y : IWord w) : Option (IWord w) :=
+  if y == ⟨0⟩ then none
+  else if divOverflows x y then none
+  else some ⟨BitVec.sdiv x.toBitVec y.toBitVec⟩
+@[inline] def checkedRem (x y : IWord w) : Option (IWord w) :=
+  if y == ⟨0⟩ then none
+  else if divOverflows x y then none
+  else some ⟨BitVec.srem x.toBitVec y.toBitVec⟩
+
+@[inline] def overflowingAdd (x y : IWord w) : IWord w × Bool :=
+  (⟨x.val + y.val⟩, overflowsAdd x y)
+@[inline] def overflowingSub (x y : IWord w) : IWord w × Bool :=
+  (⟨x.val - y.val⟩, overflowsSub x y)
+@[inline] def overflowingMul (x y : IWord w) : IWord w × Bool :=
+  (⟨x.val * y.val⟩, overflowsMul x y)
+@[inline] def wrappingDiv (x y : IWord w) (_h : y ≠ ⟨0⟩) : IWord w :=
+  ⟨BitVec.sdiv x.toBitVec y.toBitVec⟩
+@[inline] def wrappingRem (x y : IWord w) (_h : y ≠ ⟨0⟩) : IWord w :=
+  ⟨BitVec.srem x.toBitVec y.toBitVec⟩
+
+-- FR-001.2a: Saturating: MIN / -1 = MAX
+@[inline] def saturatingDiv (x y : IWord w) (_h : y ≠ ⟨0⟩) : IWord w :=
+  if divOverflows x y then maxVal
+  else ⟨BitVec.sdiv x.toBitVec y.toBitVec⟩
+
+-- FR-001.2b: MIN % -1 = 0 (fits, no saturation)
+@[inline] def saturatingRem (x y : IWord w) (_h : y ≠ ⟨0⟩) : IWord w :=
+  if divOverflows x y then ⟨0⟩
+  else ⟨BitVec.srem x.toBitVec y.toBitVec⟩
+
+-- FR-001.2a: Overflowing: MIN / -1 = (MIN, true)
+@[inline] def overflowingDiv (x y : IWord w) (_h : y ≠ ⟨0⟩) : IWord w × Bool :=
+  if divOverflows x y then (minVal, true)
+  else (⟨BitVec.sdiv x.toBitVec y.toBitVec⟩, false)
+
+-- FR-001.2b: Overflowing: MIN % -1 = (0, true)
+@[inline] def overflowingRem (x y : IWord w) (_h : y ≠ ⟨0⟩) : IWord w × Bool :=
+  if divOverflows x y then (⟨0⟩, true)
+  else (⟨BitVec.srem x.toBitVec y.toBitVec⟩, false)
 
 end IWord
 
