@@ -364,24 +364,37 @@ end Int64
 
 namespace UWord
 
-@[inline] def band (x y : UWord) : UWord := ⟨x.val &&& y.val⟩
-@[inline] def bor  (x y : UWord) : UWord := ⟨x.val ||| y.val⟩
-@[inline] def bxor (x y : UWord) : UWord := ⟨x.val ^^^ y.val⟩
-@[inline] def bnot (x : UWord)   : UWord := ⟨~~~x.val⟩
+variable {w : Nat} [PlatformWidth w]
 
-@[inline] instance : HAnd UWord UWord UWord := ⟨band⟩
-@[inline] instance : HOr  UWord UWord UWord := ⟨bor⟩
-@[inline] instance : HXor UWord UWord UWord := ⟨bxor⟩
-@[inline] instance : Complement UWord := ⟨bnot⟩
+@[inline] def band (x y : UWord w) : UWord w := ⟨x.val &&& y.val⟩
+@[inline] def bor  (x y : UWord w) : UWord w := ⟨x.val ||| y.val⟩
+@[inline] def bxor (x y : UWord w) : UWord w := ⟨x.val ^^^ y.val⟩
+@[inline] def bnot (x : UWord w)   : UWord w := ⟨~~~x.val⟩
 
-@[inline] def shl (x : UWord) (count : UWord) : UWord :=
-  ⟨x.val.shiftLeft ((count.val.toNat % System.Platform.numBits).toUSize)⟩
+@[inline] instance : HAnd (UWord w) (UWord w) (UWord w) := ⟨band⟩
+@[inline] instance : HOr  (UWord w) (UWord w) (UWord w) := ⟨bor⟩
+@[inline] instance : HXor (UWord w) (UWord w) (UWord w) := ⟨bxor⟩
+@[inline] instance : Complement (UWord w) := ⟨bnot⟩
 
-@[inline] def shrLogical (x : UWord) (count : UWord) : UWord :=
-  ⟨x.val.shiftRight ((count.val.toNat % System.Platform.numBits).toUSize)⟩
+@[inline] def shl (x : UWord w) (count : UWord w) : UWord w :=
+  ⟨x.val <<< (count.val.toNat % w)⟩
 
-@[inline] instance : HShiftLeft  UWord UWord UWord := ⟨shl⟩
-@[inline] instance : HShiftRight UWord UWord UWord := ⟨shrLogical⟩
+@[inline] def shrLogical (x : UWord w) (count : UWord w) : UWord w :=
+  ⟨x.val >>> (count.val.toNat % w)⟩
+
+@[inline] def shrArith (x : UWord w) (count : UWord w) : UWord w :=
+  ⟨x.val.sshiftRight (count.val.toNat % w)⟩
+
+@[inline] def rotl (x : UWord w) (count : UWord w) : UWord w :=
+  let c := count.val.toNat % w
+  ⟨x.val.shiftLeft c ||| x.val.ushiftRight (w - c)⟩
+
+@[inline] def rotr (x : UWord w) (count : UWord w) : UWord w :=
+  let c := count.val.toNat % w
+  ⟨x.val.ushiftRight c ||| x.val.shiftLeft (w - c)⟩
+
+@[inline] instance : HShiftLeft  (UWord w) (UWord w) (UWord w) := ⟨shl⟩
+@[inline] instance : HShiftRight (UWord w) (UWord w) (UWord w) := ⟨shrLogical⟩
 
 end UWord
 
@@ -391,27 +404,37 @@ end UWord
 
 namespace IWord
 
-@[inline] def band (x y : IWord) : IWord := ⟨x.val &&& y.val⟩
-@[inline] def bor  (x y : IWord) : IWord := ⟨x.val ||| y.val⟩
-@[inline] def bxor (x y : IWord) : IWord := ⟨x.val ^^^ y.val⟩
-@[inline] def bnot (x : IWord)   : IWord := ⟨~~~x.val⟩
+variable {w : Nat} [PlatformWidth w]
 
-@[inline] instance : HAnd IWord IWord IWord := ⟨band⟩
-@[inline] instance : HOr  IWord IWord IWord := ⟨bor⟩
-@[inline] instance : HXor IWord IWord IWord := ⟨bxor⟩
-@[inline] instance : Complement IWord := ⟨bnot⟩
+@[inline] def band (x y : IWord w) : IWord w := ⟨x.val &&& y.val⟩
+@[inline] def bor  (x y : IWord w) : IWord w := ⟨x.val ||| y.val⟩
+@[inline] def bxor (x y : IWord w) : IWord w := ⟨x.val ^^^ y.val⟩
+@[inline] def bnot (x : IWord w)   : IWord w := ⟨~~~x.val⟩
 
-@[inline] def shl (x : IWord) (count : IWord) : IWord :=
-  ⟨x.val.shiftLeft ((count.val.toNat % System.Platform.numBits).toUSize)⟩
+@[inline] instance : HAnd (IWord w) (IWord w) (IWord w) := ⟨band⟩
+@[inline] instance : HOr  (IWord w) (IWord w) (IWord w) := ⟨bor⟩
+@[inline] instance : HXor (IWord w) (IWord w) (IWord w) := ⟨bxor⟩
+@[inline] instance : Complement (IWord w) := ⟨bnot⟩
 
-@[inline] def shrLogical (x : IWord) (count : IWord) : IWord :=
-  ⟨x.val.shiftRight ((count.val.toNat % System.Platform.numBits).toUSize)⟩
+@[inline] def shl (x : IWord w) (count : IWord w) : IWord w :=
+  ⟨x.val <<< (count.val.toNat % w)⟩
 
-@[inline] def shrArith (x : IWord) (count : IWord) : IWord :=
-  ⟨⟨(x.toBitVec.sshiftRight (count.val.toNat % System.Platform.numBits)).toFin⟩⟩
+@[inline] def shrLogical (x : IWord w) (count : IWord w) : IWord w :=
+  ⟨x.val >>> (count.val.toNat % w)⟩
 
-@[inline] instance : HShiftLeft  IWord IWord IWord := ⟨shl⟩
-@[inline] instance : HShiftRight IWord IWord IWord := ⟨shrLogical⟩
+@[inline] def shrArith (x : IWord w) (count : IWord w) : IWord w :=
+  ⟨x.toBitVec.sshiftRight (count.val.toNat % w)⟩
+
+@[inline] def rotl (x : IWord w) (count : IWord w) : IWord w :=
+  let c := count.val.toNat % w
+  ⟨x.val.shiftLeft c ||| x.val.ushiftRight (w - c)⟩
+
+@[inline] def rotr (x : IWord w) (count : IWord w) : IWord w :=
+  let c := count.val.toNat % w
+  ⟨x.val.ushiftRight c ||| x.val.shiftLeft (w - c)⟩
+
+@[inline] instance : HShiftLeft  (IWord w) (IWord w) (IWord w) := ⟨shl⟩
+@[inline] instance : HShiftRight (IWord w) (IWord w) (IWord w) := ⟨shrLogical⟩
 
 end IWord
 
