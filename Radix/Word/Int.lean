@@ -49,11 +49,24 @@ instance {n : Nat} : OfNat Int8 n := ⟨⟨OfNat.ofNat n⟩⟩
 instance : ToString Int8 := ⟨fun a => toString a.toInt⟩
 instance : Repr Int8 := ⟨fun a _ => Repr.addAppParen (repr a.toInt) 0⟩
 
-/-- Signed comparison: less than. -/
-@[inline] def slt (a b : Int8) : Bool := decide (a.toInt < b.toInt)
+/-- Signed less-than via MSB comparison (zero-cost, no `Int` allocation).
+    Two's complement: same-sign ⟹ unsigned order; different-sign ⟹ negative is smaller. -/
+@[inline] def slt (a b : Int8) : Bool :=
+  let aNeg := a.val >= 128
+  let bNeg := b.val >= 128
+  if aNeg == bNeg then a.val < b.val else aNeg
 
-/-- Signed comparison: less than or equal. -/
-@[inline] def sle (a b : Int8) : Bool := decide (a.toInt <= b.toInt)
+/-- Signed less-than-or-equal via MSB comparison (zero-cost, no `Int` allocation). -/
+@[inline] def sle (a b : Int8) : Bool :=
+  let aNeg := a.val >= 128
+  let bNeg := b.val >= 128
+  if aNeg == bNeg then a.val <= b.val else aNeg
+
+/-- Signed comparison: greater than. -/
+@[inline] def sgt (a b : Int8) : Bool := slt b a
+
+/-- Signed comparison: greater than or equal. -/
+@[inline] def sge (a b : Int8) : Bool := sle b a
 
 instance : LT Int8 := ⟨fun a b => a.slt b = true⟩
 instance : LE Int8 := ⟨fun a b => a.sle b = true⟩
@@ -112,8 +125,23 @@ instance {n : Nat} : OfNat Int16 n := ⟨⟨OfNat.ofNat n⟩⟩
 instance : ToString Int16 := ⟨fun a => toString a.toInt⟩
 instance : Repr Int16 := ⟨fun a _ => Repr.addAppParen (repr a.toInt) 0⟩
 
-@[inline] def slt (a b : Int16) : Bool := decide (a.toInt < b.toInt)
-@[inline] def sle (a b : Int16) : Bool := decide (a.toInt <= b.toInt)
+/-- Signed less-than via MSB comparison (zero-cost, NFR-002). -/
+@[inline] def slt (a b : Int16) : Bool :=
+  let aNeg := a.val >= 32768
+  let bNeg := b.val >= 32768
+  if aNeg == bNeg then a.val < b.val else aNeg
+
+/-- Signed less-than-or-equal via MSB comparison (zero-cost, NFR-002). -/
+@[inline] def sle (a b : Int16) : Bool :=
+  let aNeg := a.val >= 32768
+  let bNeg := b.val >= 32768
+  if aNeg == bNeg then a.val <= b.val else aNeg
+
+/-- Signed comparison: greater than. -/
+@[inline] def sgt (a b : Int16) : Bool := slt b a
+
+/-- Signed comparison: greater than or equal. -/
+@[inline] def sge (a b : Int16) : Bool := sle b a
 
 instance : LT Int16 := ⟨fun a b => a.slt b = true⟩
 instance : LE Int16 := ⟨fun a b => a.sle b = true⟩
@@ -160,8 +188,23 @@ instance {n : Nat} : OfNat Int32 n := ⟨⟨OfNat.ofNat n⟩⟩
 instance : ToString Int32 := ⟨fun a => toString a.toInt⟩
 instance : Repr Int32 := ⟨fun a _ => Repr.addAppParen (repr a.toInt) 0⟩
 
-@[inline] def slt (a b : Int32) : Bool := decide (a.toInt < b.toInt)
-@[inline] def sle (a b : Int32) : Bool := decide (a.toInt <= b.toInt)
+/-- Signed less-than via MSB comparison (zero-cost, NFR-002). -/
+@[inline] def slt (a b : Int32) : Bool :=
+  let aNeg := a.val >= 2147483648
+  let bNeg := b.val >= 2147483648
+  if aNeg == bNeg then a.val < b.val else aNeg
+
+/-- Signed less-than-or-equal via MSB comparison (zero-cost, NFR-002). -/
+@[inline] def sle (a b : Int32) : Bool :=
+  let aNeg := a.val >= 2147483648
+  let bNeg := b.val >= 2147483648
+  if aNeg == bNeg then a.val <= b.val else aNeg
+
+/-- Signed comparison: greater than. -/
+@[inline] def sgt (a b : Int32) : Bool := slt b a
+
+/-- Signed comparison: greater than or equal. -/
+@[inline] def sge (a b : Int32) : Bool := sle b a
 
 instance : LT Int32 := ⟨fun a b => a.slt b = true⟩
 instance : LE Int32 := ⟨fun a b => a.sle b = true⟩
@@ -208,8 +251,23 @@ instance {n : Nat} : OfNat Int64 n := ⟨⟨OfNat.ofNat n⟩⟩
 instance : ToString Int64 := ⟨fun a => toString a.toInt⟩
 instance : Repr Int64 := ⟨fun a _ => Repr.addAppParen (repr a.toInt) 0⟩
 
-@[inline] def slt (a b : Int64) : Bool := decide (a.toInt < b.toInt)
-@[inline] def sle (a b : Int64) : Bool := decide (a.toInt <= b.toInt)
+/-- Signed less-than via MSB comparison (zero-cost, NFR-002). -/
+@[inline] def slt (a b : Int64) : Bool :=
+  let aNeg := a.val >= 9223372036854775808
+  let bNeg := b.val >= 9223372036854775808
+  if aNeg == bNeg then a.val < b.val else aNeg
+
+/-- Signed less-than-or-equal via MSB comparison (zero-cost, NFR-002). -/
+@[inline] def sle (a b : Int64) : Bool :=
+  let aNeg := a.val >= 9223372036854775808
+  let bNeg := b.val >= 9223372036854775808
+  if aNeg == bNeg then a.val <= b.val else aNeg
+
+/-- Signed comparison: greater than. -/
+@[inline] def sgt (a b : Int64) : Bool := slt b a
+
+/-- Signed comparison: greater than or equal. -/
+@[inline] def sge (a b : Int64) : Bool := sle b a
 
 instance : LT Int64 := ⟨fun a b => a.slt b = true⟩
 instance : LE Int64 := ⟨fun a b => a.sle b = true⟩
