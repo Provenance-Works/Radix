@@ -227,13 +227,13 @@ def signedOverflowingMul (x y : BitVec n) : BitVec n × Bool :=
 
 /-- Signed overflowing division: returns `(wrapping result, overflowed)`.
     For `MIN / -1`: returns `(MIN, true)` per FR-001.2a. -/
-def signedOverflowingDiv (x y : BitVec n) (h : y ≠ 0#n) : BitVec n × Bool :=
+def signedOverflowingDiv (x y : BitVec n) (_h : y ≠ 0#n) : BitVec n × Bool :=
   if signedDivOverflows x y then (x, true)
   else (BitVec.sdiv x y, false)
 
 /-- Signed overflowing remainder: returns `(result, overflowed)`.
     For `MIN % -1`: returns `(0, true)` per FR-001.2b. -/
-def signedOverflowingRem (x y : BitVec n) (h : y ≠ 0#n) : BitVec n × Bool :=
+def signedOverflowingRem (x y : BitVec n) (_h : y ≠ 0#n) : BitVec n × Bool :=
   if signedDivOverflows x y then (0#n, true)
   else (BitVec.srem x y, false)
 
@@ -291,5 +291,11 @@ def slt (x y : BitVec n) : Bool := x.toInt < y.toInt
 
 /-- Signed less-than-or-equal. -/
 def sle (x y : BitVec n) : Bool := x.toInt <= y.toInt
+
+/-- Signed greater-than: symmetric to `slt`. -/
+def sgt (x y : BitVec n) : Bool := slt y x
+
+/-- Signed greater-than-or-equal: symmetric to `sle`. -/
+def sge (x y : BitVec n) : Bool := sle y x
 
 end Radix.Word.Spec
