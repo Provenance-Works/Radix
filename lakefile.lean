@@ -21,6 +21,48 @@ lean_exe test where
 lean_exe proptest where
   root := `tests.PropertyTests
 
+lean_lib ComprehensiveTestLib where
+  srcDir := "."
+  roots := #[`tests.ComprehensiveTests.Framework,
+             `tests.ComprehensiveTests.Word.UInt8,
+             `tests.ComprehensiveTests.Word.UInt16,
+             `tests.ComprehensiveTests.Word.UInt32,
+             `tests.ComprehensiveTests.Word.UInt64,
+             `tests.ComprehensiveTests.Word.Int8,
+             `tests.ComprehensiveTests.Word.Int16,
+             `tests.ComprehensiveTests.Word.Int32,
+             `tests.ComprehensiveTests.Word.Int64,
+             `tests.ComprehensiveTests.Word.UWord,
+             `tests.ComprehensiveTests.Word.IWord,
+             `tests.ComprehensiveTests.Word.Conversions,
+             `tests.ComprehensiveTests.Word.Properties,
+             `tests.ComprehensiveTests.Bit.Ops,
+             `tests.ComprehensiveTests.Bit.Scan,
+             `tests.ComprehensiveTests.Bit.Field,
+             `tests.ComprehensiveTests.Bit.Properties,
+             `tests.ComprehensiveTests.Bytes.Order,
+             `tests.ComprehensiveTests.Bytes.Slice,
+             `tests.ComprehensiveTests.Bytes.Properties,
+             `tests.ComprehensiveTests.Memory.Buffer,
+             `tests.ComprehensiveTests.Memory.Ptr,
+             `tests.ComprehensiveTests.Memory.Layout,
+             `tests.ComprehensiveTests.Memory.Properties,
+             `tests.ComprehensiveTests.Binary.Format,
+             `tests.ComprehensiveTests.Binary.Leb128,
+             `tests.ComprehensiveTests.Binary.Properties,
+             `tests.ComprehensiveTests.System.Error,
+             `tests.ComprehensiveTests.System.IO,
+             `tests.ComprehensiveTests.System.Properties,
+             `tests.ComprehensiveTests.Concurrency.Ordering,
+             `tests.ComprehensiveTests.Concurrency.Atomic,
+             `tests.ComprehensiveTests.Concurrency.Properties,
+             `tests.ComprehensiveTests.BareMetal.Platform,
+             `tests.ComprehensiveTests.BareMetal.MemoryMap,
+             `tests.ComprehensiveTests.BareMetal.Startup,
+             `tests.ComprehensiveTests.BareMetal.GCFree,
+             `tests.ComprehensiveTests.BareMetal.Linker,
+             `tests.ComprehensiveTests.BareMetal.Properties]
+
 lean_exe comptest where
   root := `tests.ComprehensiveTests
 
