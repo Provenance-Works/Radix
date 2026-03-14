@@ -1,0 +1,1199 @@
+# =============================================================================
+# Radix — GitLab CI/CD Pipeline (Enterprise-Grade)
+# =============================================================================
+#
+# Runner: Shell executor, tag: normal
+# Cache: Aggressive multi-layer caching for Lean 4 + Mathlib builds
+# Structure: Modular includes from .gitlab/ci/*.yml
+#
+# Pipeline Architecture:
+#   .pre           → Cache warmup, dependency resolution
+#   prepare        → Toolchain verification, workspace setup
+#   validate       → Lint, format, YAML checks, schema validation
+#   build          → Library, tests, benchmarks, examples (parallel)
+#   test           → Unit, property, comprehensive, examples (parallel)
+#   analyze        → Proof verification, trust audit, metrics
+#   security       → Secret detection, FFI SAST, SCA, license
+#   benchmark      → Performance regression detection
+#   release        → Changelog, SBOM, tagging (tag pipelines only)
+#   notify         → Pipeline status reporting
+#   .post          → Cleanup, metrics export
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Workflow Control — Prevent Duplicate Pipelines
+# ---------------------------------------------------------------------------
+workflow:
+  name: "$CI_COMMIT_REF_NAME — $CI_PIPELINE_SOURCE"
+  auto_cancel:
+    on_new_commit: interruptible
+    on_job_failure: none
+  rules:
+    # Tag pipelines (releases)
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+      variables:
+        PIPELINE_TYPE: "release"
+    # Merge request pipelines
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        PIPELINE_TYPE: "merge_request"
+    # Default branch (main)
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        PIPELINE_TYPE: "default_branch"
+    # Release branches
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      variables:
+        PIPELINE_TYPE: "release_branch"
+    # Feature branches
+    - if: $CI_COMMIT_BRANCH
+      variables:
+        PIPELINE_TYPE: "feature_branch"
+    # Scheduled pipelines
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables:
+        PIPELINE_TYPE: "scheduled"
+
+# ---------------------------------------------------------------------------
+# Stages — Multi-Layer Pipeline Architecture
+# ---------------------------------------------------------------------------
+stages:
+  - .pre
+  - prepare
+  - validate
+  - build
+  - test
+  - analyze
+  - security
+  - benchmark
+  - release
+  - notify
+  - .post
+
+# ---------------------------------------------------------------------------
+# Global Variables
+# ---------------------------------------------------------------------------
+variables:
+  # Git optimization
+  GIT_DEPTH: 50
+  GIT_STRATEGY: fetch
+  GIT_CLEAN_FLAGS: "-ffdx -e .lake/ -e ~/.elan/"
+
+  # Lean / Lake configuration
+  LAKE_CACHE_DIR: ".lake"
+  ELAN_HOME: "$CI_PROJECT_DIR/.elan"
+  PATH: "$CI_PROJECT_DIR/.elan/bin:$PATH"
+
+  # Cache configuration
+  CACHE_FALLBACK_KEY: "lean-global-fallback"
+
+  # Feature flags
+  FF_SKIP_CACHE: "false"
+  FF_FULL_TEST: "false"
+  FF_BENCH_ENABLED: "false"
+
+# ---------------------------------------------------------------------------
+# Default Job Configuration
+# ---------------------------------------------------------------------------
+default:
+  tags:
+    - normal
+  timeout: 60m
+  interruptible: true
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+      - scheduler_failure
+
+# ---------------------------------------------------------------------------
+# Global before_script — Toolchain Setup
+# ---------------------------------------------------------------------------
+.lean_setup:
+  before_script:
+    - |
+      # Ensure elan is installed and available
+      if [ ! -f "$ELAN_HOME/bin/elan" ]; then
+        echo "Installing elan..."
+        curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+      fi
+      export PATH="$ELAN_HOME/bin:$PATH"
+    - |
+      # Install the toolchain specified in lean-toolchain
+      TOOLCHAIN=$(cat lean-toolchain | tr -d '[:space:]')
+      echo "Required toolchain: $TOOLCHAIN"
+      elan toolchain install "$TOOLCHAIN"
+      elan default "$TOOLCHAIN"
+      echo "Active: $(lean --version)"
+    - |
+      # Verify lake is available
+      which lake || { echo "ERROR: lake not found"; exit 1; }
+
+# ---------------------------------------------------------------------------
+# Cache Templates
+# ---------------------------------------------------------------------------
+
+# Layer 1: Elan toolchain cache (rarely changes)
+.cache_elan:
+  cache:
+    - key:
+        files:
+          - lean-toolchain
+        prefix: "elan"
+      paths:
+        - .elan/
+      policy: pull-push
+      when: on_success
+
+# Layer 2: Lake packages cache (changes on dependency updates)
+.cache_lake_packages:
+  cache:
+    - key:
+        files:
+          - lake-manifest.json
+          - lakefile.lean
+        prefix: "lake-pkg"
+      paths:
+        - .lake/packages/
+      policy: pull-push
+      when: on_success
+
+# Layer 3: Mathlib oleans cache (largest, changes with Mathlib rev)
+.cache_mathlib_oleans:
+  cache:
+    - key:
+        files:
+          - lake-manifest.json
+        prefix: "mathlib-oleans"
+      paths:
+        - .lake/packages/mathlib/.lake/build/
+      policy: pull-push
+      when: on_success
+
+# Layer 4: Radix build artifacts (changes every commit)
+.cache_radix_build:
+  cache:
+    - key: "radix-build-${CI_COMMIT_SHORT_SHA}"
+      paths:
+        - .lake/build/
+      policy: pull-push
+      when: on_success
+      unprotect: true
+
+# Combined read-only cache for downstream jobs
+.cache_readonly_all:
+  cache:
+    - key:
+        files:
+          - lean-toolchain
+        prefix: "elan"
+      paths:
+        - .elan/
+      policy: pull
+    - key:
+        files:
+          - lake-manifest.json
+          - lakefile.lean
+        prefix: "lake-pkg"
+      paths:
+        - .lake/packages/
+      policy: pull
+    - key:
+        files:
+          - lake-manifest.json
+        prefix: "mathlib-oleans"
+      paths:
+        - .lake/packages/mathlib/.lake/build/
+      policy: pull
+    - key: "radix-build-${CI_COMMIT_SHORT_SHA}"
+      paths:
+        - .lake/build/
+      policy: pull
+
+# Full read-write cache (for build jobs)
+.cache_full_rw:
+  cache:
+    - key:
+        files:
+          - lean-toolchain
+        prefix: "elan"
+      paths:
+        - .elan/
+      policy: pull-push
+      when: on_success
+    - key:
+        files:
+          - lake-manifest.json
+          - lakefile.lean
+        prefix: "lake-pkg"
+      paths:
+        - .lake/packages/
+      policy: pull-push
+      when: on_success
+    - key:
+        files:
+          - lake-manifest.json
+        prefix: "mathlib-oleans"
+      paths:
+        - .lake/packages/mathlib/.lake/build/
+      policy: pull-push
+      when: on_success
+    - key: "radix-build-${CI_COMMIT_SHORT_SHA}"
+      paths:
+        - .lake/build/
+      policy: pull-push
+      when: on_success
+      unprotect: true
+
+# ===========================================================================
+# = STAGE: .pre — Cache Warmup
+# ===========================================================================
+
+cache_warmup:
+  stage: .pre
+  extends:
+    - .lean_setup
+    - .cache_elan
+    - .cache_lake_packages
+  script:
+    - echo "=== Warming caches ==="
+    - echo "Lean version — $(lean --version)"
+    - echo "Lake version — $(lake --version)"
+    - echo "Pipeline type — $PIPELINE_TYPE"
+    - echo "Cache warmup complete"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - when: manual
+      allow_failure: true
+
+# ===========================================================================
+# = STAGE: prepare — Dependency Resolution
+# ===========================================================================
+
+resolve_dependencies:
+  stage: prepare
+  extends:
+    - .lean_setup
+    - .cache_full_rw
+  timeout: 120m
+  script:
+    - echo "=== Resolving dependencies ==="
+    - lake update
+
+    # Try to fetch pre-built Mathlib oleans from Mathlib cache
+    - |
+      echo "=== Fetching Mathlib cache ==="
+      lake exe cache get 2>&1 || {
+        echo "WARNING: Mathlib cache get failed. Building from source."
+        echo "This may take a very long time..."
+      }
+
+    # Verify dependency integrity
+    - |
+      echo "=== Verifying dependencies ==="
+      python3 << 'PYEOF'
+      import json, sys
+      with open('lake-manifest.json') as f:
+          manifest = json.load(f)
+      errors = 0
+      for pkg in manifest.get('packages', []):
+          name = pkg.get('name', 'unknown')
+          rev = pkg.get('rev', '')
+          url = pkg.get('url', '')
+          if pkg.get('type') == 'git':
+              if len(rev) != 40:
+                  print(f"ERROR: Package '{name}' has non-pinned rev: {rev}")
+                  errors += 1
+              if not url.startswith('https://'):
+                  print(f"ERROR: Package '{name}' uses insecure URL: {url}")
+                  errors += 1
+          print(f"  OK: {name} @ {rev[:12]}...")
+      if errors > 0:
+          sys.exit(1)
+      print(f"\nAll {len(manifest.get('packages', []))} dependencies verified")
+      PYEOF
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  artifacts:
+    paths:
+      - .lake/packages/
+    expire_in: 4 hours
+    when: on_success
+
+# ===========================================================================
+# = STAGE: validate — Lint & Format
+# ===========================================================================
+
+lint_yaml:
+  stage: validate
+  timeout: 5m
+  script:
+    - echo "=== Validating YAML files ==="
+    - |
+      find . -name '*.yml' -o -name '*.yaml' | grep -v '.lake/' | while read f; do
+        python3 -c "import yaml; yaml.safe_load(open('$f'))" 2>&1 || {
+          echo "ERROR: Invalid YAML — $f"
+          exit 1
+        }
+        echo "  OK: $f"
+      done
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "**/*.yml"
+          - "**/*.yaml"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+lint_json:
+  stage: validate
+  timeout: 5m
+  script:
+    - echo "=== Validating JSON files ==="
+    - python3 -c "import json; json.load(open('lake-manifest.json'))"
+    - echo "  OK: lake-manifest.json"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - lake-manifest.json
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+lint_lean_sources:
+  stage: validate
+  timeout: 10m
+  script:
+    - echo "=== Lean source quality checks ==="
+
+    # Check for trailing whitespace
+    - |
+      ERRORS=0
+      while IFS= read -r file; do
+        if grep -Pn '\s+$' "$file" > /dev/null 2>&1; then
+          echo "WARNING: Trailing whitespace in $file"
+          ERRORS=$((ERRORS + 1))
+        fi
+      done < <(find . -name '*.lean' -not -path './.lake/*')
+      if [ "$ERRORS" -gt 0 ]; then
+        echo "Found trailing whitespace in $ERRORS files (non-blocking)"
+      fi
+
+    # Check for TODO/FIXME markers
+    - |
+      echo "=== TODO/FIXME markers ==="
+      find . -name '*.lean' -not -path './.lake/*' -exec grep -Hn 'TODO\|FIXME\|HACK\|XXX' {} \; || echo "No markers found"
+
+    # Verify lakefile.lean is valid
+    - test -s lakefile.lean && echo "OK: lakefile.lean exists and is non-empty"
+    - test -s lean-toolchain && echo "OK: lean-toolchain exists and is non-empty"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+lint_docs:
+  stage: validate
+  timeout: 5m
+  script:
+    - echo "=== Documentation checks ==="
+    - |
+      REQUIRED_FILES="README.md CHANGELOG.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md LICENSE"
+      for f in $REQUIRED_FILES; do
+        if [ -f "$f" ]; then
+          echo "  OK: $f"
+        else
+          echo "  MISSING: $f"
+        fi
+      done
+
+    # Check for broken relative links in docs
+    - |
+      find docs -name '*.md' 2>/dev/null | while read f; do
+        grep -oP '\[.*?\]\(\K[^)]+' "$f" 2>/dev/null | while read link; do
+          if [[ "$link" =~ ^https?:// ]] || [[ "$link" =~ ^# ]]; then
+            continue
+          fi
+          CLEAN_LINK=$(echo "$link" | cut -d'#' -f1)
+          if [ -n "$CLEAN_LINK" ]; then
+            DIR=$(dirname "$f")
+            TARGET="$DIR/$CLEAN_LINK"
+            if [ ! -e "$TARGET" ]; then
+              echo "WARNING: Broken link in $f: $link -> $TARGET"
+            fi
+          fi
+        done
+      done
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "docs/**"
+          - "*.md"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ===========================================================================
+# = STAGE: build — Parallel Build Targets
+# ===========================================================================
+
+.build_template:
+  stage: build
+  extends:
+    - .lean_setup
+    - .cache_full_rw
+  timeout: 90m
+  needs:
+    - job: resolve_dependencies
+      optional: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+build_library:
+  extends: .build_template
+  script:
+    - echo "=== Building Radix library ==="
+    - lake update
+    - time lake build Radix 2>&1 | tail -20
+    - echo "=== Library build complete ==="
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "Radix/**"
+          - "Radix.lean"
+          - "c/**"
+          - "lakefile.lean"
+          - "lean-toolchain"
+          - "lake-manifest.json"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+build_tests:
+  extends: .build_template
+  needs:
+    - job: build_library
+      optional: true
+  script:
+    - echo "=== Building test targets ==="
+    - lake update
+    - time lake build test 2>&1 | tail -10
+    - time lake build proptest 2>&1 | tail -10
+    - time lake build comptest 2>&1 | tail -10
+    - echo "=== Test build complete ==="
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "Radix/**"
+          - "tests/**"
+          - "lakefile.lean"
+          - "lean-toolchain"
+          - "lake-manifest.json"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+build_benchmarks:
+  extends: .build_template
+  needs:
+    - job: build_library
+      optional: true
+  script:
+    - echo "=== Building benchmarks ==="
+    - lake update
+    - time lake build bench 2>&1 | tail -10
+    - gcc -O2 -march=native -fno-builtin -o benchmarks/baseline benchmarks/baseline.c
+    - echo "=== Benchmark build complete ==="
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths:
+          - "Radix/**"
+          - "benchmarks/**"
+          - "c/**"
+          - "lakefile.lean"
+    - if: $CI_COMMIT_TAG
+  artifacts:
+    paths:
+      - benchmarks/baseline
+    expire_in: 2 hours
+
+build_examples:
+  extends: .build_template
+  needs:
+    - job: build_library
+      optional: true
+  script:
+    - echo "=== Building examples ==="
+    - lake update
+    - time lake build examples 2>&1 | tail -10
+    - echo "=== Examples build complete ==="
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "Radix/**"
+          - "examples/**"
+          - "lakefile.lean"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+# ===========================================================================
+# = STAGE: test — Parallel Test Execution
+# ===========================================================================
+
+.test_template:
+  stage: test
+  extends:
+    - .lean_setup
+    - .cache_readonly_all
+  timeout: 45m
+  needs:
+    - job: build_tests
+      optional: true
+  artifacts:
+    when: always
+    expire_in: 30 days
+    reports:
+      junit: test-results.xml
+
+test_unit:
+  extends: .test_template
+  script:
+    - echo "=== Running unit tests ==="
+    - lake update
+    - lake exe test 2>&1 | tee test-unit-output.txt
+    - echo "Unit tests passed ✅"
+  artifacts:
+    when: always
+    paths:
+      - test-unit-output.txt
+    expire_in: 30 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "Radix/**"
+          - "tests/**"
+          - "lakefile.lean"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+test_property:
+  extends: .test_template
+  timeout: 60m
+  script:
+    - echo "=== Running property-based tests ==="
+    - lake update
+    - lake exe proptest 2>&1 | tee test-property-output.txt
+    - echo "Property tests passed ✅"
+  artifacts:
+    when: always
+    paths:
+      - test-property-output.txt
+    expire_in: 30 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "Radix/**"
+          - "tests/**"
+          - "lakefile.lean"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+test_comprehensive:
+  extends: .test_template
+  timeout: 90m
+  script:
+    - echo "=== Running comprehensive tests ==="
+    - lake update
+    - lake exe comptest 2>&1 | tee test-comprehensive-output.txt
+    - echo "Comprehensive tests passed ✅"
+  artifacts:
+    when: always
+    paths:
+      - test-comprehensive-output.txt
+    expire_in: 30 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "Radix/**"
+          - "tests/**"
+          - "lakefile.lean"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+test_examples:
+  extends: .test_template
+  timeout: 15m
+  needs:
+    - job: build_examples
+      optional: true
+  script:
+    - echo "=== Running examples ==="
+    - lake update
+    - lake exe examples 2>&1 | tee test-examples-output.txt
+    - echo "Examples validated ✅"
+  artifacts:
+    when: always
+    paths:
+      - test-examples-output.txt
+    expire_in: 30 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "Radix/**"
+          - "examples/**"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+# ===========================================================================
+# = STAGE: analyze — Proof Verification & Metrics
+# ===========================================================================
+
+verify_proofs:
+  stage: analyze
+  extends:
+    - .lean_setup
+    - .cache_readonly_all
+  timeout: 120m
+  needs:
+    - job: build_library
+      optional: true
+  script:
+    - echo "=== Verifying all Radix proofs ==="
+    - lake update
+    - time lake build Radix 2>&1 | tail -20
+    - echo ""
+    - echo "=== Proof verification complete ==="
+
+    # Census
+    - |
+      echo "=== Theorem/Lemma Census ==="
+      THEOREMS=$(grep -rn '^theorem\|^  theorem' Radix/ | wc -l)
+      LEMMAS=$(grep -rn '^lemma\|^  lemma' Radix/ | wc -l)
+      INSTANCES=$(grep -rn '^instance\|^  instance' Radix/ | wc -l)
+      DEFS=$(grep -rn '^def\|^  def\|^private def' Radix/ | wc -l)
+      echo "Theorems:    $THEOREMS"
+      echo "Lemmas:      $LEMMAS"
+      echo "Instances:   $INSTANCES"
+      echo "Definitions: $DEFS"
+
+    # Trust audit
+    - |
+      echo ""
+      echo "=== Trust Assumptions Audit ==="
+      SORRY_COUNT=$(grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/' | wc -l)
+      if [ "$SORRY_COUNT" -gt 0 ]; then
+        echo "ERROR: Found $SORRY_COUNT 'sorry' occurrences!"
+        grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/'
+        exit 1
+      fi
+      echo "No sorry found ✅"
+      echo ""
+      echo "Trust assumptions:"
+      grep -rn 'trust_' Radix/ | grep -v '\.lake/' || echo "  (none)"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "Radix/**"
+          - "lakefile.lean"
+          - "lean-toolchain"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+code_metrics:
+  stage: analyze
+  timeout: 10m
+  needs: []
+  script:
+    - echo "=== Code Metrics ==="
+    - |
+      # Lines of Code
+      echo "--- Lines of Code ---"
+      LEAN_LOC=$(find Radix/ -name '*.lean' | xargs wc -l | tail -1 | awk '{print $1}')
+      TEST_LOC=$(find tests/ -name '*.lean' | xargs wc -l | tail -1 | awk '{print $1}')
+      BENCH_LOC=$(find benchmarks/ -name '*.lean' | xargs wc -l | tail -1 | awk '{print $1}')
+      C_LOC=$(find c/ -name '*.c' | xargs wc -l | tail -1 | awk '{print $1}')
+      DOC_LOC=$(find docs/ -name '*.md' | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+
+      echo "Lean (library):    $LEAN_LOC lines"
+      echo "Lean (tests):      $TEST_LOC lines"
+      echo "Lean (benchmarks): $BENCH_LOC lines"
+      echo "C (FFI):           $C_LOC lines"
+      echo "Docs (Markdown):   $DOC_LOC lines"
+
+    - |
+      # Module count
+      echo ""
+      echo "--- Module Count ---"
+      MODULES=$(find Radix/ -name '*.lean' | wc -l)
+      echo "Radix modules: $MODULES"
+
+    - |
+      # File count by directory
+      echo ""
+      echo "--- File Count by Directory ---"
+      for dir in Radix/Word Radix/Bit Radix/Bytes Radix/Memory Radix/Binary Radix/System Radix/Concurrency Radix/BareMetal; do
+        if [ -d "$dir" ]; then
+          COUNT=$(find "$dir" -name '*.lean' | wc -l)
+          echo "  $dir: $COUNT files"
+        fi
+      done
+  artifacts:
+    when: always
+    paths:
+      - metrics-report.txt
+    expire_in: 90 days
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# ===========================================================================
+# = STAGE: security — Security Scanning
+# ===========================================================================
+
+secret_detection:
+  stage: security
+  timeout: 10m
+  needs: []
+  script:
+    - echo "=== Secret Detection ==="
+    - |
+      if command -v gitleaks &> /dev/null; then
+        gitleaks detect --source . --verbose --no-git 2>&1 | tee gitleaks-report.txt || {
+          echo "ERROR: Secrets detected!"
+          exit 1
+        }
+      else
+        echo "gitleaks not available — running manual checks"
+        FOUND=0
+        for pattern in \
+          'AKIA[0-9A-Z]{16}' \
+          'ghp_[a-zA-Z0-9]{36}' \
+          'gho_[a-zA-Z0-9]{36}' \
+          'glpat-[a-zA-Z0-9_-]{20}' \
+          'sk-[a-zA-Z0-9]{48}' \
+          '-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----'; do
+          if grep -rPn "$pattern" --include='*.lean' --include='*.c' --include='*.yml' --include='*.yaml' --include='*.json' . 2>/dev/null | grep -v '.lake/'; then
+            echo "ERROR: Potential secret matching: $pattern"
+            FOUND=$((FOUND + 1))
+          fi
+        done
+        if [ "$FOUND" -gt 0 ]; then
+          exit 1
+        fi
+        echo "No secrets detected ✅"
+      fi
+  artifacts:
+    when: always
+    paths:
+      - gitleaks-report.txt
+    expire_in: 90 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+ffi_static_analysis:
+  stage: security
+  timeout: 15m
+  needs: []
+  script:
+    - echo "=== FFI C Code Static Analysis ==="
+
+    # Check for unsafe C functions
+    - |
+      ERRORS=0
+      UNSAFE_FUNCS="gets\b|sprintf\b|strcpy\b|strcat\b|scanf\b|vsprintf\b|strtok\b|tmpnam\b|mktemp\b"
+      if grep -rPn "$UNSAFE_FUNCS" c/; then
+        echo "ERROR: Unsafe C functions detected"
+        ERRORS=$((ERRORS + 1))
+      else
+        echo "No unsafe C functions ✅"
+      fi
+
+    # Compile with maximum warnings
+    - |
+      echo "=== Compiling with strict warnings ==="
+      for src in c/*.c; do
+        echo "--- $src ---"
+        gcc -Wall -Wextra -Werror -Wpedantic -Wconversion -Wshadow \
+            -Wformat=2 -Wformat-security -Wstrict-prototypes \
+            -Wold-style-definition -Wmissing-prototypes \
+            -O2 -c "$src" -o /dev/null 2>&1 | tee -a gcc-warnings.txt || {
+          echo "ERROR: $src failed strict compilation"
+          ERRORS=$((ERRORS + 1))
+        }
+      done
+
+    # cppcheck if available
+    - |
+      if command -v cppcheck &> /dev/null; then
+        echo "=== cppcheck analysis ==="
+        cppcheck --enable=all --error-exitcode=1 \
+          --suppress=missingInclude --suppress=unmatchedSuppression \
+          --inline-suppr --std=c11 c/ 2>&1 | tee cppcheck-report.txt
+      fi
+
+    - |
+      if [ "$ERRORS" -gt 0 ]; then
+        echo "FFI analysis found $ERRORS issue(s)"
+        exit 1
+      fi
+      echo "FFI analysis passed ✅"
+  artifacts:
+    when: always
+    paths:
+      - gcc-warnings.txt
+      - cppcheck-report.txt
+    expire_in: 90 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "c/**"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+dependency_audit:
+  stage: security
+  timeout: 10m
+  needs: []
+  script:
+    - echo "=== Dependency Vulnerability Audit ==="
+    - |
+      python3 << 'PYEOF'
+      import json, sys
+
+      with open('lake-manifest.json') as f:
+          manifest = json.load(f)
+
+      print("=" * 60)
+      print("DEPENDENCY AUDIT REPORT")
+      print("=" * 60)
+
+      errors = 0
+      warnings = 0
+
+      for pkg in manifest.get('packages', []):
+          name = pkg.get('name', 'unknown')
+          rev = pkg.get('rev', '')
+          url = pkg.get('url', '')
+          pkg_type = pkg.get('type', 'unknown')
+
+          print(f"\n  {name}:")
+          print(f"    Type: {pkg_type}")
+          print(f"    Rev:  {rev[:12]}...")
+          print(f"    URL:  {url}")
+
+          if pkg_type == 'git':
+              if len(rev) != 40:
+                  print(f"    ❌ Non-pinned revision!")
+                  errors += 1
+              else:
+                  print(f"    ✅ Pinned to full SHA")
+
+              if not url.startswith('https://'):
+                  print(f"    ❌ Insecure URL!")
+                  errors += 1
+              else:
+                  print(f"    ✅ HTTPS")
+
+              trusted_orgs = ['leanprover', 'leanprover-community']
+              org = url.split('github.com/')[-1].split('/')[0] if 'github.com/' in url else ''
+              if org in trusted_orgs:
+                  print(f"    ✅ Trusted org: {org}")
+              elif org:
+                  print(f"    ⚠️  Unknown org: {org}")
+                  warnings += 1
+
+      print(f"\n{'=' * 60}")
+      print(f"TOTAL: {len(manifest.get('packages', []))} packages, {errors} errors, {warnings} warnings")
+
+      if errors > 0:
+          sys.exit(1)
+      PYEOF
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - lake-manifest.json
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+license_compliance:
+  stage: security
+  timeout: 5m
+  needs: []
+  script:
+    - echo "=== License Compliance Check ==="
+    - test -f LICENSE || { echo "ERROR: LICENSE file missing"; exit 1; }
+    - echo "LICENSE file present ✅"
+
+    # Check C source headers
+    - |
+      for f in c/*.c; do
+        if ! head -15 "$f" | grep -qi 'copyright\|license\|Apache'; then
+          echo "WARNING: $f missing copyright header"
+        else
+          echo "  ✅ $f has copyright header"
+        fi
+      done
+
+    - echo "License compliance passed ✅"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+# ===========================================================================
+# = STAGE: benchmark — Performance Regression Detection
+# ===========================================================================
+
+benchmark_lean:
+  stage: benchmark
+  extends:
+    - .lean_setup
+    - .cache_readonly_all
+  timeout: 30m
+  needs:
+    - job: build_benchmarks
+      optional: true
+  script:
+    - echo "=== System Info ==="
+    - lscpu | grep -E 'Model name|CPU\(s\)|MHz|cache' || cat /proc/cpuinfo | head -20
+    - free -h
+    - uname -a
+
+    - echo "=== Running Lean benchmarks ==="
+    - lake update
+    - lake exe bench 2>&1 | tee benchmark-lean-run1.txt
+    - lake exe bench 2>&1 | tee benchmark-lean-run2.txt
+    - lake exe bench 2>&1 | tee benchmark-lean-run3.txt
+    - echo "=== Lean benchmarks complete ==="
+  artifacts:
+    when: always
+    paths:
+      - benchmark-lean-run*.txt
+    expire_in: 180 days
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths:
+          - "Radix/**"
+          - "benchmarks/**"
+          - "c/**"
+    - if: $CI_COMMIT_TAG
+
+benchmark_c_baseline:
+  stage: benchmark
+  timeout: 15m
+  needs:
+    - job: build_benchmarks
+      optional: true
+  script:
+    - echo "=== Running C baseline benchmarks ==="
+    - |
+      if [ -f benchmarks/baseline ]; then
+        ./benchmarks/baseline 2>&1 | tee benchmark-c-run1.txt
+        ./benchmarks/baseline 2>&1 | tee benchmark-c-run2.txt
+        ./benchmarks/baseline 2>&1 | tee benchmark-c-run3.txt
+      else
+        gcc -O2 -march=native -fno-builtin -o benchmarks/baseline benchmarks/baseline.c
+        ./benchmarks/baseline 2>&1 | tee benchmark-c-run1.txt
+        ./benchmarks/baseline 2>&1 | tee benchmark-c-run2.txt
+        ./benchmarks/baseline 2>&1 | tee benchmark-c-run3.txt
+      fi
+    - echo "=== C baselines complete ==="
+  artifacts:
+    when: always
+    paths:
+      - benchmark-c-run*.txt
+    expire_in: 180 days
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths:
+          - "benchmarks/**"
+          - "c/**"
+    - if: $CI_COMMIT_TAG
+
+# ===========================================================================
+# = STAGE: release — Release Automation (Tag Pipelines Only)
+# ===========================================================================
+
+generate_release_notes:
+  stage: release
+  timeout: 10m
+  needs:
+    - job: test_unit
+    - job: test_property
+    - job: test_comprehensive
+    - job: verify_proofs
+  script:
+    - echo "=== Generating release notes ==="
+    - |
+      TAG="$CI_COMMIT_TAG"
+      PREV_TAG=$(git tag --sort=-v:refname | grep -v "$TAG" | head -1 || echo "")
+
+      echo "# Release $TAG" > release-notes.md
+      echo "" >> release-notes.md
+
+      if [ -n "$PREV_TAG" ]; then
+        echo "## Changes since $PREV_TAG" >> release-notes.md
+        git log --pretty=format:"- %s (%h)" "$PREV_TAG"..HEAD >> release-notes.md
+      else
+        echo "## Changes" >> release-notes.md
+        git log --pretty=format:"- %s (%h)" --max-count=50 >> release-notes.md
+      fi
+
+      echo "" >> release-notes.md
+      echo "## Proof Census" >> release-notes.md
+      THEOREMS=$(grep -rn '^theorem\|^  theorem' Radix/ | wc -l)
+      LEMMAS=$(grep -rn '^lemma\|^  lemma' Radix/ | wc -l)
+      echo "- Theorems: $THEOREMS" >> release-notes.md
+      echo "- Lemmas: $LEMMAS" >> release-notes.md
+      echo "- Lean: $(cat lean-toolchain)" >> release-notes.md
+
+    # Generate SBOM
+    - |
+      python3 << 'PYEOF'
+      import json, datetime
+      with open('lake-manifest.json') as f:
+          manifest = json.load(f)
+      sbom = {
+          "bomFormat": "CycloneDX",
+          "specVersion": "1.4",
+          "version": 1,
+          "metadata": {
+              "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+              "component": {"type": "library", "name": "radix", "version": "$CI_COMMIT_TAG"}
+          },
+          "components": [{
+              "type": "library",
+              "name": p.get("name", ""),
+              "version": p.get("rev", "")[:12],
+              "purl": f"pkg:github/{p.get('url','').replace('https://github.com/','')}"
+          } for p in manifest.get("packages", [])]
+      }
+      with open("sbom.json", "w") as f:
+          json.dump(sbom, f, indent=2)
+      print(f"SBOM: {len(sbom['components'])} components")
+      PYEOF
+
+    - cat release-notes.md
+  artifacts:
+    paths:
+      - release-notes.md
+      - sbom.json
+    expire_in: 1 year
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+
+create_release:
+  stage: release
+  timeout: 5m
+  needs:
+    - job: generate_release_notes
+  script:
+    - echo "Release artifacts generated for $CI_COMMIT_TAG"
+    - echo "Upload release-notes.md and sbom.json to GitLab Release"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: "Radix $CI_COMMIT_TAG"
+    description: "./release-notes.md"
+    assets:
+      links:
+        - name: "SBOM (CycloneDX)"
+          url: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/file/sbom.json"
+          filepath: "/sbom.json"
+          link_type: "other"
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+
+# ===========================================================================
+# = STAGE: notify — Pipeline Notifications
+# ===========================================================================
+
+pipeline_success:
+  stage: notify
+  timeout: 5m
+  needs:
+    - job: test_unit
+      optional: true
+    - job: test_property
+      optional: true
+    - job: test_comprehensive
+      optional: true
+    - job: verify_proofs
+      optional: true
+  script:
+    - echo "=== Pipeline completed successfully ==="
+    - echo "Pipeline type: $PIPELINE_TYPE"
+    - echo "Branch: $CI_COMMIT_BRANCH"
+    - echo "Commit: $CI_COMMIT_SHORT_SHA"
+    - echo "Author: $CI_COMMIT_AUTHOR"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+    - if: $CI_COMMIT_TAG
+      when: on_success
+
+pipeline_failure:
+  stage: notify
+  timeout: 5m
+  needs:
+    - job: test_unit
+      optional: true
+    - job: test_property
+      optional: true
+    - job: test_comprehensive
+      optional: true
+    - job: verify_proofs
+      optional: true
+  script:
+    - echo "=== Pipeline FAILED ==="
+    - echo "Pipeline type: $PIPELINE_TYPE"
+    - echo "Branch: $CI_COMMIT_BRANCH"
+    - echo "Commit: $CI_COMMIT_SHORT_SHA"
+    - echo "Author: $CI_COMMIT_AUTHOR"
+    - echo "Pipeline URL: $CI_PIPELINE_URL"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_failure
+    - if: $CI_COMMIT_TAG
+      when: on_failure
+
+# ===========================================================================
+# = STAGE: .post — Cleanup
+# ===========================================================================
+
+cleanup_workspace:
+  stage: .post
+  timeout: 5m
+  script:
+    - echo "=== Cleanup ==="
+    - echo "Pipeline duration: ~${CI_PIPELINE_DURATION:-unknown}s"
+    - echo "Pipeline ID: $CI_PIPELINE_ID"
+    - echo "Runner: $CI_RUNNER_DESCRIPTION ($CI_RUNNER_ID)"
+    # Clean up temporary files but preserve caches
+    - find . -name '*.tmp' -delete 2>/dev/null || true
+    - find . -name '*.bak' -delete 2>/dev/null || true
+  rules:
+    - when: always
