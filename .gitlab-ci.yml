@@ -227,6 +227,38 @@ default:
         - .lake/build/
       policy: pull
 
+# Combined read-only cache + radix-build push (for build_library)
+.cache_readonly_build_push:
+  cache:
+    - key:
+        files:
+          - lean-toolchain
+        prefix: "elan"
+      paths:
+        - .elan/
+      policy: pull
+    - key:
+        files:
+          - lake-manifest.json
+          - lakefile.lean
+        prefix: "lake-pkg"
+      paths:
+        - .lake/packages/
+      policy: pull
+    - key:
+        files:
+          - lake-manifest.json
+        prefix: "mathlib-oleans"
+      paths:
+        - .lake/packages/mathlib/.lake/build/
+      policy: pull
+    - key: "radix-build-${CI_COMMIT_SHORT_SHA}"
+      paths:
+        - .lake/build/
+      policy: pull-push
+      when: on_success
+      unprotect: true
+
 # Full read-write cache (for build producer jobs)
 .cache_full_rw:
   cache:
@@ -562,16 +594,7 @@ lint_docs:
 
 build_library:
   extends: .build_template
-  cache:
-    - !reference [.cache_readonly_all, cache, 0]
-    - !reference [.cache_readonly_all, cache, 1]
-    - !reference [.cache_readonly_all, cache, 2]
-    - key: "radix-build-${CI_COMMIT_SHORT_SHA}"
-      paths:
-        - .lake/build/
-      policy: pull-push
-      when: on_success
-      unprotect: true
+  cache: !reference [.cache_readonly_build_push, cache]
   script:
     - echo "=== Building Radix library ==="
     - time lake build Radix 2>&1 | tail -20
