@@ -63,15 +63,13 @@ termination_by n
      ((n >>> 21).toUInt8 ||| 0x80)).push (n >>> 28).toUInt8
 
 @[inline] private def encodeU32_fast (x : Radix.UInt32) : ByteArray :=
-  encodeU32_go x.val ⟨Array.mkEmpty 5⟩
+  encodeU32_go x.val (ByteArray.emptyWithCapacity 5)
 
 /-- Encode a `UInt32` as unsigned LEB128. Result is 1-5 bytes. -/
 @[implemented_by encodeU32_fast]
 def encodeU32 (x : Radix.UInt32) : ByteArray :=
   encodeUnsigned x.toNat ByteArray.empty
 
-/-- Fast UInt32 LEB128 encoder that appends to an existing buffer.
-    More efficient than `encodeU32` when encoding multiple values sequentially. -/
 @[inline] private def encodeU32Append_fast (x : Radix.UInt32) (buf : ByteArray) : ByteArray :=
   encodeU32_go x.val buf
 
@@ -143,14 +141,13 @@ def encodeU32Append (x : Radix.UInt32) (buf : ByteArray) : ByteArray :=
      ((n >>> 56).toUInt8 ||| 0x80)).push (n >>> 63).toUInt8
 
 @[inline] private def encodeU64_fast (x : Radix.UInt64) : ByteArray :=
-  encodeU64_go x.val ⟨Array.mkEmpty 10⟩
+  encodeU64_go x.val (ByteArray.emptyWithCapacity 10)
 
 /-- Encode a `UInt64` as unsigned LEB128. Result is 1-10 bytes. -/
 @[implemented_by encodeU64_fast]
 def encodeU64 (x : Radix.UInt64) : ByteArray :=
   encodeUnsigned x.toNat ByteArray.empty
 
-/-- Fast UInt64 LEB128 encoder that appends to an existing buffer. -/
 @[inline] private def encodeU64Append_fast (x : Radix.UInt64) (buf : ByteArray) : ByteArray :=
   encodeU64_go x.val buf
 
