@@ -276,13 +276,13 @@ namespace UInt8
 theorem clz_zero : clz (0 : UInt8) = ⟨8⟩ := by decide
 
 /-- `ctz 0 = 8`: all bits are zero, so all 8 trailing positions are zero. -/
-theorem ctz_zero : ctz (0 : UInt8) = ⟨8⟩ := by native_decide
+theorem ctz_zero : ctz (0 : UInt8) = ⟨8⟩ := by decide
 
 /-- `popcount 0 = 0`: no bits are set. -/
-theorem popcount_zero : popcount (0 : UInt8) = 0 := by native_decide
+theorem popcount_zero : popcount (0 : UInt8) = 0 := by decide
 
 /-- `popcount allOnes = 8`: all bits are set. -/
-theorem popcount_allOnes : popcount (⟨255⟩ : UInt8) = ⟨8⟩ := by native_decide
+theorem popcount_allOnes : popcount (⟨255⟩ : UInt8) = ⟨8⟩ := by decide
 
 /-- `popcount (bxor x y)` equals the Hamming distance (FR-002.3). -/
 theorem popcount_bxor (x y : UInt8) :
@@ -303,9 +303,9 @@ end UInt8
 namespace UInt16
 
 theorem clz_zero : clz (0 : UInt16) = ⟨16⟩ := by decide
-theorem ctz_zero : ctz (0 : UInt16) = ⟨16⟩ := by native_decide
-theorem popcount_zero : popcount (0 : UInt16) = 0 := by native_decide
-theorem popcount_allOnes : popcount (⟨65535⟩ : UInt16) = ⟨16⟩ := by native_decide
+theorem ctz_zero : ctz (0 : UInt16) = ⟨16⟩ := by decide
+theorem popcount_zero : popcount (0 : UInt16) = 0 := by decide
+theorem popcount_allOnes : popcount (⟨65535⟩ : UInt16) = ⟨16⟩ := by decide
 
 theorem popcount_bxor (x y : UInt16) :
     popcount (bxor x y) = hammingDistance x y := rfl
@@ -324,9 +324,9 @@ end UInt16
 namespace UInt32
 
 theorem clz_zero : clz (0 : UInt32) = ⟨32⟩ := by decide
-theorem ctz_zero : ctz (0 : UInt32) = ⟨32⟩ := by native_decide
-theorem popcount_zero : popcount (0 : UInt32) = 0 := by native_decide
-theorem popcount_allOnes : popcount (⟨4294967295⟩ : UInt32) = ⟨32⟩ := by native_decide
+theorem ctz_zero : ctz (0 : UInt32) = ⟨32⟩ := by decide
+theorem popcount_zero : popcount (0 : UInt32) = 0 := by decide
+theorem popcount_allOnes : popcount (⟨4294967295⟩ : UInt32) = ⟨32⟩ := by decide
 
 theorem popcount_bxor (x y : UInt32) :
     popcount (bxor x y) = hammingDistance x y := rfl
@@ -345,9 +345,9 @@ end UInt32
 namespace UInt64
 
 theorem clz_zero : clz (0 : UInt64) = ⟨64⟩ := by decide
-theorem ctz_zero : ctz (0 : UInt64) = ⟨64⟩ := by native_decide
-theorem popcount_zero : popcount (0 : UInt64) = 0 := by native_decide
-theorem popcount_allOnes : popcount (⟨18446744073709551615⟩ : UInt64) = ⟨64⟩ := by native_decide
+theorem ctz_zero : ctz (0 : UInt64) = ⟨64⟩ := by decide
+theorem popcount_zero : popcount (0 : UInt64) = 0 := by decide
+theorem popcount_allOnes : popcount (⟨18446744073709551615⟩ : UInt64) = ⟨64⟩ := by decide
 
 theorem popcount_bxor (x y : UInt64) :
     popcount (bxor x y) = hammingDistance x y := rfl
@@ -1081,8 +1081,8 @@ end IWord
 
 namespace Int8
 theorem clz_zero : clz (0 : Int8) = ⟨8⟩ := by decide
-theorem ctz_zero : ctz (0 : Int8) = ⟨8⟩ := by native_decide
-theorem popcount_zero : popcount (0 : Int8) = 0 := by native_decide
+theorem ctz_zero : ctz (0 : Int8) = ⟨8⟩ := by decide
+theorem popcount_zero : popcount (0 : Int8) = 0 := by decide
 theorem popcount_bxor (x y : Int8) :
     popcount (bxor x y) = hammingDistance x y := rfl
 theorem hammingDistance_comm (x y : Int8) :
@@ -1093,8 +1093,8 @@ end Int8
 
 namespace Int16
 theorem clz_zero : clz (0 : Int16) = ⟨16⟩ := by decide
-theorem ctz_zero : ctz (0 : Int16) = ⟨16⟩ := by native_decide
-theorem popcount_zero : popcount (0 : Int16) = 0 := by native_decide
+theorem ctz_zero : ctz (0 : Int16) = ⟨16⟩ := by decide
+theorem popcount_zero : popcount (0 : Int16) = 0 := by decide
 theorem popcount_bxor (x y : Int16) :
     popcount (bxor x y) = hammingDistance x y := rfl
 theorem hammingDistance_comm (x y : Int16) :
@@ -1105,8 +1105,8 @@ end Int16
 
 namespace Int32
 theorem clz_zero : clz (0 : Int32) = ⟨32⟩ := by decide
-theorem ctz_zero : ctz (0 : Int32) = ⟨32⟩ := by native_decide
-theorem popcount_zero : popcount (0 : Int32) = 0 := by native_decide
+theorem ctz_zero : ctz (0 : Int32) = ⟨32⟩ := by decide
+theorem popcount_zero : popcount (0 : Int32) = 0 := by decide
 theorem popcount_bxor (x y : Int32) :
     popcount (bxor x y) = hammingDistance x y := rfl
 theorem hammingDistance_comm (x y : Int32) :
@@ -1117,8 +1117,8 @@ end Int32
 
 namespace Int64
 theorem clz_zero : clz (0 : Int64) = ⟨64⟩ := by decide
-theorem ctz_zero : ctz (0 : Int64) = ⟨64⟩ := by native_decide
-theorem popcount_zero : popcount (0 : Int64) = 0 := by native_decide
+theorem ctz_zero : ctz (0 : Int64) = ⟨64⟩ := by decide
+theorem popcount_zero : popcount (0 : Int64) = 0 := by decide
 theorem popcount_bxor (x y : Int64) :
     popcount (bxor x y) = hammingDistance x y := rfl
 theorem hammingDistance_comm (x y : Int64) :
