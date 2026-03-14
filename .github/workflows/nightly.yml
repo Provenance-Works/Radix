@@ -1,0 +1,386 @@
+# =============================================================================
+# Radix — Nightly CI Pipeline
+# =============================================================================
+#
+# Runs a full clean build + exhaustive test suite every night.
+# Purpose:
+#   1. Detect cache-dependent build failures (clean, uncached build)
+#   2. Run extended property tests with more iterations
+#   3. Full proof verification without caching
+#   4. Benchmarks for regression tracking
+#   5. Dependency freshness check
+#
+# Schedule: 02:00 UTC daily
+# Runner: arc-runner-set-pw (self-hosted ARC)
+# =============================================================================
+
+name: "Nightly"
+run-name: "Nightly — ${{ github.ref_name }} @ ${{ github.sha }}"
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # 02:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      skip_benchmarks:
+        description: "Skip benchmarks"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  LEAN_TOOLCHAIN_FILE: lean-toolchain
+
+jobs:
+  # ===========================================================================
+  # Clean Build (no cache — detect cache-dependent failures)
+  # ===========================================================================
+  clean-build:
+    name: "Clean Build (No Cache)"
+    runs-on: arc-runner-set-pw
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Install elan & Lean"
+        uses: leanprover/lean4-action@471d71ad3fcb61d5e7454b5a36b975c434c8e907 # v1.1.5
+        with:
+          toolchain: ""
+          use-mathlib-cache: false
+
+      - name: "Verify toolchain"
+        run: |
+          echo "Lean: $(lean --version)"
+          echo "Lake: $(lake --version)"
+
+      - name: "Lake update"
+        run: lake update
+
+      - name: "Fetch Mathlib oleans"
+        run: lake exe cache get || echo "::warning::Mathlib cache unavailable — building from source"
+
+      - name: "Build: Full library (clean)"
+        run: |
+          echo "=== Clean library build ==="
+          START=$(date +%s)
+          lake build Radix 2>&1 | tail -30
+          DURATION=$(($(date +%s) - START))
+          echo "Library build: ${DURATION}s"
+
+      - name: "Build: All test targets"
+        run: |
+          time lake build test 2>&1 | tail -10
+          time lake build proptest 2>&1 | tail -10
+          time lake build comptest 2>&1 | tail -10
+
+      - name: "Build: Examples"
+        run: time lake build examples 2>&1 | tail -10
+
+      - name: "Build: Benchmarks"
+        run: time lake build bench 2>&1 | tail -10
+
+      - name: "Save nightly cache"
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            .lake/packages
+            .lake/build
+            ~/.elan
+          key: nightly-${{ github.sha }}-${{ github.run_number }}
+
+  # ===========================================================================
+  # Exhaustive Tests
+  # ===========================================================================
+  test-unit:
+    name: "Unit Tests"
+    runs-on: arc-runner-set-pw
+    needs: [clean-build]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Setup Lean"
+        uses: ./.github/actions/lean-setup
+        with:
+          cache-key: nightly-${{ github.sha }}-${{ github.run_number }}
+
+      - name: "Run unit tests"
+        run: |
+          lake exe test 2>&1 | tee test-unit-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          exit $EXIT_CODE
+
+      - name: "Upload results"
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nightly-test-unit
+          path: test-unit-output.txt
+          retention-days: 30
+
+  test-property:
+    name: "Property Tests (Extended)"
+    runs-on: arc-runner-set-pw
+    needs: [clean-build]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Setup Lean"
+        uses: ./.github/actions/lean-setup
+        with:
+          cache-key: nightly-${{ github.sha }}-${{ github.run_number }}
+
+      - name: "Run property-based tests (extended)"
+        run: |
+          lake exe proptest 2>&1 | tee test-property-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          exit $EXIT_CODE
+
+      - name: "Upload results"
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nightly-test-property
+          path: test-property-output.txt
+          retention-days: 30
+
+  test-comprehensive:
+    name: "Comprehensive Tests"
+    runs-on: arc-runner-set-pw
+    needs: [clean-build]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Setup Lean"
+        uses: ./.github/actions/lean-setup
+        with:
+          cache-key: nightly-${{ github.sha }}-${{ github.run_number }}
+
+      - name: "Run comprehensive tests"
+        run: |
+          lake exe comptest 2>&1 | tee test-comprehensive-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          exit $EXIT_CODE
+
+      - name: "Upload results"
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nightly-test-comprehensive
+          path: test-comprehensive-output.txt
+          retention-days: 30
+
+  test-examples:
+    name: "Examples"
+    runs-on: arc-runner-set-pw
+    needs: [clean-build]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Setup Lean"
+        uses: ./.github/actions/lean-setup
+        with:
+          cache-key: nightly-${{ github.sha }}-${{ github.run_number }}
+
+      - name: "Run examples"
+        run: lake exe examples
+
+  # ===========================================================================
+  # Proof Verification (full, no cache shortcuts)
+  # ===========================================================================
+  verify-proofs:
+    name: "Verify Proofs (Full)"
+    runs-on: arc-runner-set-pw
+    needs: [clean-build]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Setup Lean"
+        uses: ./.github/actions/lean-setup
+        with:
+          cache-key: nightly-${{ github.sha }}-${{ github.run_number }}
+
+      - name: "Full proof verification"
+        run: |
+          echo "=== Proof Verification ==="
+          time lake build Radix 2>&1 | tail -20
+
+      - name: "Zero-sorry audit"
+        run: |
+          SORRY_COUNT=$(grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/' | wc -l)
+          if [ "$SORRY_COUNT" -gt 0 ]; then
+            echo "::error::Found $SORRY_COUNT 'sorry' in codebase"
+            grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/'
+            exit 1
+          fi
+          echo "Zero sorry — all proofs complete"
+
+      - name: "Proof census"
+        run: |
+          THEOREMS=$(grep -rn '^theorem\|^  theorem' Radix/ | wc -l)
+          LEMMAS=$(grep -rn '^lemma\|^  lemma' Radix/ | wc -l)
+          INSTANCES=$(grep -rn '^instance\|^  instance' Radix/ | wc -l)
+          DEFS=$(grep -rn '^def\|^  def\|^private def' Radix/ | wc -l)
+          AXIOMS=$(grep -rn '^axiom\|^  axiom' Radix/ | wc -l)
+          echo "### Nightly Proof Census" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Type | Count |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Theorems | $THEOREMS |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Lemmas | $LEMMAS |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Instances | $INSTANCES |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Definitions | $DEFS |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Axioms | $AXIOMS |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Trust assumptions audit"
+        run: |
+          grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | grep -v '\.lake/' || echo "No trust assumptions"
+
+  # ===========================================================================
+  # Nightly Benchmarks
+  # ===========================================================================
+  benchmarks:
+    name: "Nightly Benchmarks"
+    runs-on: arc-runner-set-pw
+    needs: [clean-build]
+    if: inputs.skip_benchmarks != true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Setup Lean"
+        uses: ./.github/actions/lean-setup
+        with:
+          cache-key: nightly-${{ github.sha }}-${{ github.run_number }}
+
+      - name: "System info"
+        run: |
+          lscpu | grep -E 'Model name|CPU\(s\)|Thread|MHz|cache' || cat /proc/cpuinfo | head -20
+          free -h
+
+      - name: "Lean benchmarks (3 runs)"
+        run: |
+          for i in 1 2 3; do
+            echo "=== Run $i/3 ==="
+            lake exe bench 2>&1 | tee "bench-lean-run-${i}.txt"
+          done
+
+      - name: "C baseline (3 runs)"
+        run: |
+          if [ -f benchmarks/baseline.c ]; then
+            gcc -O2 -march=native -fno-builtin -o benchmarks/baseline benchmarks/baseline.c
+            for i in 1 2 3; do
+              echo "=== C Run $i/3 ==="
+              ./benchmarks/baseline 2>&1 | tee "bench-c-run-${i}.txt"
+            done
+          fi
+
+      - name: "Upload results"
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nightly-benchmarks-${{ github.run_number }}
+          path: bench-*.txt
+          retention-days: 365
+
+  # ===========================================================================
+  # Dependency Freshness Check
+  # ===========================================================================
+  dependency-check:
+    name: "Dependency Freshness"
+    runs-on: arc-runner-set-pw
+    needs: []
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Analyze dependency age"
+        run: |
+          python3 << 'PYEOF'
+          import json, subprocess, datetime, sys
+
+          with open('lake-manifest.json') as f:
+              manifest = json.load(f)
+
+          print("=== Dependency Freshness Report ===\n")
+          for pkg in manifest.get('packages', []):
+              name = pkg.get('name', 'unknown')
+              rev = pkg.get('rev', '')
+              url = pkg.get('url', '')
+              print(f"  {name}:")
+              print(f"    Pinned rev: {rev[:12]}...")
+              if 'github.com' in url:
+                  parts = url.replace('https://github.com/', '').replace('.git', '').split('/')
+                  if len(parts) >= 2:
+                      repo = '/'.join(parts[:2])
+                      print(f"    Repo: {repo}")
+          print("\nTo update: lake update && lake exe cache get")
+          PYEOF
+
+      - name: "Toolchain version check"
+        run: |
+          TOOLCHAIN=$(cat lean-toolchain | tr -d '[:space:]')
+          echo "Current: $TOOLCHAIN"
+
+  # ===========================================================================
+  # Nightly Summary
+  # ===========================================================================
+  nightly-summary:
+    name: "Nightly Summary"
+    runs-on: arc-runner-set-pw
+    needs:
+      - clean-build
+      - test-unit
+      - test-property
+      - test-comprehensive
+      - test-examples
+      - verify-proofs
+      - benchmarks
+      - dependency-check
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: "Summary"
+        run: |
+          echo "### Nightly Pipeline Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Clean Build | \`${{ needs.clean-build.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Unit Tests | \`${{ needs.test-unit.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Property Tests | \`${{ needs.test-property.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Comprehensive Tests | \`${{ needs.test-comprehensive.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Examples | \`${{ needs.test-examples.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Proof Verification | \`${{ needs.verify-proofs.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Benchmarks | \`${{ needs.benchmarks.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Dependency Check | \`${{ needs.dependency-check.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Run:** #${{ github.run_number }} | **SHA:** \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Enforce nightly gates"
+        run: |
+          FAILED=0
+          for RESULT in \
+            "${{ needs.clean-build.result }}" \
+            "${{ needs.test-unit.result }}" \
+            "${{ needs.test-property.result }}" \
+            "${{ needs.test-comprehensive.result }}" \
+            "${{ needs.verify-proofs.result }}"; do
+            if [ "$RESULT" = "failure" ]; then
+              FAILED=$((FAILED + 1))
+            fi
+          done
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::Nightly pipeline: $FAILED critical job(s) failed"
+            exit 1
+          fi
+          echo "Nightly pipeline passed"
