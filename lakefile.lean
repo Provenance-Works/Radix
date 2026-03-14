@@ -6,10 +6,20 @@ package radix where
     -- Enable well-foundedness checks
     ⟨`autoImplicit, false⟩
   ]
+  -- Enable native CPU instructions (popcnt, lzcnt, bmi, bmi2, etc.)
+  moreLeancArgs := #["-march=native"]
 
 @[default_target]
 lean_lib Radix where
   srcDir := "."
+  extraDepTargets := #[`radixffi]
+
+extern_lib radixffi pkg := do
+  let srcJob ← inputTextFile (pkg.dir / "c" / "radix_ffi.c")
+  let oFile := pkg.buildDir / "c" / "radix_ffi.o"
+  let oJob ← buildLeanO oFile srcJob #[] #["-O2", "-march=native"]
+  let libFile := pkg.staticLibDir / nameToStaticLib "radixffi"
+  buildStaticLib libFile #[oJob]
 
 require mathlib from git
   "https://github.com/leanprover-community/mathlib4" @ "06e947358d88e36af006f915f79a04a10fd43cc4"

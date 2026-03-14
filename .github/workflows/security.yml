@@ -1,0 +1,354 @@
+# =============================================================================
+# Radix — Security Scanning Pipeline (Scheduled + On-Demand)
+# =============================================================================
+# Deep security analysis: SAST, SCA, secret detection, FFI audit,
+# dependency vulnerability scanning, license compliance.
+# =============================================================================
+
+name: "Security"
+run-name: "Security Scan — ${{ github.event_name }}"
+
+on:
+  schedule:
+    # Weekly Monday 03:00 UTC — deep security scan
+    - cron: "0 3 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - "c/**"
+      - "lake-manifest.json"
+      - "lakefile.lean"
+      - "lean-toolchain"
+  pull_request:
+    branches: [main]
+    paths:
+      - "c/**"
+      - "lake-manifest.json"
+  workflow_dispatch:
+    inputs:
+      full_scan:
+        description: "Run full deep scan (slower)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ===========================================================================
+  # Secret Detection — Zero Tolerance
+  # ===========================================================================
+  secret-detection:
+    name: "Secret Detection"
+    runs-on: arc-runner-set-pw
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: "Gitleaks — Full history scan"
+        run: |
+          if command -v gitleaks &> /dev/null; then
+            gitleaks detect \
+              --source . \
+              --verbose \
+              --report-format json \
+              --report-path gitleaks-report.json \
+              --log-level info \
+              2>&1 | tee gitleaks-output.txt
+          else
+            echo "::warning::gitleaks not available — running manual checks"
+            # Manual fallback checks
+            FOUND=0
+            # Check for common secret patterns
+            for pattern in \
+              'AKIA[0-9A-Z]{16}' \
+              'ghp_[a-zA-Z0-9]{36}' \
+              'gho_[a-zA-Z0-9]{36}' \
+              'glpat-[a-zA-Z0-9_-]{20}' \
+              'sk-[a-zA-Z0-9]{48}' \
+              '-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----' \
+              'password\s*=\s*["\x27][^"\x27]{8,}["\x27]'; do
+              if grep -rPn "$pattern" --include='*.lean' --include='*.c' --include='*.yml' --include='*.yaml' --include='*.json' --include='*.toml' --include='*.md' . 2>/dev/null | grep -v '.lake/' | grep -v 'node_modules/'; then
+                echo "::error::Potential secret detected matching pattern: $pattern"
+                FOUND=$((FOUND + 1))
+              fi
+            done
+            if [ "$FOUND" -gt 0 ]; then
+              exit 1
+            fi
+          fi
+
+      - name: "Upload secret detection report"
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: secret-detection-report
+          path: |
+            gitleaks-report.json
+            gitleaks-output.txt
+          retention-days: 90
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # FFI C Code — Static Analysis (SAST)
+  # ===========================================================================
+  ffi-sast:
+    name: "FFI SAST (C Code)"
+    runs-on: arc-runner-set-pw
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Static analysis — cppcheck"
+        run: |
+          if command -v cppcheck &> /dev/null; then
+            cppcheck \
+              --enable=all \
+              --error-exitcode=1 \
+              --suppress=missingInclude \
+              --suppress=unmatchedSuppression \
+              --inline-suppr \
+              --std=c11 \
+              --xml \
+              --output-file=cppcheck-report.xml \
+              c/ 2>&1 | tee cppcheck-output.txt
+          else
+            echo "::notice::cppcheck not installed — running manual analysis"
+          fi
+
+      - name: "Check for unsafe C patterns"
+        run: |
+          echo "=== Checking for unsafe C function usage ==="
+          ERRORS=0
+          UNSAFE_FUNCS="gets\b|sprintf\b|strcpy\b|strcat\b|scanf\b|vsprintf\b|strtok\b|tmpnam\b|mktemp\b"
+          if grep -rPn "$UNSAFE_FUNCS" c/; then
+            echo "::error::Unsafe C functions detected in FFI code"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          echo "=== Checking for potential buffer overflows ==="
+          if grep -rPn 'malloc\s*\(.*(strlen|sizeof)' c/ | grep -v 'malloc.*+.*1'; then
+            echo "::warning::Potential off-by-one in malloc (missing +1 for null terminator?)"
+          fi
+
+          echo "=== Checking for integer overflow risks ==="
+          if grep -rPn 'uint8_t.*\*.*uint8_t|uint16_t.*\*.*uint16_t' c/; then
+            echo "::notice::Potential integer multiplication overflow"
+          fi
+
+          if [ "$ERRORS" -gt 0 ]; then
+            exit 1
+          fi
+          echo "FFI code passed safety checks ✅"
+
+      - name: "Compile with extra warnings"
+        run: |
+          for src in c/*.c; do
+            echo "=== Compiling $src with strict warnings ==="
+            gcc -Wall -Wextra -Werror -Wpedantic -Wconversion -Wshadow \
+                -Wformat=2 -Wformat-security -Wstrict-prototypes \
+                -Wold-style-definition -Wmissing-prototypes \
+                -fsanitize=undefined -fstack-protector-strong \
+                -O2 -c "$src" -o /dev/null 2>&1 | tee -a gcc-warnings.txt
+          done
+
+      - name: "Upload SAST reports"
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ffi-sast-reports
+          path: |
+            cppcheck-report.xml
+            cppcheck-output.txt
+            gcc-warnings.txt
+          retention-days: 90
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # Dependency Vulnerability Scanning (SCA)
+  # ===========================================================================
+  dependency-audit:
+    name: "Dependency Audit"
+    runs-on: arc-runner-set-pw
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Deep dependency analysis"
+        run: |
+          python3 << 'PYEOF'
+          import json, sys, hashlib, urllib.request, ssl
+
+          with open('lake-manifest.json') as f:
+              manifest = json.load(f)
+
+          print("=" * 72)
+          print("RADIX DEPENDENCY AUDIT REPORT")
+          print("=" * 72)
+
+          errors = 0
+          warnings = 0
+          packages = manifest.get('packages', [])
+
+          for pkg in packages:
+              name = pkg.get('name', 'unknown')
+              pkg_type = pkg.get('type', 'unknown')
+              rev = pkg.get('rev', 'N/A')
+              url = pkg.get('url', 'N/A')
+              inherited = pkg.get('inherited', False)
+
+              print(f"\n--- {name} ---")
+              print(f"  Type:      {pkg_type}")
+              print(f"  URL:       {url}")
+              print(f"  Revision:  {rev}")
+              print(f"  Inherited: {inherited}")
+              print(f"  Input Rev: {pkg.get('inputRev', 'N/A')}")
+
+              # Check: Git packages must use full SHA
+              if pkg_type == 'git':
+                  if len(rev) != 40:
+                      print(f"  ❌ CRITICAL: Non-pinned revision (not 40-char SHA)")
+                      errors += 1
+                  else:
+                      print(f"  ✅ Pinned to full SHA")
+
+                  # Check: Must use HTTPS
+                  if not url.startswith('https://'):
+                      print(f"  ❌ CRITICAL: Non-HTTPS URL")
+                      errors += 1
+                  else:
+                      print(f"  ✅ HTTPS URL")
+
+                  # Check: GitHub source verification
+                  if 'github.com' in url:
+                      # Verify it's a known trusted org
+                      trusted_orgs = ['leanprover', 'leanprover-community']
+                      org = url.split('github.com/')[-1].split('/')[0] if 'github.com/' in url else 'unknown'
+                      if org in trusted_orgs:
+                          print(f"  ✅ Trusted organization: {org}")
+                      else:
+                          print(f"  ⚠️  Non-standard org: {org}")
+                          warnings += 1
+
+          print(f"\n{'=' * 72}")
+          print(f"SUMMARY: {len(packages)} packages, {errors} errors, {warnings} warnings")
+          print(f"{'=' * 72}")
+
+          if errors > 0:
+              print(f"\n::error::Dependency audit failed with {errors} critical issue(s)")
+              sys.exit(1)
+          elif warnings > 0:
+              print(f"\n::warning::Dependency audit passed with {warnings} warning(s)")
+          else:
+              print(f"\nAll checks passed ✅")
+          PYEOF
+
+      - name: "Check Lean toolchain provenance"
+        run: |
+          TOOLCHAIN=$(cat lean-toolchain | tr -d '[:space:]')
+          echo "Lean toolchain: $TOOLCHAIN"
+          # Verify it matches expected pattern
+          if [[ ! "$TOOLCHAIN" =~ ^leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
+            echo "::warning::Non-standard toolchain format: $TOOLCHAIN"
+          else
+            echo "Toolchain format verified ✅"
+          fi
+
+  # ===========================================================================
+  # License Compliance
+  # ===========================================================================
+  license-check:
+    name: "License Compliance"
+    runs-on: arc-runner-set-pw
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Verify project license"
+        run: |
+          if [ ! -f LICENSE ]; then
+            echo "::error::LICENSE file missing"
+            exit 1
+          fi
+          echo "LICENSE file present ✅"
+          head -5 LICENSE
+
+      - name: "Check dependency licenses"
+        run: |
+          python3 << 'PYEOF'
+          import json
+
+          # Known-good licenses for Lean ecosystem
+          ALLOWED_LICENSES = {
+              'Apache-2.0', 'MIT', 'BSD-2-Clause', 'BSD-3-Clause',
+              'ISC', 'Unlicense', 'CC0-1.0'
+          }
+
+          with open('lake-manifest.json') as f:
+              manifest = json.load(f)
+
+          print("=== Dependency License Audit ===")
+          for pkg in manifest.get('packages', []):
+              name = pkg.get('name', 'unknown')
+              url = pkg.get('url', '')
+              # Mathlib and leanprover-community packages are Apache-2.0
+              if 'leanprover-community' in url or 'leanprover' in url:
+                  print(f"  ✅ {name}: Apache-2.0 (leanprover ecosystem)")
+              else:
+                  print(f"  ⚠️  {name}: License needs manual verification ({url})")
+          PYEOF
+
+      - name: "Check copyright headers"
+        run: |
+          echo "=== Checking C source copyright headers ==="
+          for f in c/*.c; do
+            if ! head -15 "$f" | grep -qi 'copyright\|license\|Apache'; then
+              echo "::warning file=$f::Missing copyright/license header"
+            else
+              echo "  ✅ $f has copyright header"
+            fi
+          done
+
+  # ===========================================================================
+  # Security Summary
+  # ===========================================================================
+  security-summary:
+    name: "Security Summary"
+    runs-on: arc-runner-set-pw
+    needs: [secret-detection, ffi-sast, dependency-audit, license-check]
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: "Generate security report"
+        run: |
+          echo "### 🔒 Security Scan Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Scan | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Secret Detection | ${{ needs.secret-detection.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| FFI SAST (C Code) | ${{ needs.ffi-sast.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Dependency Audit | ${{ needs.dependency-audit.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| License Compliance | ${{ needs.license-check.result }} |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Fail on critical security issues"
+        run: |
+          for result in \
+            "${{ needs.secret-detection.result }}" \
+            "${{ needs.ffi-sast.result }}" \
+            "${{ needs.dependency-audit.result }}"; do
+            if [ "$result" = "failure" ]; then
+              echo "::error::Critical security scan failed"
+              exit 1
+            fi
+          done
+          echo "All security scans passed ✅"

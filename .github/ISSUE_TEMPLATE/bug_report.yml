@@ -1,0 +1,112 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in Radix
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report this bug! Please fill out the form below as completely as possible.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of the bug.
+      placeholder: What went wrong?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to reproduce the behavior.
+      placeholder: |
+        1. Create a file with the following code:
+        ```lean
+        import Radix.Word
+        -- ...
+        ```
+        2. Run `lake build`
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened? Include any error messages.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Affected Module
+      description: Which Radix module is affected?
+      options:
+        - Word
+        - Bit
+        - Bytes
+        - Memory
+        - Binary
+        - System
+        - Concurrency
+        - BareMetal
+        - Build / Infrastructure
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: lean-version
+    attributes:
+      label: Lean Version
+      description: "Output of `lean --version`"
+      placeholder: "leanprover/lean4:v4.29.0-rc4"
+    validations:
+      required: true
+
+  - type: input
+    id: radix-version
+    attributes:
+      label: Radix Version
+      description: "Version or git commit SHA"
+      placeholder: "v0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "Ubuntu 24.04 / macOS 15 / Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other relevant information (screenshots, logs, related issues).
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate.
+          required: true
+        - label: I have verified this issue exists on the latest version of `main`.
+          required: false

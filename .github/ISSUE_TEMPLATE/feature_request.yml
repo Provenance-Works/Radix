@@ -1,0 +1,97 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for Radix
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a feature! Please describe your idea as clearly as possible.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? Is it related to a frustration?
+      placeholder: "I'm always frustrated when..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the feature you'd like. Include API sketches if applicable.
+      placeholder: |
+        I would like a `Radix.Foo.bar` function that:
+        ```lean
+        def bar (x : UInt32) : UInt32 := ...
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What alternative solutions or workarounds have you considered?
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Target Module
+      description: Which module would this feature belong to?
+      options:
+        - Word
+        - Bit
+        - Bytes
+        - Memory
+        - Binary
+        - System
+        - Concurrency
+        - BareMetal
+        - New Module
+        - Build / Infrastructure
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Architecture Layer
+      description: Which layer of the three-layer architecture does this affect?
+      options:
+        - "Spec (Layer 3: mathematical specification)"
+        - "Impl (Layer 2: computable code with proofs)"
+        - "Bridge (Layer 1: system-level wrappers)"
+        - "Multiple layers"
+        - "Not sure"
+
+  - type: checkboxes
+    id: verification
+    attributes:
+      label: Verification Expectations
+      description: What level of verification should this feature have?
+      options:
+        - label: Full formal specification (BitVec-based spec in Spec.lean)
+        - label: Correctness proofs (implementation matches specification)
+        - label: Property-based tests
+        - label: Unit tests
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, references, or motivation for this feature.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and discussions to ensure this is not a duplicate.
+          required: true
+        - label: I have checked the [ROADMAP.md](https://github.com/provenance-works/radix/blob/main/ROADMAP.md) to see if this is already planned.
+          required: false

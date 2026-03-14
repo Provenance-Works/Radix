@@ -63,8 +63,13 @@ def validateNativeEndian : IO (Except String String) := do
 
 namespace UInt16
 
+@[inline] private def bswap16_fast (x : Radix.UInt16) : Radix.UInt16 :=
+  let v := x.val
+  ⟨((v &&& 0xFF) <<< (8 : _root_.UInt16)) ||| (v >>> (8 : _root_.UInt16))⟩
+
 /-- Swap the byte order of a 16-bit unsigned integer. -/
-@[inline] def bswap (x : UInt16) : UInt16 :=
+@[implemented_by bswap16_fast, inline]
+def bswap (x : UInt16) : UInt16 :=
   let lo := Radix.UInt16.band (Radix.UInt16.shrLogical x ⟨8⟩) ⟨0xFF⟩
   let hi := Radix.UInt16.shl (Radix.UInt16.band x ⟨0xFF⟩) ⟨8⟩
   Radix.UInt16.bor hi lo
@@ -111,8 +116,15 @@ end UInt16
 
 namespace UInt32
 
+@[inline] private def bswap32_fast (x : Radix.UInt32) : Radix.UInt32 :=
+  let v := x.val
+  let v := ((v &&& 0x00FF00FF) <<< (8 : _root_.UInt32)) ||| ((v >>> (8 : _root_.UInt32)) &&& 0x00FF00FF)
+  let v := (v <<< (16 : _root_.UInt32)) ||| (v >>> (16 : _root_.UInt32))
+  ⟨v⟩
+
 /-- Swap the byte order of a 32-bit unsigned integer. -/
-@[inline] def bswap (x : UInt32) : UInt32 :=
+@[implemented_by bswap32_fast, inline]
+def bswap (x : UInt32) : UInt32 :=
   let b0 := Radix.UInt32.band (Radix.UInt32.shrLogical x ⟨24⟩) ⟨0xFF⟩
   let b1 := Radix.UInt32.band (Radix.UInt32.shrLogical x ⟨16⟩) ⟨0xFF⟩
   let b2 := Radix.UInt32.band (Radix.UInt32.shrLogical x ⟨8⟩) ⟨0xFF⟩
@@ -157,8 +169,16 @@ end UInt32
 
 namespace UInt64
 
+@[inline] private def bswap64_fast (x : Radix.UInt64) : Radix.UInt64 :=
+  let v := x.val
+  let v := ((v &&& 0x00FF00FF00FF00FF) <<< (8 : _root_.UInt64)) ||| ((v >>> (8 : _root_.UInt64)) &&& 0x00FF00FF00FF00FF)
+  let v := ((v &&& 0x0000FFFF0000FFFF) <<< (16 : _root_.UInt64)) ||| ((v >>> (16 : _root_.UInt64)) &&& 0x0000FFFF0000FFFF)
+  let v := (v <<< (32 : _root_.UInt64)) ||| (v >>> (32 : _root_.UInt64))
+  ⟨v⟩
+
 /-- Swap the byte order of a 64-bit unsigned integer. -/
-@[inline] def bswap (x : UInt64) : UInt64 :=
+@[implemented_by bswap64_fast, inline]
+def bswap (x : UInt64) : UInt64 :=
   let b0 := Radix.UInt64.band (Radix.UInt64.shrLogical x ⟨56⟩) ⟨0xFF⟩
   let b1 := Radix.UInt64.band (Radix.UInt64.shrLogical x ⟨48⟩) ⟨0xFF⟩
   let b2 := Radix.UInt64.band (Radix.UInt64.shrLogical x ⟨40⟩) ⟨0xFF⟩

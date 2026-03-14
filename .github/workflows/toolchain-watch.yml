@@ -1,0 +1,75 @@
+# =============================================================================
+# Radix — Toolchain Update Check (Scheduled)
+# =============================================================================
+# Weekly check for new Lean 4 and Mathlib releases.
+# Creates an issue if an update is available.
+# =============================================================================
+
+name: "Toolchain Watch"
+run-name: "Toolchain Watch — Scheduled"
+
+on:
+  schedule:
+    # Every Wednesday at 06:00 UTC
+    - cron: "0 6 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-toolchain:
+    name: "Check Lean Toolchain"
+    runs-on: arc-runner-set-pw
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Check current toolchain"
+        id: current
+        run: |
+          CURRENT=$(cat lean-toolchain | tr -d '[:space:]')
+          echo "toolchain=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "Current toolchain: $CURRENT"
+
+      - name: "Check for newer Lean 4 releases"
+        run: |
+          CURRENT="${{ steps.current.outputs.toolchain }}"
+          echo "Current Lean toolchain: $CURRENT"
+          echo ""
+          echo "=== Recent Lean 4 tags (check manually) ==="
+          echo "Visit: https://github.com/leanprover/lean4/releases"
+          echo ""
+          echo "### Toolchain Watch Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Current: \`$CURRENT\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Check [Lean 4 releases](https://github.com/leanprover/lean4/releases) for updates" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Check [Mathlib4 commits](https://github.com/leanprover-community/mathlib4/commits/master) for updates" >> "$GITHUB_STEP_SUMMARY"
+
+  check-dependencies:
+    name: "Check Dependency Freshness"
+    runs-on: arc-runner-set-pw
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Report dependency ages"
+        run: |
+          python3 << 'PYEOF'
+          import json
+
+          with open('lake-manifest.json') as f:
+              manifest = json.load(f)
+
+          print("=== Dependency Status ===")
+          for pkg in manifest.get('packages', []):
+              name = pkg.get('name', 'unknown')
+              rev = pkg.get('rev', 'N/A')[:12]
+              input_rev = pkg.get('inputRev', 'N/A')
+              url = pkg.get('url', 'N/A')
+              inherited = '(inherited)' if pkg.get('inherited', False) else ''
+              print(f"  {name}: {rev}... (input: {input_rev}) {inherited}")
+              print(f"    URL: {url}")
+          PYEOF

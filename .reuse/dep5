@@ -1,0 +1,59 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Radix
+Upstream-Contact: https://github.com/provenance-works/radix/issues
+Source: https://github.com/provenance-works/radix
+
+# Lean source files
+Files: Radix.lean Radix/**/*.lean
+Copyright: 2026 Provenance Works
+License: Apache-2.0
+
+# Test files
+Files: tests/**/*.lean test_helpers.lean
+Copyright: 2026 Provenance Works
+License: Apache-2.0
+
+# Example files
+Files: examples/**/*.lean
+Copyright: 2026 Provenance Works
+License: Apache-2.0
+
+# Benchmark files
+Files: benchmarks/**/*.lean benchmarks/baseline.c
+Copyright: 2026 Provenance Works
+License: Apache-2.0
+
+# C FFI source
+Files: c/*.c
+Copyright: 2026 Provenance Works
+License: Apache-2.0
+
+# Build configuration
+Files: lakefile.lean lean-toolchain lake-manifest.json
+Copyright: 2026 Provenance Works
+License: Apache-2.0
+
+# Documentation
+Files: docs/**
+Copyright: 2026 Provenance Works
+License: Apache-2.0
+
+# Markdown files at root
+Files: *.md
+Copyright: 2026 Provenance Works
+License: Apache-2.0
+
+# Configuration files
+Files: .editorconfig .gitattributes .gitignore Makefile
+Copyright: 2026 Provenance Works
+License: Apache-2.0
+
+# GitHub configuration
+Files: .github/**
+Copyright: 2026 Provenance Works
+License: Apache-2.0
+
+# Benchmark result templates
+Files: benchmarks/results/**
+Copyright: 2026 Provenance Works
+License: Apache-2.0

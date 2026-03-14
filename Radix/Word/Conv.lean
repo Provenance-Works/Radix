@@ -53,28 +53,62 @@ namespace Radix
 /-! ## Sign Extension (Signed Widening)                               -/
 /-! ================================================================ -/
 
+-- Branchless sign extension using the XOR-subtract trick:
+-- (val ^ sign_bit) - sign_bit extends the sign bit to all upper positions.
+-- This avoids the expensive BitVec.signExtend → Nat pathway.
+
+@[inline] private def signExtend8to16_fast (x : Radix.Int8) : Radix.Int16 :=
+  let val := x.val.toUInt16
+  ⟨(val ^^^ 0x80) - 0x80⟩
+
+@[inline] private def signExtend8to32_fast (x : Radix.Int8) : Radix.Int32 :=
+  let val := x.val.toUInt32
+  ⟨(val ^^^ 0x80) - 0x80⟩
+
+@[inline] private def signExtend8to64_fast (x : Radix.Int8) : Radix.Int64 :=
+  let val := x.val.toUInt64
+  ⟨(val ^^^ 0x80) - 0x80⟩
+
+@[inline] private def signExtend16to32_fast (x : Radix.Int16) : Radix.Int32 :=
+  let val := x.val.toUInt32
+  ⟨(val ^^^ 0x8000) - 0x8000⟩
+
+@[inline] private def signExtend16to64_fast (x : Radix.Int16) : Radix.Int64 :=
+  let val := x.val.toUInt64
+  ⟨(val ^^^ 0x8000) - 0x8000⟩
+
+@[inline] private def signExtend32to64_fast (x : Radix.Int32) : Radix.Int64 :=
+  let val := x.val.toUInt64
+  ⟨(val ^^^ 0x80000000) - 0x80000000⟩
+
 /-- Sign-extend `Int8` to `Int16`. -/
-@[inline] def Int8.toInt16 (x : Int8) : Int16 :=
+@[implemented_by signExtend8to16_fast, inline]
+def Int8.toInt16 (x : Int8) : Int16 :=
   Int16.fromBitVec (BitVec.signExtend 16 x.toBitVec)
 
 /-- Sign-extend `Int8` to `Int32`. -/
-@[inline] def Int8.toInt32 (x : Int8) : Int32 :=
+@[implemented_by signExtend8to32_fast, inline]
+def Int8.toInt32 (x : Int8) : Int32 :=
   Int32.fromBitVec (BitVec.signExtend 32 x.toBitVec)
 
 /-- Sign-extend `Int8` to `Int64`. -/
-@[inline] def Int8.toInt64 (x : Int8) : Int64 :=
+@[implemented_by signExtend8to64_fast, inline]
+def Int8.toInt64 (x : Int8) : Int64 :=
   Int64.fromBitVec (BitVec.signExtend 64 x.toBitVec)
 
 /-- Sign-extend `Int16` to `Int32`. -/
-@[inline] def Int16.toInt32 (x : Int16) : Int32 :=
+@[implemented_by signExtend16to32_fast, inline]
+def Int16.toInt32 (x : Int16) : Int32 :=
   Int32.fromBitVec (BitVec.signExtend 32 x.toBitVec)
 
 /-- Sign-extend `Int16` to `Int64`. -/
-@[inline] def Int16.toInt64 (x : Int16) : Int64 :=
+@[implemented_by signExtend16to64_fast, inline]
+def Int16.toInt64 (x : Int16) : Int64 :=
   Int64.fromBitVec (BitVec.signExtend 64 x.toBitVec)
 
 /-- Sign-extend `Int32` to `Int64`. -/
-@[inline] def Int32.toInt64 (x : Int32) : Int64 :=
+@[implemented_by signExtend32to64_fast, inline]
+def Int32.toInt64 (x : Int32) : Int64 :=
   Int64.fromBitVec (BitVec.signExtend 64 x.toBitVec)
 
 /-! ================================================================ -/
@@ -99,28 +133,44 @@ namespace Radix
 /-- Truncate `UInt64` to `UInt32`. -/
 @[inline] def UInt64.toUInt32 (x : UInt64) : UInt32 := ⟨x.val.toUInt32⟩
 
+-- Truncation fast paths: just narrow the underlying unsigned value.
+-- Narrowing keeps the lower bits, which is exactly what truncation does.
+
+@[inline] private def truncateI16toI8_fast (x : Radix.Int16) : Radix.Int8 := ⟨x.val.toUInt8⟩
+@[inline] private def truncateI32toI8_fast (x : Radix.Int32) : Radix.Int8 := ⟨x.val.toUInt8⟩
+@[inline] private def truncateI32toI16_fast (x : Radix.Int32) : Radix.Int16 := ⟨x.val.toUInt16⟩
+@[inline] private def truncateI64toI8_fast (x : Radix.Int64) : Radix.Int8 := ⟨x.val.toUInt8⟩
+@[inline] private def truncateI64toI16_fast (x : Radix.Int64) : Radix.Int16 := ⟨x.val.toUInt16⟩
+@[inline] private def truncateI64toI32_fast (x : Radix.Int64) : Radix.Int32 := ⟨x.val.toUInt32⟩
+
 /-- Truncate `Int16` to `Int8`. -/
-@[inline] def Int16.toInt8 (x : Int16) : Int8 :=
+@[implemented_by truncateI16toI8_fast, inline]
+def Int16.toInt8 (x : Int16) : Int8 :=
   Int8.fromBitVec (x.toBitVec.truncate 8)
 
 /-- Truncate `Int32` to `Int8`. -/
-@[inline] def Int32.toInt8 (x : Int32) : Int8 :=
+@[implemented_by truncateI32toI8_fast, inline]
+def Int32.toInt8 (x : Int32) : Int8 :=
   Int8.fromBitVec (x.toBitVec.truncate 8)
 
 /-- Truncate `Int32` to `Int16`. -/
-@[inline] def Int32.toInt16 (x : Int32) : Int16 :=
+@[implemented_by truncateI32toI16_fast, inline]
+def Int32.toInt16 (x : Int32) : Int16 :=
   Int16.fromBitVec (x.toBitVec.truncate 16)
 
 /-- Truncate `Int64` to `Int8`. -/
-@[inline] def Int64.toInt8 (x : Int64) : Int8 :=
+@[implemented_by truncateI64toI8_fast, inline]
+def Int64.toInt8 (x : Int64) : Int8 :=
   Int8.fromBitVec (x.toBitVec.truncate 8)
 
 /-- Truncate `Int64` to `Int16`. -/
-@[inline] def Int64.toInt16 (x : Int64) : Int16 :=
+@[implemented_by truncateI64toI16_fast, inline]
+def Int64.toInt16 (x : Int64) : Int16 :=
   Int16.fromBitVec (x.toBitVec.truncate 16)
 
 /-- Truncate `Int64` to `Int32`. -/
-@[inline] def Int64.toInt32 (x : Int64) : Int32 :=
+@[implemented_by truncateI64toI32_fast, inline]
+def Int64.toInt32 (x : Int64) : Int32 :=
   Int32.fromBitVec (x.toBitVec.truncate 32)
 
 /-! ================================================================ -/

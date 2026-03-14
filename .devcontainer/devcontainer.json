@@ -1,0 +1,37 @@
+// Radix Development Container — VS Code / GitHub Codespaces
+// https://containers.dev/implementors/json_reference/
+{
+  "name": "Radix Dev",
+  "image": "ghcr.io/leanprover/lean4:v4.29.0-rc4",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": false,
+      "upgradePackages": true
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "lake update && lake exe cache get 2>/dev/null || true",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "leanprover.lean4",
+        "EditorConfig.EditorConfig",
+        "streetsidesoftware.code-spell-checker",
+        "DavidAnson.vscode-markdownlint"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.rulers": [100],
+        "files.trimTrailingWhitespace": true,
+        "files.insertFinalNewline": true,
+        "lean4.lakeEnabled": true
+      }
+    }
+  },
+  "remoteUser": "vscode"
+}

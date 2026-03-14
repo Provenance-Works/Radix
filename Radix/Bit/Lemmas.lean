@@ -273,7 +273,7 @@ end UInt64
 namespace UInt8
 
 /-- `clz 0 = 8`: all bits are zero, so all 8 leading positions are zero. -/
-theorem clz_zero : clz (0 : UInt8) = ⟨8⟩ := by native_decide
+theorem clz_zero : clz (0 : UInt8) = ⟨8⟩ := by decide
 
 /-- `ctz 0 = 8`: all bits are zero, so all 8 trailing positions are zero. -/
 theorem ctz_zero : ctz (0 : UInt8) = ⟨8⟩ := by native_decide
@@ -302,7 +302,7 @@ end UInt8
 
 namespace UInt16
 
-theorem clz_zero : clz (0 : UInt16) = ⟨16⟩ := by native_decide
+theorem clz_zero : clz (0 : UInt16) = ⟨16⟩ := by decide
 theorem ctz_zero : ctz (0 : UInt16) = ⟨16⟩ := by native_decide
 theorem popcount_zero : popcount (0 : UInt16) = 0 := by native_decide
 theorem popcount_allOnes : popcount (⟨65535⟩ : UInt16) = ⟨16⟩ := by native_decide
@@ -323,7 +323,7 @@ end UInt16
 
 namespace UInt32
 
-theorem clz_zero : clz (0 : UInt32) = ⟨32⟩ := by native_decide
+theorem clz_zero : clz (0 : UInt32) = ⟨32⟩ := by decide
 theorem ctz_zero : ctz (0 : UInt32) = ⟨32⟩ := by native_decide
 theorem popcount_zero : popcount (0 : UInt32) = 0 := by native_decide
 theorem popcount_allOnes : popcount (⟨4294967295⟩ : UInt32) = ⟨32⟩ := by native_decide
@@ -344,7 +344,7 @@ end UInt32
 
 namespace UInt64
 
-theorem clz_zero : clz (0 : UInt64) = ⟨64⟩ := by native_decide
+theorem clz_zero : clz (0 : UInt64) = ⟨64⟩ := by decide
 theorem ctz_zero : ctz (0 : UInt64) = ⟨64⟩ := by native_decide
 theorem popcount_zero : popcount (0 : UInt64) = 0 := by native_decide
 theorem popcount_allOnes : popcount (⟨18446744073709551615⟩ : UInt64) = ⟨64⟩ := by native_decide
@@ -1080,7 +1080,7 @@ end IWord
 /-! ================================================================ -/
 
 namespace Int8
-theorem clz_zero : clz (0 : Int8) = ⟨8⟩ := by native_decide
+theorem clz_zero : clz (0 : Int8) = ⟨8⟩ := by decide
 theorem ctz_zero : ctz (0 : Int8) = ⟨8⟩ := by native_decide
 theorem popcount_zero : popcount (0 : Int8) = 0 := by native_decide
 theorem popcount_bxor (x y : Int8) :
@@ -1092,7 +1092,7 @@ theorem hammingDistance_comm (x y : Int8) :
 end Int8
 
 namespace Int16
-theorem clz_zero : clz (0 : Int16) = ⟨16⟩ := by native_decide
+theorem clz_zero : clz (0 : Int16) = ⟨16⟩ := by decide
 theorem ctz_zero : ctz (0 : Int16) = ⟨16⟩ := by native_decide
 theorem popcount_zero : popcount (0 : Int16) = 0 := by native_decide
 theorem popcount_bxor (x y : Int16) :
@@ -1104,7 +1104,7 @@ theorem hammingDistance_comm (x y : Int16) :
 end Int16
 
 namespace Int32
-theorem clz_zero : clz (0 : Int32) = ⟨32⟩ := by native_decide
+theorem clz_zero : clz (0 : Int32) = ⟨32⟩ := by decide
 theorem ctz_zero : ctz (0 : Int32) = ⟨32⟩ := by native_decide
 theorem popcount_zero : popcount (0 : Int32) = 0 := by native_decide
 theorem popcount_bxor (x y : Int32) :
@@ -1116,7 +1116,7 @@ theorem hammingDistance_comm (x y : Int32) :
 end Int32
 
 namespace Int64
-theorem clz_zero : clz (0 : Int64) = ⟨64⟩ := by native_decide
+theorem clz_zero : clz (0 : Int64) = ⟨64⟩ := by decide
 theorem ctz_zero : ctz (0 : Int64) = ⟨64⟩ := by native_decide
 theorem popcount_zero : popcount (0 : Int64) = 0 := by native_decide
 theorem popcount_bxor (x y : Int64) :

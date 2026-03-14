@@ -100,44 +100,39 @@ private def benchUInt32Arith : IO Unit := do
 
   bench "wrappingAdd" do
     let mut acc : Radix.UInt32 := ⟨1⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
       acc := Radix.UInt32.wrappingAdd acc x
-    return acc.toNat.toUInt64
+    return acc.val.toUInt64
 
   bench "wrappingSub" do
     let mut acc : Radix.UInt32 := ⟨4294967295⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
       acc := Radix.UInt32.wrappingSub acc x
-    return acc.toNat.toUInt64
+    return acc.val.toUInt64
 
   bench "wrappingMul" do
     let mut acc : Radix.UInt32 := ⟨1⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
+    for v in data do
       let x : Radix.UInt32 := ⟨((v % 100) + 1).toUInt32⟩
       acc := Radix.UInt32.wrappingMul acc x
-    return acc.toNat.toUInt64
+    return acc.val.toUInt64
 
   bench "saturatingAdd" do
     let mut acc : Radix.UInt32 := ⟨0⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
       acc := Radix.UInt32.saturatingAdd acc x
-    return acc.toNat.toUInt64
+    return acc.val.toUInt64
 
   bench "checkedAdd" do
     let mut acc : UInt64 := 0
-    for i in [:numIter] do
-      let v := data[i % data.size]!
+    for v in data do
       let a : Radix.UInt32 := ⟨(v % 100).toUInt32⟩
       let b : Radix.UInt32 := ⟨((v / 100) % 100).toUInt32⟩
       match Radix.UInt32.checkedAdd a b with
-      | some r => acc := acc + r.toNat.toUInt64
+      | some r => acc := acc + r.val.toUInt64
       | none => acc := acc + 1
     return acc
 
@@ -151,27 +146,24 @@ private def benchUInt64Arith : IO Unit := do
 
   bench "wrappingAdd" do
     let mut acc : Radix.UInt64 := ⟨1⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
+    for v in data do
       let x : Radix.UInt64 := ⟨v⟩
       acc := Radix.UInt64.wrappingAdd acc x
-    return acc.toNat.toUInt64
+    return acc.val
 
   bench "wrappingSub" do
     let mut acc : Radix.UInt64 := ⟨18446744073709551615⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
+    for v in data do
       let x : Radix.UInt64 := ⟨v⟩
       acc := Radix.UInt64.wrappingSub acc x
-    return acc.toNat.toUInt64
+    return acc.val
 
   bench "wrappingMul" do
     let mut acc : Radix.UInt64 := ⟨1⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
+    for v in data do
       let x : Radix.UInt64 := ⟨(v % 100) + 1⟩
       acc := Radix.UInt64.wrappingMul acc x
-    return acc.toNat.toUInt64
+    return acc.val
 
 /-! ================================================================ -/
 /-! ## Bitwise Operation Benchmarks                                  -/
@@ -183,59 +175,52 @@ private def benchBitwise : IO Unit := do
 
   bench "band" do
     let mut acc : Radix.UInt32 := ⟨4294967295⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
       acc := Radix.UInt32.band acc x
-    return acc.toNat.toUInt64
+    return acc.val.toUInt64
 
   bench "bor" do
     let mut acc : Radix.UInt32 := ⟨0⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
       acc := Radix.UInt32.bor acc x
-    return acc.toNat.toUInt64
+    return acc.val.toUInt64
 
   bench "bxor" do
     let mut acc : Radix.UInt32 := ⟨0⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
       acc := Radix.UInt32.bxor acc x
-    return acc.toNat.toUInt64
+    return acc.val.toUInt64
 
   bench "shl" do
     let mut acc : Radix.UInt32 := ⟨1⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
+    for v in data do
       let shift : Radix.UInt32 := ⟨(v % 32).toUInt32⟩
-      acc := Radix.UInt32.bxor acc (Radix.UInt32.shl ⟨(v % 4294967296).toUInt32⟩ shift)
-    return acc.toNat.toUInt64
+      acc := Radix.UInt32.bxor acc (Radix.UInt32.shl ⟨v.toUInt32⟩ shift)
+    return acc.val.toUInt64
 
   bench "popcount" do
     let mut acc : UInt64 := 0
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
-      acc := acc + (Radix.UInt32.popcount x).toNat.toUInt64
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
+      acc := acc + (Radix.UInt32.popcount x).val.toUInt64
     return acc
 
   bench "clz" do
     let mut acc : UInt64 := 0
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
-      acc := acc + (Radix.UInt32.clz x).toNat.toUInt64
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
+      acc := acc + (Radix.UInt32.clz x).val.toUInt64
     return acc
 
   bench "rotl" do
     let mut acc : Radix.UInt32 := ⟨1⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
+    for v in data do
       let shift : Radix.UInt32 := ⟨(v % 32).toUInt32⟩
       acc := Radix.UInt32.rotl acc shift
-    return acc.toNat.toUInt64
+    return acc.val.toUInt64
 
 /-! ================================================================ -/
 /-! ## Byte Order Benchmarks                                         -/
@@ -247,27 +232,24 @@ private def benchByteOrder : IO Unit := do
 
   bench "bswap" do
     let mut acc : Radix.UInt32 := ⟨0⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
       acc := Radix.UInt32.bxor acc (Radix.UInt32.bswap x)
-    return acc.toNat.toUInt64
+    return acc.val.toUInt64
 
   bench "toBigEndian" do
     let mut acc : Radix.UInt32 := ⟨0⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
       acc := Radix.UInt32.bxor acc (Radix.UInt32.toBigEndian x)
-    return acc.toNat.toUInt64
+    return acc.val.toUInt64
 
   bench "toLittleEndian" do
     let mut acc : Radix.UInt32 := ⟨0⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
       acc := Radix.UInt32.bxor acc (Radix.UInt32.toLittleEndian x)
-    return acc.toNat.toUInt64
+    return acc.val.toUInt64
 
 /-! ================================================================ -/
 /-! ## Conversion Benchmarks                                         -/
@@ -279,26 +261,23 @@ private def benchConversions : IO Unit := do
 
   bench "u8→u32 zeroExtend" do
     let mut acc : UInt64 := 0
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt8 := ⟨(v % 256).toUInt8⟩
-      acc := acc + (Radix.UInt8.toUInt32 x).toNat.toUInt64
+    for v in data do
+      let x : Radix.UInt8 := ⟨v.toUInt8⟩
+      acc := acc + (Radix.UInt8.toUInt32 x).val.toUInt64
     return acc
 
   bench "u32→u8 truncate" do
     let mut acc : UInt64 := 0
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
-      acc := acc + (Radix.UInt32.toUInt8 x).toNat.toUInt64
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
+      acc := acc + (Radix.UInt32.toUInt8 x).val.toUInt64
     return acc
 
   bench "u32→u64 zeroExtend" do
     let mut acc : UInt64 := 0
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
-      acc := acc + (Radix.UInt32.toUInt64 x).toNat.toUInt64
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
+      acc := acc + (Radix.UInt32.toUInt64 x).val
     return acc
 
 /-! ================================================================ -/
@@ -310,28 +289,26 @@ private def benchLeb128 : IO Unit := do
   let data := genRandomArray numIter 6
 
   bench "encodeU32" do
-    let mut acc : UInt64 := 0
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
-      let encoded := Radix.Binary.Leb128.encodeU32 x
-      acc := acc + encoded.size.toUInt64
-    return acc
+    let mut buf := ⟨Array.mkEmpty (numIter * 5)⟩
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
+      buf := Radix.Binary.Leb128.encodeU32Append x buf
+    return buf.size.toUInt64
 
   bench "decodeU32" do
-    -- Pre-encode a set of values
+    -- Pre-encode a set of values (power of 2 for fast modulo via bitmask)
     let encodedArr := Id.run do
       let mut arr : Array ByteArray := #[]
-      for i in [:1000] do
-        let v := data[i % data.size]!
-        let x : Radix.UInt32 := ⟨(v % 4294967296).toUInt32⟩
+      for i in [:1024] do
+        let v := data[i]!
+        let x : Radix.UInt32 := ⟨v.toUInt32⟩
         arr := arr.push (Radix.Binary.Leb128.encodeU32 x)
       return arr
     let mut acc : UInt64 := 0
     for i in [:numIter] do
-      let encoded := encodedArr[i % encodedArr.size]!
+      let encoded := encodedArr[i &&& 1023]!
       match Radix.Binary.Leb128.decodeU32 encoded 0 with
-      | some (val, _) => acc := acc + val.toNat.toUInt64
+      | some (val, _) => acc := acc + val.val.toUInt64
       | none => acc := acc + 1
     return acc
 
@@ -345,27 +322,24 @@ private def benchSignedArith : IO Unit := do
 
   bench "wrappingAdd" do
     let mut acc : Radix.Int32 := ⟨1⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.Int32 := ⟨(v % 4294967296).toUInt32⟩
+    for v in data do
+      let x : Radix.Int32 := ⟨v.toUInt32⟩
       acc := Radix.Int32.wrappingAdd acc x
-    return acc.val.toNat.toUInt64
+    return acc.val.toUInt64
 
   bench "wrappingMul" do
     let mut acc : Radix.Int32 := ⟨1⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
+    for v in data do
       let x : Radix.Int32 := ⟨((v % 100) + 1).toUInt32⟩
       acc := Radix.Int32.wrappingMul acc x
-    return acc.val.toNat.toUInt64
+    return acc.val.toUInt64
 
   bench "wrappingNeg" do
     let mut acc : Radix.Int32 := ⟨1⟩
-    for i in [:numIter] do
-      let v := data[i % data.size]!
-      let x : Radix.Int32 := ⟨(v % 4294967296).toUInt32⟩
+    for v in data do
+      let x : Radix.Int32 := ⟨v.toUInt32⟩
       acc := Radix.Int32.wrappingAdd acc (Radix.Int32.wrappingNeg x)
-    return acc.val.toNat.toUInt64
+    return acc.val.toUInt64
 
 /-! ================================================================ -/
 /-! ## Main                                                          -/

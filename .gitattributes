@@ -1,0 +1,41 @@
+# Auto detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Lean source files
+*.lean text eol=lf diff=lean
+
+# C source files
+*.c text eol=lf diff=c
+*.h text eol=lf diff=c
+
+# Documentation
+*.md text eol=lf diff=markdown
+*.txt text eol=lf
+
+# Configuration
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+
+# Makefiles
+Makefile text eol=lf
+
+# Git config
+.gitattributes text eol=lf
+.gitignore text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+
+# Linguist overrides — ensure GitHub detects this as a Lean project
+*.lean linguist-language=Lean
+*.c linguist-vendored
+benchmarks/baseline linguist-generated

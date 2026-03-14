@@ -116,38 +116,38 @@ def zeros (n : Nat) : ByteSlice where
   let b0 := s.readU8 off (by omega)
   let b1 := s.readU8 (off + 1) (by omega)
   match e with
-  | .little => ⟨(b0.toNat ||| (b1.toNat <<< 8)).toUInt16⟩
-  | .big => ⟨((b0.toNat <<< 8) ||| b1.toNat).toUInt16⟩
+  | .little => ⟨b0.toUInt16 ||| (b1.toUInt16 <<< (8 : _root_.UInt16))⟩
+  | .big => ⟨(b0.toUInt16 <<< (8 : _root_.UInt16)) ||| b1.toUInt16⟩
 
 /-- Read a 32-bit value at the given offset in the specified endianness (proof-carrying). -/
 @[inline] def readU32 (s : ByteSlice) (off : Nat) (e : Bytes.Spec.Endian)
     (h : off + 4 ≤ s.len) : Radix.UInt32 :=
-  let b0 := (s.readU8 off (by omega)).toNat
-  let b1 := (s.readU8 (off + 1) (by omega)).toNat
-  let b2 := (s.readU8 (off + 2) (by omega)).toNat
-  let b3 := (s.readU8 (off + 3) (by omega)).toNat
+  let b0 := (s.readU8 off (by omega)).toUInt32
+  let b1 := (s.readU8 (off + 1) (by omega)).toUInt32
+  let b2 := (s.readU8 (off + 2) (by omega)).toUInt32
+  let b3 := (s.readU8 (off + 3) (by omega)).toUInt32
   match e with
-  | .little => ⟨(b0 ||| (b1 <<< 8) ||| (b2 <<< 16) ||| (b3 <<< 24)).toUInt32⟩
-  | .big => ⟨((b0 <<< 24) ||| (b1 <<< 16) ||| (b2 <<< 8) ||| b3).toUInt32⟩
+  | .little => ⟨b0 ||| (b1 <<< (8 : _root_.UInt32)) ||| (b2 <<< (16 : _root_.UInt32)) ||| (b3 <<< (24 : _root_.UInt32))⟩
+  | .big => ⟨(b0 <<< (24 : _root_.UInt32)) ||| (b1 <<< (16 : _root_.UInt32)) ||| (b2 <<< (8 : _root_.UInt32)) ||| b3⟩
 
 /-- Read a 64-bit value at the given offset in the specified endianness (proof-carrying). -/
 @[inline] def readU64 (s : ByteSlice) (off : Nat) (e : Bytes.Spec.Endian)
     (h : off + 8 ≤ s.len) : Radix.UInt64 :=
-  let b0 := (s.readU8 off (by omega)).toNat
-  let b1 := (s.readU8 (off + 1) (by omega)).toNat
-  let b2 := (s.readU8 (off + 2) (by omega)).toNat
-  let b3 := (s.readU8 (off + 3) (by omega)).toNat
-  let b4 := (s.readU8 (off + 4) (by omega)).toNat
-  let b5 := (s.readU8 (off + 5) (by omega)).toNat
-  let b6 := (s.readU8 (off + 6) (by omega)).toNat
-  let b7 := (s.readU8 (off + 7) (by omega)).toNat
+  let b0 := (s.readU8 off (by omega)).toUInt64
+  let b1 := (s.readU8 (off + 1) (by omega)).toUInt64
+  let b2 := (s.readU8 (off + 2) (by omega)).toUInt64
+  let b3 := (s.readU8 (off + 3) (by omega)).toUInt64
+  let b4 := (s.readU8 (off + 4) (by omega)).toUInt64
+  let b5 := (s.readU8 (off + 5) (by omega)).toUInt64
+  let b6 := (s.readU8 (off + 6) (by omega)).toUInt64
+  let b7 := (s.readU8 (off + 7) (by omega)).toUInt64
   match e with
   | .little =>
-    ⟨(b0 ||| (b1 <<< 8) ||| (b2 <<< 16) ||| (b3 <<< 24) |||
-     (b4 <<< 32) ||| (b5 <<< 40) ||| (b6 <<< 48) ||| (b7 <<< 56)).toUInt64⟩
+    ⟨b0 ||| (b1 <<< (8 : _root_.UInt64)) ||| (b2 <<< (16 : _root_.UInt64)) ||| (b3 <<< (24 : _root_.UInt64)) |||
+     (b4 <<< (32 : _root_.UInt64)) ||| (b5 <<< (40 : _root_.UInt64)) ||| (b6 <<< (48 : _root_.UInt64)) ||| (b7 <<< (56 : _root_.UInt64))⟩
   | .big =>
-    ⟨((b0 <<< 56) ||| (b1 <<< 48) ||| (b2 <<< 40) ||| (b3 <<< 32) |||
-     (b4 <<< 24) ||| (b5 <<< 16) ||| (b6 <<< 8) ||| b7).toUInt64⟩
+    ⟨(b0 <<< (56 : _root_.UInt64)) ||| (b1 <<< (48 : _root_.UInt64)) ||| (b2 <<< (40 : _root_.UInt64)) ||| (b3 <<< (32 : _root_.UInt64)) |||
+     (b4 <<< (24 : _root_.UInt64)) ||| (b5 <<< (16 : _root_.UInt64)) ||| (b6 <<< (8 : _root_.UInt64)) ||| b7⟩
 
 /-- Write a 16-bit value at the given offset in the specified endianness (proof-carrying). -/
 @[inline] def writeU16 (s : ByteSlice) (off : Nat) (v : Radix.UInt16)

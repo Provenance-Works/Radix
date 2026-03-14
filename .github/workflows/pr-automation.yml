@@ -1,0 +1,121 @@
+# =============================================================================
+# Radix — Documentation & Labeler Pipeline
+# =============================================================================
+# Handles PR labeling, documentation validation, and link checking.
+# =============================================================================
+
+name: "PR Automation"
+run-name: "PR Automation — ${{ github.event_name }}"
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  # ===========================================================================
+  # Auto-Label PRs
+  # ===========================================================================
+  labeler:
+    name: "Auto-Label PR"
+    runs-on: arc-runner-set-pw
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/labeler@8558fd74291d67161a8a78ce36a881fa63b766a9 # v5.0.0
+        with:
+          configuration-path: .github/labeler.yml
+          sync-labels: true
+
+  # ===========================================================================
+  # Documentation Validation
+  # ===========================================================================
+  docs-check:
+    name: "Documentation Check"
+    runs-on: arc-runner-set-pw
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Check documentation links"
+        run: |
+          ERRORS=0
+          # Check for broken relative links in markdown
+          find docs -name '*.md' | while read f; do
+            # Extract markdown links [text](path)
+            grep -oP '\[.*?\]\(\K[^)]+' "$f" 2>/dev/null | while read link; do
+              # Skip absolute URLs and anchors
+              if [[ "$link" =~ ^https?:// ]] || [[ "$link" =~ ^# ]]; then
+                continue
+              fi
+              # Remove anchor from relative links
+              CLEAN_LINK=$(echo "$link" | cut -d'#' -f1)
+              if [ -n "$CLEAN_LINK" ]; then
+                DIR=$(dirname "$f")
+                TARGET="$DIR/$CLEAN_LINK"
+                if [ ! -e "$TARGET" ]; then
+                  echo "::warning file=$f::Broken link: $link (target: $TARGET)"
+                fi
+              fi
+            done
+          done
+
+      - name: "Check for required documentation files"
+        run: |
+          REQUIRED_FILES=(
+            "README.md"
+            "CHANGELOG.md"
+            "CONTRIBUTING.md"
+            "CODE_OF_CONDUCT.md"
+            "SECURITY.md"
+            "LICENSE"
+          )
+          for f in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Required file missing: $f"
+            else
+              echo "  ✅ $f"
+            fi
+          done
+
+  # ===========================================================================
+  # PR Size Check
+  # ===========================================================================
+  pr-size:
+    name: "PR Size Check"
+    runs-on: arc-runner-set-pw
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: "Check PR size"
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          if [ -n "$BASE" ] && [ -n "$HEAD" ]; then
+            ADDITIONS=$(git diff --stat "$BASE".."$HEAD" | tail -1 | grep -oP '\d+ insertion' | grep -oP '\d+' || echo "0")
+            DELETIONS=$(git diff --stat "$BASE".."$HEAD" | tail -1 | grep -oP '\d+ deletion' | grep -oP '\d+' || echo "0")
+            TOTAL=$((ADDITIONS + DELETIONS))
+
+            echo "Changes: +$ADDITIONS -$DELETIONS (total: $TOTAL lines)"
+
+            if [ "$TOTAL" -gt 1000 ]; then
+              echo "::warning::Large PR detected ($TOTAL lines changed). Consider splitting into smaller PRs."
+            elif [ "$TOTAL" -gt 500 ]; then
+              echo "::notice::Medium PR ($TOTAL lines changed)"
+            fi
+
+            echo "### PR Size" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Additions: +$ADDITIONS" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Deletions: -$DELETIONS" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Total: $TOTAL lines" >> "$GITHUB_STEP_SUMMARY"
+          fi

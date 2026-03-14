@@ -1,0 +1,273 @@
+# =============================================================================
+# Radix — Release Pipeline
+# =============================================================================
+# Automates versioning, changelog generation, and GitHub Release creation.
+# Triggered by version tags (v*.*.*) or manual dispatch.
+# =============================================================================
+
+name: "Release"
+run-name: "Release ${{ github.ref_name }}"
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g., v0.2.0)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: "Dry run (do not publish)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ===========================================================================
+  # Validate Release
+  # ===========================================================================
+  validate:
+    name: "Validate Release"
+    runs-on: arc-runner-set-pw
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.tag }}
+      is_prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: "Determine version"
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          if [[ "$TAG" =~ -rc[0-9]+$ ]] || [ "${{ inputs.prerelease }}" = "true" ]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Release version: $TAG"
+
+      - name: "Validate version format"
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
+            echo "::error::Invalid version format: $TAG (expected vX.Y.Z or vX.Y.Z-rcN)"
+            exit 1
+          fi
+
+      - name: "Check CHANGELOG entry"
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${TAG#v}"
+          if ! grep -q "$VERSION\|Unreleased" CHANGELOG.md; then
+            echo "::warning::No CHANGELOG entry found for version $VERSION"
+          fi
+
+  # ===========================================================================
+  # Full Build & Test (Release Quality Gate)
+  # ===========================================================================
+  build-and-test:
+    name: "Build & Test (Release Gate)"
+    runs-on: arc-runner-set-pw
+    needs: [validate]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Install elan & Lean"
+        uses: leanprover/lean4-action@471d71ad3fcb61d5e7454b5a36b975c434c8e907 # v1.1.5
+        with:
+          toolchain: ""
+          use-mathlib-cache: false
+
+      - name: "Restore .lake cache"
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            .lake/packages
+            .lake/build
+            ~/.elan
+          key: release-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.lean') }}-${{ github.sha }}
+          restore-keys: |
+            release-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.lean') }}-
+
+      - name: "Fetch dependencies & Mathlib cache"
+        run: |
+          lake update
+          lake exe cache get || true
+
+      - name: "Build: Library"
+        run: lake build Radix
+
+      - name: "Build & Run: Unit tests"
+        run: |
+          lake build test
+          lake exe test
+
+      - name: "Build & Run: Property tests"
+        run: |
+          lake build proptest
+          lake exe proptest
+
+      - name: "Build & Run: Comprehensive tests"
+        run: |
+          lake build comptest
+          lake exe comptest
+
+      - name: "Build & Run: Examples"
+        run: |
+          lake build examples
+          lake exe examples
+
+      - name: "Verify: No sorry in proofs"
+        run: |
+          SORRY_COUNT=$(grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/' | wc -l)
+          if [ "$SORRY_COUNT" -gt 0 ]; then
+            echo "::error::Cannot release with $SORRY_COUNT 'sorry' in codebase"
+            grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/'
+            exit 1
+          fi
+          echo "No sorry found ✅"
+
+  # ===========================================================================
+  # Generate Release Artifacts
+  # ===========================================================================
+  release-artifacts:
+    name: "Generate Artifacts"
+    runs-on: arc-runner-set-pw
+    needs: [validate, build-and-test]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: "Generate changelog for this release"
+        run: |
+          TAG="${{ needs.validate.outputs.version }}"
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "$TAG" | head -1 || echo "")
+
+          echo "# Release $TAG" > release-notes.md
+          echo "" >> release-notes.md
+          echo "## Changes" >> release-notes.md
+          echo "" >> release-notes.md
+
+          if [ -n "$PREV_TAG" ]; then
+            git log --pretty=format:"- %s (%h)" "$PREV_TAG"..HEAD >> release-notes.md
+          else
+            git log --pretty=format:"- %s (%h)" >> release-notes.md
+          fi
+
+          echo "" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "## Proof Census" >> release-notes.md
+          echo "" >> release-notes.md
+          THEOREMS=$(grep -rn '^theorem\|^  theorem' Radix/ | wc -l)
+          LEMMAS=$(grep -rn '^lemma\|^  lemma' Radix/ | wc -l)
+          echo "- Theorems: $THEOREMS" >> release-notes.md
+          echo "- Lemmas: $LEMMAS" >> release-notes.md
+
+          echo "" >> release-notes.md
+          echo "## Dependencies" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "- Lean: $(cat lean-toolchain | tr -d '[:space:]')" >> release-notes.md
+
+      - name: "Generate SBOM"
+        run: |
+          python3 << 'PYEOF'
+          import json, datetime
+
+          with open('lake-manifest.json') as f:
+              manifest = json.load(f)
+
+          sbom = {
+              "bomFormat": "CycloneDX",
+              "specVersion": "1.4",
+              "version": 1,
+              "metadata": {
+                  "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+                  "component": {
+                      "type": "library",
+                      "name": "radix",
+                      "version": "${{ needs.validate.outputs.version }}"
+                  }
+              },
+              "components": []
+          }
+
+          for pkg in manifest.get('packages', []):
+              comp = {
+                  "type": "library",
+                  "name": pkg.get('name', 'unknown'),
+                  "version": pkg.get('rev', 'unknown')[:12],
+                  "purl": f"pkg:github/{pkg.get('url', '').replace('https://github.com/', '')}@{pkg.get('rev', '')}",
+                  "externalReferences": [
+                      {"type": "vcs", "url": pkg.get('url', '')}
+                  ]
+              }
+              sbom["components"].append(comp)
+
+          with open('sbom.json', 'w') as f:
+              json.dump(sbom, f, indent=2)
+          print(f"Generated SBOM with {len(sbom['components'])} components")
+          PYEOF
+
+      - name: "Upload release artifacts"
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-artifacts-${{ needs.validate.outputs.version }}
+          path: |
+            release-notes.md
+            sbom.json
+          retention-days: 365
+
+  # ===========================================================================
+  # Publish GitHub Release
+  # ===========================================================================
+  publish:
+    name: "Publish Release"
+    runs-on: arc-runner-set-pw
+    needs: [validate, build-and-test, release-artifacts]
+    if: ${{ !inputs.dry_run }}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "Download release artifacts"
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-artifacts-${{ needs.validate.outputs.version }}
+
+      - name: "Create GitHub Release"
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        with:
+          tag_name: ${{ needs.validate.outputs.version }}
+          name: "Radix ${{ needs.validate.outputs.version }}"
+          body_path: release-notes.md
+          prerelease: ${{ needs.validate.outputs.is_prerelease == 'true' }}
+          files: |
+            sbom.json
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

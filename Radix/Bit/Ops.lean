@@ -36,6 +36,18 @@ namespace Radix
 /-! ## UInt8 Bitwise Operations                                       -/
 /-! ================================================================ -/
 
+@[inline] private def shl8_impl (x : UInt8) (count : UInt8) : UInt8 :=
+  ⟨x.val <<< count.val⟩
+@[inline] private def shrLogical8_impl (x : UInt8) (count : UInt8) : UInt8 :=
+  ⟨x.val >>> count.val⟩
+@[inline] private def shrArith8_impl (x : UInt8) (count : UInt8) : UInt8 :=
+  let c := count.val &&& 7
+  let shifted := x.val >>> c
+  -- Sign extend: if MSB was set, fill high bits with 1s
+  if x.val &&& 128 != 0 then
+    ⟨shifted ||| (255 <<< (8 - c))⟩
+  else ⟨shifted⟩
+
 namespace UInt8
 
 @[inline] def band (x y : UInt8) : UInt8 := ⟨x.val &&& y.val⟩
@@ -49,29 +61,25 @@ namespace UInt8
 @[inline] instance : Complement UInt8 := ⟨bnot⟩
 
 /-- Left shift with count normalization (FR-002.1a). -/
-@[inline] def shl (x : UInt8) (count : UInt8) : UInt8 :=
+@[implemented_by shl8_impl, inline] def shl (x : UInt8) (count : UInt8) : UInt8 :=
   fromBitVec (x.toBitVec.shiftLeft (count.val.toNat % 8))
 
 /-- Logical right shift with count normalization (FR-002.1a). -/
-@[inline] def shrLogical (x : UInt8) (count : UInt8) : UInt8 :=
+@[implemented_by shrLogical8_impl, inline] def shrLogical (x : UInt8) (count : UInt8) : UInt8 :=
   fromBitVec (x.toBitVec.ushiftRight (count.val.toNat % 8))
 
 /-- Arithmetic right shift with count normalization (FR-002.1a).
     Preserves sign bit (for signed reinterpretation). -/
-@[inline] def shrArith (x : UInt8) (count : UInt8) : UInt8 :=
+@[implemented_by shrArith8_impl, inline] def shrArith (x : UInt8) (count : UInt8) : UInt8 :=
   fromBitVec (x.toBitVec.sshiftRight (count.val.toNat % 8))
 
 /-- Rotate left with count normalization. -/
 @[inline] def rotl (x : UInt8) (count : UInt8) : UInt8 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 8
-  fromBitVec (bv.shiftLeft c ||| bv.ushiftRight (8 - c))
+  ⟨(x.val <<< count.val) ||| (x.val >>> (0 - count.val))⟩
 
 /-- Rotate right with count normalization. -/
 @[inline] def rotr (x : UInt8) (count : UInt8) : UInt8 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 8
-  fromBitVec (bv.ushiftRight c ||| bv.shiftLeft (8 - c))
+  ⟨(x.val >>> count.val) ||| (x.val <<< (0 - count.val))⟩
 
 @[inline] instance : HShiftLeft  UInt8 UInt8 UInt8 := ⟨shl⟩
 @[inline] instance : HShiftRight UInt8 UInt8 UInt8 := ⟨shrLogical⟩
@@ -81,6 +89,17 @@ end UInt8
 /-! ================================================================ -/
 /-! ## UInt16 Bitwise Operations                                      -/
 /-! ================================================================ -/
+
+@[inline] private def shl16_impl (x : UInt16) (count : UInt16) : UInt16 :=
+  ⟨x.val <<< count.val⟩
+@[inline] private def shrLogical16_impl (x : UInt16) (count : UInt16) : UInt16 :=
+  ⟨x.val >>> count.val⟩
+@[inline] private def shrArith16_impl (x : UInt16) (count : UInt16) : UInt16 :=
+  let c := count.val &&& 15
+  let shifted := x.val >>> c
+  if x.val &&& 32768 != 0 then
+    ⟨shifted ||| (65535 <<< (16 - c))⟩
+  else ⟨shifted⟩
 
 namespace UInt16
 
@@ -94,24 +113,20 @@ namespace UInt16
 @[inline] instance : HXor UInt16 UInt16 UInt16 := ⟨bxor⟩
 @[inline] instance : Complement UInt16 := ⟨bnot⟩
 
-@[inline] def shl (x : UInt16) (count : UInt16) : UInt16 :=
+@[implemented_by shl16_impl, inline] def shl (x : UInt16) (count : UInt16) : UInt16 :=
   fromBitVec (x.toBitVec.shiftLeft (count.val.toNat % 16))
 
-@[inline] def shrLogical (x : UInt16) (count : UInt16) : UInt16 :=
+@[implemented_by shrLogical16_impl, inline] def shrLogical (x : UInt16) (count : UInt16) : UInt16 :=
   fromBitVec (x.toBitVec.ushiftRight (count.val.toNat % 16))
 
-@[inline] def shrArith (x : UInt16) (count : UInt16) : UInt16 :=
+@[implemented_by shrArith16_impl, inline] def shrArith (x : UInt16) (count : UInt16) : UInt16 :=
   fromBitVec (x.toBitVec.sshiftRight (count.val.toNat % 16))
 
 @[inline] def rotl (x : UInt16) (count : UInt16) : UInt16 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 16
-  fromBitVec (bv.shiftLeft c ||| bv.ushiftRight (16 - c))
+  ⟨(x.val <<< count.val) ||| (x.val >>> (0 - count.val))⟩
 
 @[inline] def rotr (x : UInt16) (count : UInt16) : UInt16 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 16
-  fromBitVec (bv.ushiftRight c ||| bv.shiftLeft (16 - c))
+  ⟨(x.val >>> count.val) ||| (x.val <<< (0 - count.val))⟩
 
 @[inline] instance : HShiftLeft  UInt16 UInt16 UInt16 := ⟨shl⟩
 @[inline] instance : HShiftRight UInt16 UInt16 UInt16 := ⟨shrLogical⟩
@@ -134,24 +149,31 @@ namespace UInt32
 @[inline] instance : HXor UInt32 UInt32 UInt32 := ⟨bxor⟩
 @[inline] instance : Complement UInt32 := ⟨bnot⟩
 
-@[inline] def shl (x : UInt32) (count : UInt32) : UInt32 :=
+@[inline] private def shl32_impl (x : UInt32) (count : UInt32) : UInt32 :=
+  ⟨x.val <<< count.val⟩
+@[inline] private def shrLogical32_impl (x : UInt32) (count : UInt32) : UInt32 :=
+  ⟨x.val >>> count.val⟩
+@[inline] private def shrArith32_impl (x : UInt32) (count : UInt32) : UInt32 :=
+  let c := count.val &&& 31
+  let shifted := x.val >>> c
+  if x.val &&& 2147483648 != 0 then
+    ⟨shifted ||| (4294967295 <<< (32 - c))⟩
+  else ⟨shifted⟩
+
+@[implemented_by shl32_impl, inline] def shl (x : UInt32) (count : UInt32) : UInt32 :=
   fromBitVec (x.toBitVec.shiftLeft (count.val.toNat % 32))
 
-@[inline] def shrLogical (x : UInt32) (count : UInt32) : UInt32 :=
+@[implemented_by shrLogical32_impl, inline] def shrLogical (x : UInt32) (count : UInt32) : UInt32 :=
   fromBitVec (x.toBitVec.ushiftRight (count.val.toNat % 32))
 
-@[inline] def shrArith (x : UInt32) (count : UInt32) : UInt32 :=
+@[implemented_by shrArith32_impl, inline] def shrArith (x : UInt32) (count : UInt32) : UInt32 :=
   fromBitVec (x.toBitVec.sshiftRight (count.val.toNat % 32))
 
 @[inline] def rotl (x : UInt32) (count : UInt32) : UInt32 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 32
-  fromBitVec (bv.shiftLeft c ||| bv.ushiftRight (32 - c))
+  ⟨(x.val <<< count.val) ||| (x.val >>> (0 - count.val))⟩
 
 @[inline] def rotr (x : UInt32) (count : UInt32) : UInt32 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 32
-  fromBitVec (bv.ushiftRight c ||| bv.shiftLeft (32 - c))
+  ⟨(x.val >>> count.val) ||| (x.val <<< (0 - count.val))⟩
 
 @[inline] instance : HShiftLeft  UInt32 UInt32 UInt32 := ⟨shl⟩
 @[inline] instance : HShiftRight UInt32 UInt32 UInt32 := ⟨shrLogical⟩
@@ -161,6 +183,17 @@ end UInt32
 /-! ================================================================ -/
 /-! ## UInt64 Bitwise Operations                                      -/
 /-! ================================================================ -/
+
+@[inline] private def shl64_impl (x : UInt64) (count : UInt64) : UInt64 :=
+  ⟨x.val <<< count.val⟩
+@[inline] private def shrLogical64_impl (x : UInt64) (count : UInt64) : UInt64 :=
+  ⟨x.val >>> count.val⟩
+@[inline] private def shrArith64_impl (x : UInt64) (count : UInt64) : UInt64 :=
+  let c := count.val &&& 63
+  let shifted := x.val >>> c
+  if x.val &&& 9223372036854775808 != 0 then
+    ⟨shifted ||| (18446744073709551615 <<< (64 - c))⟩
+  else ⟨shifted⟩
 
 namespace UInt64
 
@@ -174,24 +207,20 @@ namespace UInt64
 @[inline] instance : HXor UInt64 UInt64 UInt64 := ⟨bxor⟩
 @[inline] instance : Complement UInt64 := ⟨bnot⟩
 
-@[inline] def shl (x : UInt64) (count : UInt64) : UInt64 :=
+@[implemented_by shl64_impl, inline] def shl (x : UInt64) (count : UInt64) : UInt64 :=
   fromBitVec (x.toBitVec.shiftLeft (count.val.toNat % 64))
 
-@[inline] def shrLogical (x : UInt64) (count : UInt64) : UInt64 :=
+@[implemented_by shrLogical64_impl, inline] def shrLogical (x : UInt64) (count : UInt64) : UInt64 :=
   fromBitVec (x.toBitVec.ushiftRight (count.val.toNat % 64))
 
-@[inline] def shrArith (x : UInt64) (count : UInt64) : UInt64 :=
+@[implemented_by shrArith64_impl, inline] def shrArith (x : UInt64) (count : UInt64) : UInt64 :=
   fromBitVec (x.toBitVec.sshiftRight (count.val.toNat % 64))
 
 @[inline] def rotl (x : UInt64) (count : UInt64) : UInt64 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 64
-  fromBitVec (bv.shiftLeft c ||| bv.ushiftRight (64 - c))
+  ⟨(x.val <<< count.val) ||| (x.val >>> (0 - count.val))⟩
 
 @[inline] def rotr (x : UInt64) (count : UInt64) : UInt64 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 64
-  fromBitVec (bv.ushiftRight c ||| bv.shiftLeft (64 - c))
+  ⟨(x.val >>> count.val) ||| (x.val <<< (0 - count.val))⟩
 
 @[inline] instance : HShiftLeft  UInt64 UInt64 UInt64 := ⟨shl⟩
 @[inline] instance : HShiftRight UInt64 UInt64 UInt64 := ⟨shrLogical⟩
@@ -201,6 +230,11 @@ end UInt64
 /-! ================================================================ -/
 /-! ## Int8 Bitwise Operations (via underlying UInt8)                  -/
 /-! ================================================================ -/
+
+@[inline] private def shl8i_impl (x : Int8) (count : Int8) : Int8 :=
+  ⟨x.val <<< count.val⟩
+@[inline] private def shrLogical8i_impl (x : Int8) (count : Int8) : Int8 :=
+  ⟨x.val >>> count.val⟩
 
 namespace Int8
 
@@ -214,24 +248,20 @@ namespace Int8
 @[inline] instance : HXor Int8 Int8 Int8 := ⟨bxor⟩
 @[inline] instance : Complement Int8 := ⟨bnot⟩
 
-@[inline] def shl (x : Int8) (count : Int8) : Int8 :=
+@[implemented_by shl8i_impl, inline] def shl (x : Int8) (count : Int8) : Int8 :=
   fromBitVec (x.toBitVec.shiftLeft (count.val.toNat % 8))
 
-@[inline] def shrLogical (x : Int8) (count : Int8) : Int8 :=
+@[implemented_by shrLogical8i_impl, inline] def shrLogical (x : Int8) (count : Int8) : Int8 :=
   fromBitVec (x.toBitVec.ushiftRight (count.val.toNat % 8))
 
 @[inline] def shrArith (x : Int8) (count : Int8) : Int8 :=
   fromBitVec (x.toBitVec.sshiftRight (count.val.toNat % 8))
 
 @[inline] def rotl (x : Int8) (count : Int8) : Int8 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 8
-  fromBitVec (bv.shiftLeft c ||| bv.ushiftRight (8 - c))
+  ⟨(x.val <<< count.val) ||| (x.val >>> (0 - count.val))⟩
 
 @[inline] def rotr (x : Int8) (count : Int8) : Int8 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 8
-  fromBitVec (bv.ushiftRight c ||| bv.shiftLeft (8 - c))
+  ⟨(x.val >>> count.val) ||| (x.val <<< (0 - count.val))⟩
 
 @[inline] instance : HShiftLeft  Int8 Int8 Int8 := ⟨shl⟩
 @[inline] instance : HShiftRight Int8 Int8 Int8 := ⟨shrLogical⟩
@@ -241,6 +271,11 @@ end Int8
 /-! ================================================================ -/
 /-! ## Int16 Bitwise Operations (via underlying UInt16)                -/
 /-! ================================================================ -/
+
+@[inline] private def shl16i_impl (x : Int16) (count : Int16) : Int16 :=
+  ⟨x.val <<< count.val⟩
+@[inline] private def shrLogical16i_impl (x : Int16) (count : Int16) : Int16 :=
+  ⟨x.val >>> count.val⟩
 
 namespace Int16
 
@@ -254,24 +289,20 @@ namespace Int16
 @[inline] instance : HXor Int16 Int16 Int16 := ⟨bxor⟩
 @[inline] instance : Complement Int16 := ⟨bnot⟩
 
-@[inline] def shl (x : Int16) (count : Int16) : Int16 :=
+@[implemented_by shl16i_impl, inline] def shl (x : Int16) (count : Int16) : Int16 :=
   fromBitVec (x.toBitVec.shiftLeft (count.val.toNat % 16))
 
-@[inline] def shrLogical (x : Int16) (count : Int16) : Int16 :=
+@[implemented_by shrLogical16i_impl, inline] def shrLogical (x : Int16) (count : Int16) : Int16 :=
   fromBitVec (x.toBitVec.ushiftRight (count.val.toNat % 16))
 
 @[inline] def shrArith (x : Int16) (count : Int16) : Int16 :=
   fromBitVec (x.toBitVec.sshiftRight (count.val.toNat % 16))
 
 @[inline] def rotl (x : Int16) (count : Int16) : Int16 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 16
-  fromBitVec (bv.shiftLeft c ||| bv.ushiftRight (16 - c))
+  ⟨(x.val <<< count.val) ||| (x.val >>> (0 - count.val))⟩
 
 @[inline] def rotr (x : Int16) (count : Int16) : Int16 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 16
-  fromBitVec (bv.ushiftRight c ||| bv.shiftLeft (16 - c))
+  ⟨(x.val >>> count.val) ||| (x.val <<< (0 - count.val))⟩
 
 @[inline] instance : HShiftLeft  Int16 Int16 Int16 := ⟨shl⟩
 @[inline] instance : HShiftRight Int16 Int16 Int16 := ⟨shrLogical⟩
@@ -281,6 +312,11 @@ end Int16
 /-! ================================================================ -/
 /-! ## Int32 Bitwise Operations (via underlying UInt32)                -/
 /-! ================================================================ -/
+
+@[inline] private def shl32i_impl (x : Int32) (count : Int32) : Int32 :=
+  ⟨x.val <<< count.val⟩
+@[inline] private def shrLogical32i_impl (x : Int32) (count : Int32) : Int32 :=
+  ⟨x.val >>> count.val⟩
 
 namespace Int32
 
@@ -294,24 +330,20 @@ namespace Int32
 @[inline] instance : HXor Int32 Int32 Int32 := ⟨bxor⟩
 @[inline] instance : Complement Int32 := ⟨bnot⟩
 
-@[inline] def shl (x : Int32) (count : Int32) : Int32 :=
+@[implemented_by shl32i_impl, inline] def shl (x : Int32) (count : Int32) : Int32 :=
   fromBitVec (x.toBitVec.shiftLeft (count.val.toNat % 32))
 
-@[inline] def shrLogical (x : Int32) (count : Int32) : Int32 :=
+@[implemented_by shrLogical32i_impl, inline] def shrLogical (x : Int32) (count : Int32) : Int32 :=
   fromBitVec (x.toBitVec.ushiftRight (count.val.toNat % 32))
 
 @[inline] def shrArith (x : Int32) (count : Int32) : Int32 :=
   fromBitVec (x.toBitVec.sshiftRight (count.val.toNat % 32))
 
 @[inline] def rotl (x : Int32) (count : Int32) : Int32 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 32
-  fromBitVec (bv.shiftLeft c ||| bv.ushiftRight (32 - c))
+  ⟨(x.val <<< count.val) ||| (x.val >>> (0 - count.val))⟩
 
 @[inline] def rotr (x : Int32) (count : Int32) : Int32 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 32
-  fromBitVec (bv.ushiftRight c ||| bv.shiftLeft (32 - c))
+  ⟨(x.val >>> count.val) ||| (x.val <<< (0 - count.val))⟩
 
 @[inline] instance : HShiftLeft  Int32 Int32 Int32 := ⟨shl⟩
 @[inline] instance : HShiftRight Int32 Int32 Int32 := ⟨shrLogical⟩
@@ -321,6 +353,11 @@ end Int32
 /-! ================================================================ -/
 /-! ## Int64 Bitwise Operations (via underlying UInt64)                -/
 /-! ================================================================ -/
+
+@[inline] private def shl64i_impl (x : Int64) (count : Int64) : Int64 :=
+  ⟨x.val <<< count.val⟩
+@[inline] private def shrLogical64i_impl (x : Int64) (count : Int64) : Int64 :=
+  ⟨x.val >>> count.val⟩
 
 namespace Int64
 
@@ -334,24 +371,20 @@ namespace Int64
 @[inline] instance : HXor Int64 Int64 Int64 := ⟨bxor⟩
 @[inline] instance : Complement Int64 := ⟨bnot⟩
 
-@[inline] def shl (x : Int64) (count : Int64) : Int64 :=
+@[implemented_by shl64i_impl, inline] def shl (x : Int64) (count : Int64) : Int64 :=
   fromBitVec (x.toBitVec.shiftLeft (count.val.toNat % 64))
 
-@[inline] def shrLogical (x : Int64) (count : Int64) : Int64 :=
+@[implemented_by shrLogical64i_impl, inline] def shrLogical (x : Int64) (count : Int64) : Int64 :=
   fromBitVec (x.toBitVec.ushiftRight (count.val.toNat % 64))
 
 @[inline] def shrArith (x : Int64) (count : Int64) : Int64 :=
   fromBitVec (x.toBitVec.sshiftRight (count.val.toNat % 64))
 
 @[inline] def rotl (x : Int64) (count : Int64) : Int64 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 64
-  fromBitVec (bv.shiftLeft c ||| bv.ushiftRight (64 - c))
+  ⟨(x.val <<< count.val) ||| (x.val >>> (0 - count.val))⟩
 
 @[inline] def rotr (x : Int64) (count : Int64) : Int64 :=
-  let bv := x.toBitVec
-  let c := count.val.toNat % 64
-  fromBitVec (bv.ushiftRight c ||| bv.shiftLeft (64 - c))
+  ⟨(x.val >>> count.val) ||| (x.val <<< (0 - count.val))⟩
 
 @[inline] instance : HShiftLeft  Int64 Int64 Int64 := ⟨shl⟩
 @[inline] instance : HShiftRight Int64 Int64 Int64 := ⟨shrLogical⟩

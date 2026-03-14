@@ -1,14 +1,32 @@
-# Lean 4
+# Lean 4 / Lake
 build/
 lake-packages/
-lake-manifest.json
 .lake/
 
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
 
 # Editor
 .vscode/settings.json
+.vscode/*.code-workspace
 *.swp
 *~
+.idea/
+*.iml
+
+# Project-specific
+.VSCodeCounter
+TODO.md
+spec/
+
+# Environment
+.env
+.env.*
+
+# Compiled binaries
+benchmarks/baseline
+c/*.o
+c/*.so
+c/*.dylib

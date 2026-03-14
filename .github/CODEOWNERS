@@ -1,0 +1,26 @@
+# Default owners for everything
+* @Aqua-218
+
+# Core modules — require maintainer review
+/Radix/ @Aqua-218
+/Radix/Word/ @Aqua-218
+/Radix/Bit/ @Aqua-218
+/Radix/Bytes/ @Aqua-218
+/Radix/Memory/ @Aqua-218
+/Radix/Binary/ @Aqua-218
+/Radix/System/ @Aqua-218
+/Radix/Concurrency/ @Aqua-218
+/Radix/BareMetal/ @Aqua-218
+
+# Build system
+lakefile.lean @Aqua-218
+lean-toolchain @Aqua-218
+
+# CI/CD
+/.github/workflows/ @Aqua-218
+
+# Documentation
+/docs/ @Aqua-218
+
+# Tests
+/tests/ @Aqua-218

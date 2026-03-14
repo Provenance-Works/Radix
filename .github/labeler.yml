@@ -1,0 +1,64 @@
+# Radix PR Labeler Configuration
+
+# Core modules
+word:
+  - changed-files:
+      - any-glob-to-any-file: 'Radix/Word/**'
+
+bit:
+  - changed-files:
+      - any-glob-to-any-file: 'Radix/Bit/**'
+
+bytes:
+  - changed-files:
+      - any-glob-to-any-file: 'Radix/Bytes/**'
+
+memory:
+  - changed-files:
+      - any-glob-to-any-file: 'Radix/Memory/**'
+
+binary:
+  - changed-files:
+      - any-glob-to-any-file: 'Radix/Binary/**'
+
+system:
+  - changed-files:
+      - any-glob-to-any-file: 'Radix/System/**'
+
+concurrency:
+  - changed-files:
+      - any-glob-to-any-file: 'Radix/Concurrency/**'
+
+baremetal:
+  - changed-files:
+      - any-glob-to-any-file: 'Radix/BareMetal/**'
+
+# Categories
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '*.md'
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: '.github/workflows/**'
+
+build:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'lakefile.lean'
+          - 'lean-toolchain'
+          - 'lake-manifest.json'
+
+examples:
+  - changed-files:
+      - any-glob-to-any-file: 'examples/**'
+
+benchmarks:
+  - changed-files:
+      - any-glob-to-any-file: 'benchmarks/**'
