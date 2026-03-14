@@ -18,6 +18,7 @@ lean-toolchain @Aqua-218
 
 # CI/CD
 /.github/workflows/ @Aqua-218
+/.gitlab-ci.yml @Aqua-218
 
 # Documentation
 /docs/ @Aqua-218
