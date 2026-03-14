@@ -342,6 +342,47 @@ private def benchSignedArith : IO Unit := do
     return acc.val.toUInt64
 
 /-! ================================================================ -/
+/-! ## Bit Field Benchmarks                                          -/
+/-! ================================================================ -/
+
+private def benchBitFields : IO Unit := do
+  IO.println "Bit Field Operations (UInt32):"
+  let data := genRandomArray numIter 8
+
+  bench "testBit" do
+    let mut acc : UInt64 := 0
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
+      if Radix.UInt32.testBit x ((v % 32).toNat) then
+        acc := acc + 1
+    return acc
+
+  bench "setBit" do
+    let mut acc : Radix.UInt32 := ⟨0⟩
+    for v in data do
+      acc := Radix.UInt32.bxor acc (Radix.UInt32.setBit ⟨v.toUInt32⟩ ((v % 32).toNat))
+    return acc.val.toUInt64
+
+  bench "clearBit" do
+    let mut acc : Radix.UInt32 := ⟨0xFFFFFFFF⟩
+    for v in data do
+      acc := Radix.UInt32.bxor acc (Radix.UInt32.clearBit ⟨v.toUInt32⟩ ((v % 32).toNat))
+    return acc.val.toUInt64
+
+  bench "toggleBit" do
+    let mut acc : Radix.UInt32 := ⟨0⟩
+    for v in data do
+      acc := Radix.UInt32.bxor acc (Radix.UInt32.toggleBit ⟨v.toUInt32⟩ ((v % 32).toNat))
+    return acc.val.toUInt64
+
+  bench "extractBits" do
+    let mut acc : UInt64 := 0
+    for v in data do
+      let x : Radix.UInt32 := ⟨v.toUInt32⟩
+      acc := acc + (Radix.UInt32.extractBits x 4 20 ⟨by omega, by omega⟩).val.toUInt64
+    return acc
+
+/-! ================================================================ -/
 /-! ## Main                                                          -/
 /-! ================================================================ -/
 
@@ -363,6 +404,8 @@ def main : IO Unit := do
   benchLeb128
   IO.println ""
   benchSignedArith
+  IO.println ""
+  benchBitFields
   IO.println ""
 
   IO.println "Benchmarks complete."
