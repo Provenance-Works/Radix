@@ -139,7 +139,7 @@ default:
       # Install required toolchain
       TOOLCHAIN=$(cat lean-toolchain | tr -d '[:space:]')
       echo "Required: $TOOLCHAIN"
-      elan toolchain install "$TOOLCHAIN"
+      elan toolchain install "$TOOLCHAIN" || elan toolchain list | grep -q "$TOOLCHAIN"
       elan default "$TOOLCHAIN"
       echo "Active: $(lean --version)"
     - |

@@ -57,7 +57,7 @@ jobs:
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.elan/bin:$PATH"
           TOOLCHAIN=$(cat lean-toolchain | tr -d '[:space:]')
-          elan toolchain install "$TOOLCHAIN"
+          elan toolchain install "$TOOLCHAIN" || elan toolchain list | grep -q "$TOOLCHAIN"
           elan default "$TOOLCHAIN"
           lean --version
           lake --version
