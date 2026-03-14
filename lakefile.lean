@@ -21,6 +21,9 @@ lean_exe test where
 lean_exe proptest where
   root := `tests.PropertyTests
 
+lean_exe comptest where
+  root := `tests.ComprehensiveTests
+
 lean_exe bench where
   root := `benchmarks.Main
 
