@@ -12,14 +12,6 @@ package radix where
 @[default_target]
 lean_lib Radix where
   srcDir := "."
-  extraDepTargets := #[`radixffi]
-
-extern_lib radixffi pkg := do
-  let srcJob ← inputTextFile (pkg.dir / "c" / "radix_ffi.c")
-  let oFile := pkg.buildDir / "c" / "radix_ffi.o"
-  let oJob ← buildLeanO oFile srcJob #[] #["-O2", "-march=native"]
-  let libFile := pkg.staticLibDir / nameToStaticLib "radixffi"
-  buildStaticLib libFile #[oJob]
 
 require mathlib from git
   "https://github.com/leanprover-community/mathlib4" @ "06e947358d88e36af006f915f79a04a10fd43cc4"
@@ -78,6 +70,20 @@ lean_exe comptest where
 
 lean_exe bench where
   root := `benchmarks.Main
+
+lean_lib ExamplesLib where
+  srcDir := "."
+  roots := #[`examples.Crc32,
+             `examples.IPv4Header,
+             `examples.HexDump,
+             `examples.RingBuffer,
+             `examples.BitFlags,
+             `examples.NetworkPacket,
+             `examples.TinyVM,
+             `examples.Varint,
+             `examples.FirmwareImage,
+             `examples.LockFree,
+             `examples.SystemIO]
 
 lean_exe examples where
   root := `examples.Main
