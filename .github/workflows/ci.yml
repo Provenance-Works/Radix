@@ -208,10 +208,17 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: "Install elan & Lean"
-        uses: leanprover/lean4-action@471d71ad3fcb61d5e7454b5a36b975c434c8e907 # v1.1.5
-        with:
-          toolchain: ""
-          use-mathlib-cache: false
+        run: |
+          if ! command -v elan &> /dev/null; then
+            curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          fi
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.elan/bin:$PATH"
+          TOOLCHAIN=$(cat lean-toolchain | tr -d '[:space:]')
+          elan toolchain install "$TOOLCHAIN"
+          elan default "$TOOLCHAIN"
+          lean --version
+          lake --version
 
       # L1+L2: Elan + Lake packages
       - name: "Restore .lake directory cache"

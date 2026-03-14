@@ -34,10 +34,18 @@ runs:
   using: "composite"
   steps:
     - name: "Install elan & Lean toolchain"
-      uses: leanprover/lean4-action@471d71ad3fcb61d5e7454b5a36b975c434c8e907 # v1.1.5
-      with:
-        toolchain: ""
-        use-mathlib-cache: false
+      shell: bash
+      run: |
+        if ! command -v elan &> /dev/null; then
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+        fi
+        echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+        export PATH="$HOME/.elan/bin:$PATH"
+        TOOLCHAIN=$(cat lean-toolchain | tr -d '[:space:]')
+        elan toolchain install "$TOOLCHAIN"
+        elan default "$TOOLCHAIN"
+        lean --version
+        lake --version
 
     - name: "Restore build cache"
       if: inputs.skip-cache != 'true' && inputs.cache-key != ''

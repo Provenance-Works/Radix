@@ -297,10 +297,10 @@ cache_warmup:
     - .cache_lake_packages
   script:
     - echo "=== Cache Warmup ==="
-    - echo "Lean: $(lean --version)"
-    - echo "Lake: $(lake --version)"
-    - echo "Pipeline: $PIPELINE_TYPE"
-    - echo "Runner: $CI_RUNNER_DESCRIPTION ($CI_RUNNER_ID)"
+    - 'echo "Lean: $(lean --version)"'
+    - 'echo "Lake: $(lake --version)"'
+    - 'echo "Pipeline: $PIPELINE_TYPE"'
+    - 'echo "Runner: $CI_RUNNER_DESCRIPTION ($CI_RUNNER_ID)"'
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -402,7 +402,7 @@ lint_json:
   script:
     - echo "=== Validating JSON ==="
     - python3 -c "import json; json.load(open('lake-manifest.json'))"
-    - echo "  OK: lake-manifest.json"
+    - 'echo "  OK: lake-manifest.json"'
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -436,8 +436,8 @@ lint_lean_sources:
       find . -name '*.lean' -not -path './.lake/*' -exec grep -Hn 'TODO\|FIXME\|HACK\|XXX' {} \; | head -50 || echo "None found"
 
     # Validate core files
-    - test -s lakefile.lean && echo "OK: lakefile.lean"
-    - test -s lean-toolchain && echo "OK: lean-toolchain"
+    - 'test -s lakefile.lean && echo "OK: lakefile.lean"'
+    - 'test -s lean-toolchain && echo "OK: lean-toolchain"'
 
     # Toolchain format
     - |
@@ -945,7 +945,7 @@ license_compliance:
   needs: []
   script:
     - echo "=== License Compliance ==="
-    - test -f LICENSE || { echo "ERROR: LICENSE file missing!"; exit 1; }
+    - 'test -f LICENSE || { echo "ERROR: LICENSE file missing!"; exit 1; }'
     - echo "LICENSE present"
     - test -d LICENSES && echo "REUSE LICENSES/ directory present" || true
     - echo "License compliance passed"
@@ -1153,11 +1153,11 @@ pipeline_success:
       optional: true
   script:
     - echo "=== Pipeline SUCCESS ==="
-    - echo "Type:   $PIPELINE_TYPE"
-    - echo "Branch: $CI_COMMIT_BRANCH"
-    - echo "Commit: $CI_COMMIT_SHORT_SHA"
-    - echo "Author: $CI_COMMIT_AUTHOR"
-    - echo "Runner: $CI_RUNNER_DESCRIPTION"
+    - 'echo "Type:   $PIPELINE_TYPE"'
+    - 'echo "Branch: $CI_COMMIT_BRANCH"'
+    - 'echo "Commit: $CI_COMMIT_SHORT_SHA"'
+    - 'echo "Author: $CI_COMMIT_AUTHOR"'
+    - 'echo "Runner: $CI_RUNNER_DESCRIPTION"'
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: on_success
@@ -1178,12 +1178,12 @@ pipeline_failure:
       optional: true
   script:
     - echo "=== Pipeline FAILED ==="
-    - echo "Type:     $PIPELINE_TYPE"
-    - echo "Branch:   $CI_COMMIT_BRANCH"
-    - echo "Commit:   $CI_COMMIT_SHORT_SHA"
-    - echo "Author:   $CI_COMMIT_AUTHOR"
-    - echo "URL:      $CI_PIPELINE_URL"
-    - echo "Runner:   $CI_RUNNER_DESCRIPTION"
+    - 'echo "Type:     $PIPELINE_TYPE"'
+    - 'echo "Branch:   $CI_COMMIT_BRANCH"'
+    - 'echo "Commit:   $CI_COMMIT_SHORT_SHA"'
+    - 'echo "Author:   $CI_COMMIT_AUTHOR"'
+    - 'echo "URL:      $CI_PIPELINE_URL"'
+    - 'echo "Runner:   $CI_RUNNER_DESCRIPTION"'
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: on_failure
@@ -1199,10 +1199,10 @@ cleanup_workspace:
   timeout: 5m
   script:
     - echo "=== Pipeline Telemetry ==="
-    - echo "Pipeline ID:   $CI_PIPELINE_ID"
-    - echo "Pipeline URL:  $CI_PIPELINE_URL"
-    - echo "Runner:        $CI_RUNNER_DESCRIPTION ($CI_RUNNER_ID)"
-    - echo "Type:          $PIPELINE_TYPE"
+    - 'echo "Pipeline ID:   $CI_PIPELINE_ID"'
+    - 'echo "Pipeline URL:  $CI_PIPELINE_URL"'
+    - 'echo "Runner:        $CI_RUNNER_DESCRIPTION ($CI_RUNNER_ID)"'
+    - 'echo "Type:          $PIPELINE_TYPE"'
     # Cleanup temp files but preserve caches
     - find . -name '*.tmp' -delete 2>/dev/null || true
     - find . -name '*.bak' -delete 2>/dev/null || true
