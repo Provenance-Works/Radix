@@ -100,7 +100,6 @@ variables:
 
   # Lean / Lake configuration
   ELAN_HOME: "$CI_PROJECT_DIR/.elan"
-  PATH: "$CI_PROJECT_DIR/.elan/bin:$PATH"
 
   # Cache fallback
   CACHE_FALLBACK_KEY: "lean-global-fallback"
