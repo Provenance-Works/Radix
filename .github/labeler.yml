@@ -46,7 +46,21 @@ tests:
 
 ci:
   - changed-files:
-      - any-glob-to-any-file: '.github/workflows/**'
+      - any-glob-to-any-file:
+          - '.github/workflows/**'
+          - '.github/actions/**'
+          - '.gitlab-ci.yml'
+          - '.gitlab/ci/**'
+
+ffi:
+  - changed-files:
+      - any-glob-to-any-file: 'c/**'
+
+security:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'SECURITY.md'
+          - '.github/workflows/security.yml'
 
 build:
   - changed-files:
