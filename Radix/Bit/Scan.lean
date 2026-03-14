@@ -70,8 +70,13 @@ private def bitReverseLoop {n : Nat} (bv : BitVec n) : Nat → Nat → BitVec n 
   let v := (v &&& (0x33 : _root_.UInt8)) + ((v >>> (2 : _root_.UInt8)) &&& (0x33 : _root_.UInt8))
   ⟨(v + (v >>> (4 : _root_.UInt8))) &&& (0x0F : _root_.UInt8)⟩
 
--- Hardware-accelerated CLZ via __builtin_clz (compiles to LZCNT instruction)
-@[extern "radix_clz8"] private opaque clz8_impl : UInt8 → UInt8
+-- SWAR CLZ: fill bits right then subtract popcount from bit width
+@[inline] private def clz8_impl (x : UInt8) : UInt8 :=
+  let v := x.val
+  let v := v ||| (v >>> (1 : _root_.UInt8))
+  let v := v ||| (v >>> (2 : _root_.UInt8))
+  let v := v ||| (v >>> (4 : _root_.UInt8))
+  ⟨(8 : _root_.UInt8) - (popcount8_impl ⟨v⟩).val⟩
 
 @[inline] private def ctz8_impl (x : UInt8) : UInt8 :=
   -- Branchless: (~x) & (x-1) isolates trailing zeros. For x=0, gives 0xFF, popcount=8.
@@ -124,8 +129,14 @@ end UInt8
   let v := (v + (v >>> (4 : _root_.UInt16))) &&& (0x0F0F : _root_.UInt16)
   ⟨(v * (0x0101 : _root_.UInt16)) >>> (8 : _root_.UInt16)⟩
 
--- Hardware-accelerated CLZ via __builtin_clz (compiles to LZCNT instruction)
-@[extern "radix_clz16"] private opaque clz16_impl : UInt16 → UInt16
+-- SWAR CLZ: fill bits right then subtract popcount from bit width
+@[inline] private def clz16_impl (x : UInt16) : UInt16 :=
+  let v := x.val
+  let v := v ||| (v >>> (1 : _root_.UInt16))
+  let v := v ||| (v >>> (2 : _root_.UInt16))
+  let v := v ||| (v >>> (4 : _root_.UInt16))
+  let v := v ||| (v >>> (8 : _root_.UInt16))
+  ⟨(16 : _root_.UInt16) - (popcount16_impl ⟨v⟩).val⟩
 
 @[inline] private def ctz16_impl (x : UInt16) : UInt16 :=
   -- Branchless: (~x) & (x-1) isolates trailing zeros. For x=0, gives 0xFFFF, popcount=16.
@@ -174,8 +185,15 @@ end UInt16
   let v := (v + (v >>> (4 : _root_.UInt32))) &&& (0x0F0F0F0F : _root_.UInt32)
   ⟨(v * (0x01010101 : _root_.UInt32)) >>> (24 : _root_.UInt32)⟩
 
--- Hardware-accelerated CLZ via __builtin_clz (compiles to LZCNT instruction)
-@[extern "radix_clz32"] private opaque clz32_impl : UInt32 → UInt32
+-- SWAR CLZ: fill bits right then subtract popcount from bit width
+@[inline] private def clz32_impl (x : UInt32) : UInt32 :=
+  let v := x.val
+  let v := v ||| (v >>> (1 : _root_.UInt32))
+  let v := v ||| (v >>> (2 : _root_.UInt32))
+  let v := v ||| (v >>> (4 : _root_.UInt32))
+  let v := v ||| (v >>> (8 : _root_.UInt32))
+  let v := v ||| (v >>> (16 : _root_.UInt32))
+  ⟨(32 : _root_.UInt32) - (popcount32_impl ⟨v⟩).val⟩
 
 @[inline] private def ctz32_impl (x : UInt32) : UInt32 :=
   -- Branchless: (~x) & (x-1) isolates trailing zeros. For x=0, gives 0xFFFFFFFF, popcount=32.
@@ -225,8 +243,16 @@ end UInt32
   let v := (v + (v >>> (4 : _root_.UInt64))) &&& (0x0F0F0F0F0F0F0F0F : _root_.UInt64)
   ⟨(v * (0x0101010101010101 : _root_.UInt64)) >>> (56 : _root_.UInt64)⟩
 
--- Hardware-accelerated CLZ via __builtin_clzll (compiles to LZCNT instruction)
-@[extern "radix_clz64"] private opaque clz64_impl : UInt64 → UInt64
+-- SWAR CLZ: fill bits right then subtract popcount from bit width
+@[inline] private def clz64_impl (x : UInt64) : UInt64 :=
+  let v := x.val
+  let v := v ||| (v >>> (1 : _root_.UInt64))
+  let v := v ||| (v >>> (2 : _root_.UInt64))
+  let v := v ||| (v >>> (4 : _root_.UInt64))
+  let v := v ||| (v >>> (8 : _root_.UInt64))
+  let v := v ||| (v >>> (16 : _root_.UInt64))
+  let v := v ||| (v >>> (32 : _root_.UInt64))
+  ⟨(64 : _root_.UInt64) - (popcount64_impl ⟨v⟩).val⟩
 
 @[inline] private def ctz64_impl (x : UInt64) : UInt64 :=
   -- Branchless: (~x) & (x-1) isolates trailing zeros. For x=0, gives 0xFFFFFFFFFFFFFFFF, popcount=64.
