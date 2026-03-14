@@ -15,6 +15,19 @@ import Radix.System
 import Radix.Concurrency
 import Radix.BareMetal
 
+-- Individual focused examples
+import examples.Crc32
+import examples.IPv4Header
+import examples.HexDump
+import examples.RingBuffer
+import examples.BitFlags
+import examples.NetworkPacket
+import examples.TinyVM
+import examples.Varint
+import examples.FirmwareImage
+import examples.LockFree
+import examples.SystemIO
+
 /-!
 # Radix Usage Examples (P4-03)
 
@@ -673,6 +686,7 @@ def main : IO Unit := do
   IO.println "=============================="
   IO.println ""
 
+  -- Core module demos (built-in)
   exampleWordArith
   exampleSignedInts
   exampleBitwise
@@ -686,5 +700,23 @@ def main : IO Unit := do
   exampleSystemIO
   exampleConcurrency
   exampleBareMetal
+
+  IO.println "=============================="
+  IO.println "Focused Application Examples"
+  IO.println "=============================="
+  IO.println ""
+
+  -- Individual focused examples
+  Examples.Crc32.run
+  Examples.IPv4Header.run
+  Examples.HexDump.run
+  Examples.RingBuffer.run
+  Examples.BitFlags.run
+  Examples.NetworkPacket.run
+  Examples.TinyVM.run
+  Examples.Varint.run
+  Examples.FirmwareImage.run
+  Examples.LockFree.run
+  Examples.SystemIO.run
 
   IO.println "All examples completed successfully!"
