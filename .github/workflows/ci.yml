@@ -246,7 +246,12 @@ jobs:
             mathlib-oleans-${{ needs.changes.outputs.mathlib_rev }}-
 
       - name: "Lake update (fetch dependencies)"
-        run: lake update
+        run: |
+          if [ -d .lake/packages/mathlib ] && [ "${{ steps.lake-cache.outputs.cache-hit }}" = "true" ]; then
+            echo "Lake packages cache hit — skipping lake update"
+          else
+            lake update
+          fi
 
       - name: "Fetch Mathlib oleans"
         if: steps.mathlib-cache.outputs.cache-hit != 'true'
@@ -287,13 +292,6 @@ jobs:
     name: "Build Library"
     runs-on: arc-runner-set-pw
     needs: [changes, resolve-deps]
-    if: >-
-      needs.changes.outputs.core == 'true' ||
-      needs.changes.outputs.build_system == 'true' ||
-      needs.changes.outputs.tests == 'true' ||
-      needs.changes.outputs.examples == 'true' ||
-      needs.changes.outputs.benchmarks == 'true' ||
-      github.event_name == 'workflow_dispatch'
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -327,9 +325,6 @@ jobs:
     name: "Build Tests"
     runs-on: arc-runner-set-pw
     needs: [changes, build-lib]
-    if: >-
-      needs.changes.outputs.any_lean == 'true' ||
-      github.event_name == 'workflow_dispatch'
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -365,6 +360,7 @@ jobs:
     runs-on: arc-runner-set-pw
     needs: [changes, build-lib]
     if: >-
+      !cancelled() && needs.build-lib.result == 'success' &&
       (
         needs.changes.outputs.benchmarks == 'true' ||
         needs.changes.outputs.core == 'true' ||
@@ -409,9 +405,12 @@ jobs:
     runs-on: arc-runner-set-pw
     needs: [changes, build-lib]
     if: >-
-      needs.changes.outputs.core == 'true' ||
-      needs.changes.outputs.examples == 'true' ||
-      github.event_name == 'workflow_dispatch'
+      !cancelled() && needs.build-lib.result == 'success' &&
+      (
+        needs.changes.outputs.core == 'true' ||
+        needs.changes.outputs.examples == 'true' ||
+        github.event_name == 'workflow_dispatch'
+      )
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -719,9 +718,7 @@ jobs:
     runs-on: arc-runner-set-pw
     needs: [changes, build-examples]
     if: >-
-      needs.changes.outputs.core == 'true' ||
-      needs.changes.outputs.examples == 'true' ||
-      github.event_name == 'workflow_dispatch'
+      !cancelled() && needs.build-examples.result == 'success'
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -744,8 +741,11 @@ jobs:
     runs-on: arc-runner-set-pw
     needs: [changes, build-lib]
     if: >-
-      needs.changes.outputs.core == 'true' ||
-      needs.changes.outputs.build_system == 'true'
+      !cancelled() && needs.build-lib.result == 'success' &&
+      (
+        needs.changes.outputs.core == 'true' ||
+        needs.changes.outputs.build_system == 'true'
+      )
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

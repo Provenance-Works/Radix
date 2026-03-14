@@ -292,8 +292,15 @@ cache_warmup:
   stage: .pre
   extends:
     - .lean_setup
-    - .cache_elan
-    - .cache_lake_packages
+  cache:
+    - key:
+        files:
+          - lean-toolchain
+        prefix: "elan"
+      paths:
+        - .elan/
+      policy: pull-push
+      when: on_success
   script:
     - echo "=== Cache Warmup ==="
     - 'echo "Lean: $(lean --version)"'
@@ -317,18 +324,60 @@ resolve_dependencies:
   stage: prepare
   extends:
     - .lean_setup
-    - .cache_full_rw
+  cache:
+    - key:
+        files:
+          - lean-toolchain
+        prefix: "elan"
+      paths:
+        - .elan/
+      policy: pull
+    - key:
+        files:
+          - lake-manifest.json
+          - lakefile.lean
+        prefix: "lake-pkg"
+      paths:
+        - .lake/packages/
+      policy: pull-push
+      when: on_success
+    - key:
+        files:
+          - lake-manifest.json
+        prefix: "mathlib-oleans"
+      paths:
+        - .lake/packages/mathlib/.lake/build/
+      policy: pull-push
+      when: on_success
   timeout: 120m
   script:
     - echo "=== Resolving dependencies ==="
-    - lake update
 
-    # Fetch pre-built Mathlib oleans
+    # Skip lake update if packages already present and manifest unchanged
     - |
-      echo "=== Fetching Mathlib cache ==="
-      lake exe cache get 2>&1 || {
-        echo "WARNING: Mathlib cache get failed. Will build from source."
-      }
+      if [ -d .lake/packages/mathlib ] && [ -f .lake/packages/manifest.json ]; then
+        echo "Packages cached — running lake update only if manifest diverges"
+        if diff -q .lake/packages/manifest.json lake-manifest.json > /dev/null 2>&1; then
+          echo "Manifest matches cache — skipping lake update"
+        else
+          echo "Manifest changed — running lake update"
+          lake update
+        fi
+      else
+        echo "No package cache — running lake update"
+        lake update
+      fi
+
+    # Fetch pre-built Mathlib oleans only if not cached
+    - |
+      if [ -d .lake/packages/mathlib/.lake/build/lib ] && [ "$(find .lake/packages/mathlib/.lake/build/lib -name '*.olean' 2>/dev/null | head -1)" ]; then
+        echo "Mathlib oleans present in cache — skipping fetch"
+      else
+        echo "=== Fetching Mathlib cache ==="
+        lake exe cache get 2>&1 || {
+          echo "WARNING: Mathlib cache get failed. Will build from source."
+        }
+      fi
 
     # Verify dependency integrity
     - |
@@ -505,7 +554,7 @@ lint_docs:
   stage: build
   extends:
     - .lean_setup
-    - .cache_full_rw
+    - .cache_readonly_all
   timeout: 90m
   needs:
     - job: resolve_dependencies
@@ -513,9 +562,18 @@ lint_docs:
 
 build_library:
   extends: .build_template
+  cache:
+    - !reference [.cache_readonly_all, cache, 0]
+    - !reference [.cache_readonly_all, cache, 1]
+    - !reference [.cache_readonly_all, cache, 2]
+    - key: "radix-build-${CI_COMMIT_SHORT_SHA}"
+      paths:
+        - .lake/build/
+      policy: pull-push
+      when: on_success
+      unprotect: true
   script:
     - echo "=== Building Radix library ==="
-    - lake update
     - time lake build Radix 2>&1 | tail -20
     - echo "=== Library build complete ==="
   rules:
@@ -538,7 +596,6 @@ build_tests:
       optional: true
   script:
     - echo "=== Building test targets ==="
-    - lake update
     - time lake build test 2>&1 | tail -10
     - time lake build proptest 2>&1 | tail -10
     - time lake build comptest 2>&1 | tail -10
@@ -563,7 +620,6 @@ build_examples:
       optional: true
   script:
     - echo "=== Building examples ==="
-    - lake update
     - time lake build examples 2>&1 | tail -10
     - echo "=== Examples build complete ==="
   rules:
@@ -583,7 +639,6 @@ build_benchmarks:
       optional: true
   script:
     - echo "=== Building benchmarks ==="
-    - lake update
     - time lake build bench 2>&1 | tail -10
     - |
       if [ -f benchmarks/baseline.c ]; then
