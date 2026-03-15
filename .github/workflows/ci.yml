@@ -229,7 +229,6 @@ jobs:
           path: |
             .lake/packages
             .lake/build
-            ~/.elan
           key: ${{ needs.changes.outputs.cache_prefix }}-lake-${{ hashFiles('lake-manifest.json', 'lakefile.lean') }}
           restore-keys: |
             ${{ needs.changes.outputs.cache_prefix }}-lake-
@@ -315,7 +314,6 @@ jobs:
           path: |
             .lake/packages
             .lake/build
-            ~/.elan
           key: ${{ needs.changes.outputs.cache_prefix }}-radix-build-${{ github.sha }}
 
   # ===========================================================================
@@ -352,7 +350,6 @@ jobs:
           path: |
             .lake/packages
             .lake/build
-            ~/.elan
           key: ${{ needs.changes.outputs.cache_prefix }}-test-build-${{ github.sha }}
 
   build-bench:
@@ -399,7 +396,6 @@ jobs:
           path: |
             .lake/packages
             .lake/build
-            ~/.elan
           key: ${{ needs.changes.outputs.cache_prefix }}-bench-build-${{ github.sha }}
 
   build-examples:

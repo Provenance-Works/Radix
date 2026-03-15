@@ -112,7 +112,6 @@ jobs:
           path: |
             .lake/packages
             .lake/build
-            ~/.elan
           key: release-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.lean') }}-${{ github.sha }}
           restore-keys: |
             release-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.lean') }}-

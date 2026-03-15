@@ -54,7 +54,6 @@ runs:
         path: |
           .lake/packages
           .lake/build
-          ~/.elan
         key: ${{ inputs.cache-key }}
         restore-keys: ${{ inputs.cache-restore-keys }}
 

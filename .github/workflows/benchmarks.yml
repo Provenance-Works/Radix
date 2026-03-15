@@ -64,7 +64,6 @@ jobs:
           path: |
             .lake/packages
             .lake/build
-            ~/.elan
           key: bench-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.lean') }}-${{ github.sha }}
           restore-keys: |
             bench-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.lean') }}-
@@ -118,7 +117,6 @@ jobs:
           path: |
             .lake/packages
             .lake/build
-            ~/.elan
           key: ${{ needs.build.outputs.cache_key }}
 
       - name: "Fetch dependencies"

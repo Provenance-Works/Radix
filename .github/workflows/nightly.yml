@@ -99,7 +99,6 @@ jobs:
           path: |
             .lake/packages
             .lake/build
-            ~/.elan
           key: nightly-${{ github.sha }}-${{ github.run_number }}
 
   # ===========================================================================

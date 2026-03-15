@@ -838,10 +838,10 @@ verify_proofs:
     - |
       echo ""
       echo "=== Zero-Sorry Audit ==="
-      SORRY_COUNT=$(grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/' | wc -l)
+      SORRY_COUNT=$(grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/' | wc -l || true)
       if [ "$SORRY_COUNT" -gt 0 ]; then
         echo "ERROR: Found $SORRY_COUNT 'sorry' occurrences!"
-        grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/'
+        grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/' || true
         exit 1
       fi
       echo "Zero sorry — all proofs complete"
@@ -850,7 +850,7 @@ verify_proofs:
     - |
       echo ""
       echo "=== Trust Assumptions ==="
-      TRUST_ITEMS=$(grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | grep -v '\.lake/' | wc -l)
+      TRUST_ITEMS=$(grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | grep -v '\.lake/' | wc -l || true)
       echo "Trust assumptions: $TRUST_ITEMS"
       grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | grep -v '\.lake/' || echo "  (none)"
   rules:
