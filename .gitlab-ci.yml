@@ -823,11 +823,13 @@ verify_proofs:
     # Theorem/lemma census
     - |
       echo "=== Proof Census ==="
-      THEOREMS=$(grep -rn '^theorem\|^  theorem' Radix/ | wc -l || true)
-      LEMMAS=$(grep -rn '^lemma\|^  lemma' Radix/ | wc -l || true)
-      INSTANCES=$(grep -rn '^instance\|^  instance' Radix/ | wc -l || true)
-      DEFS=$(grep -rn '^def\|^  def\|^private def' Radix/ | wc -l || true)
-      AXIOMS=$(grep -rn '^axiom\|^  axiom' Radix/ | wc -l || true)
+      set +e
+      THEOREMS=$(grep -rn '^theorem\|^  theorem' Radix/ | wc -l)
+      LEMMAS=$(grep -rn '^lemma\|^  lemma' Radix/ | wc -l)
+      INSTANCES=$(grep -rn '^instance\|^  instance' Radix/ | wc -l)
+      DEFS=$(grep -rn '^def\|^  def\|^private def' Radix/ | wc -l)
+      AXIOMS=$(grep -rn '^axiom\|^  axiom' Radix/ | wc -l)
+      set -e
       echo "Theorems:    $THEOREMS"
       echo "Lemmas:      $LEMMAS"
       echo "Instances:   $INSTANCES"
@@ -838,10 +840,12 @@ verify_proofs:
     - |
       echo ""
       echo "=== Zero-Sorry Audit ==="
-      SORRY_COUNT=$(grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/' | wc -l || true)
+      set +e
+      SORRY_COUNT=$(grep -rn '\bsorry\b' Radix/ | wc -l)
+      set -e
       if [ "$SORRY_COUNT" -gt 0 ]; then
         echo "ERROR: Found $SORRY_COUNT 'sorry' occurrences!"
-        grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/' || true
+        grep -rn '\bsorry\b' Radix/
         exit 1
       fi
       echo "Zero sorry — all proofs complete"
@@ -850,9 +854,15 @@ verify_proofs:
     - |
       echo ""
       echo "=== Trust Assumptions ==="
-      TRUST_ITEMS=$(grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | grep -v '\.lake/' | wc -l || true)
+      set +e
+      TRUST_ITEMS=$(grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | wc -l)
+      set -e
       echo "Trust assumptions: $TRUST_ITEMS"
-      grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | grep -v '\.lake/' || echo "  (none)"
+      if [ "$TRUST_ITEMS" -gt 0 ]; then
+        grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/
+      else
+        echo "  (none)"
+      fi
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -1138,8 +1148,10 @@ generate_release_notes:
       echo "" >> release-notes.md
       echo "## Proof Census" >> release-notes.md
       echo "" >> release-notes.md
+      set +e
       THEOREMS=$(grep -rn '^theorem\|^  theorem' Radix/ | wc -l)
       LEMMAS=$(grep -rn '^lemma\|^  lemma' Radix/ | wc -l)
+      set -e
       echo "- Theorems: $THEOREMS" >> release-notes.md
       echo "- Lemmas: $LEMMAS" >> release-notes.md
       echo "" >> release-notes.md
