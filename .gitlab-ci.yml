@@ -823,11 +823,11 @@ verify_proofs:
     # Theorem/lemma census
     - |
       echo "=== Proof Census ==="
-      THEOREMS=$(grep -rn '^theorem\|^  theorem' Radix/ | wc -l)
-      LEMMAS=$(grep -rn '^lemma\|^  lemma' Radix/ | wc -l)
-      INSTANCES=$(grep -rn '^instance\|^  instance' Radix/ | wc -l)
-      DEFS=$(grep -rn '^def\|^  def\|^private def' Radix/ | wc -l)
-      AXIOMS=$(grep -rn '^axiom\|^  axiom' Radix/ | wc -l)
+      THEOREMS=$(grep -rn '^theorem\|^  theorem' Radix/ | wc -l || true)
+      LEMMAS=$(grep -rn '^lemma\|^  lemma' Radix/ | wc -l || true)
+      INSTANCES=$(grep -rn '^instance\|^  instance' Radix/ | wc -l || true)
+      DEFS=$(grep -rn '^def\|^  def\|^private def' Radix/ | wc -l || true)
+      AXIOMS=$(grep -rn '^axiom\|^  axiom' Radix/ | wc -l || true)
       echo "Theorems:    $THEOREMS"
       echo "Lemmas:      $LEMMAS"
       echo "Instances:   $INSTANCES"

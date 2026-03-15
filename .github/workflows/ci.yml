@@ -364,6 +364,8 @@ jobs:
       (
         needs.changes.outputs.benchmarks == 'true' ||
         needs.changes.outputs.core == 'true' ||
+        needs.changes.outputs.build_system == 'true' ||
+        needs.changes.outputs.ci == 'true' ||
         github.event_name == 'workflow_dispatch'
       ) && (
         needs.changes.outputs.is_main == 'true' ||
@@ -409,6 +411,8 @@ jobs:
       (
         needs.changes.outputs.core == 'true' ||
         needs.changes.outputs.examples == 'true' ||
+        needs.changes.outputs.build_system == 'true' ||
+        needs.changes.outputs.ci == 'true' ||
         github.event_name == 'workflow_dispatch'
       )
     timeout-minutes: 30
@@ -517,6 +521,7 @@ jobs:
     if: >-
       needs.changes.outputs.core == 'true' ||
       needs.changes.outputs.build_system == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
       github.event_name == 'workflow_dispatch'
     timeout-minutes: 15
     permissions:
@@ -744,7 +749,9 @@ jobs:
       !cancelled() && needs.build-lib.result == 'success' &&
       (
         needs.changes.outputs.core == 'true' ||
-        needs.changes.outputs.build_system == 'true'
+        needs.changes.outputs.build_system == 'true' ||
+        needs.changes.outputs.ci == 'true' ||
+        github.event_name == 'workflow_dispatch'
       )
     timeout-minutes: 120
     steps:
