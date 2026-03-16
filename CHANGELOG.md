@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-03-16
+
+### Fixed
+
+- **Concurrency axioms**: Replace 5 trivial `True` axioms with meaningful propositions
+  (`trust_atomic_word_access`, `trust_seqcst_total_order`, `trust_acquire_release_sync`,
+  `trust_cas_semantics`, `trust_fence_ordering`)
+- **BareMetal axioms**: Replace 5 trivial `True` axioms with meaningful propositions
+  (`trust_reset_entry`, `trust_mmio_volatile`, `trust_interrupt_vector_table`,
+  `trust_stack_grows_down`, `trust_alignment_fault`)
+
+### Added
+
+- **System module**: 34 proofs for file state machine (lifecycle validation,
+  IO faithfulness, read/write/close pre/postconditions)
+- **Bytes module**: 29 new proofs (bswap involution, BE/LE round-trips,
+  Spec Prop completeness, ByteSlice multi-byte write length preservation)
+- **Memory module**: 24 new proofs (read-after-write for different offsets,
+  region disjointness/containment, BufferSpec, alignment properties)
+
+### Changed
+
+- Updated theorem count from 721+ to 907+
+- Corrected module-level theorem counts in README and CHANGELOG
+
 ## [0.1.0] - 2026-03-14
 
 ### Added
@@ -80,5 +105,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation in English and Japanese
 - 11 usage examples demonstrating all modules
 
-[Unreleased]: https://github.com/provenance-works/radix/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/provenance-works/radix/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/provenance-works/radix/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/provenance-works/radix/releases/tag/v0.1.0
