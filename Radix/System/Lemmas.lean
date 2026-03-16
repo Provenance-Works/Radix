@@ -178,38 +178,38 @@ theorem validLifecycle_nil (s : FileState) :
 
 theorem validLifecycle_open_read_close :
     validLifecycle .closed [.open "/tmp/f" .readOnly, .read 1024, .close] = true := by
-  native_decide
+  rfl
 
 theorem validLifecycle_open_write_close :
     validLifecycle .closed [.open "/tmp/f" .writeOnly, .write 512, .close] = true := by
-  native_decide
+  rfl
 
 theorem validLifecycle_open_close :
     validLifecycle .closed [.open "/tmp/f" .readOnly, .close] = true := by
-  native_decide
+  rfl
 
 theorem validLifecycle_readOnly_cannot_write :
     validLifecycle .closed [.open "/tmp/f" .readOnly, .write 100, .close] = false := by
-  native_decide
+  rfl
 
 theorem validLifecycle_writeOnly_cannot_read :
     validLifecycle .closed [.open "/tmp/f" .writeOnly, .read 100, .close] = false := by
-  native_decide
+  rfl
 
 theorem validLifecycle_readWrite_can_both :
     validLifecycle .closed [.open "/tmp/f" .readWrite, .read 100, .write 50, .close] = true := by
-  native_decide
+  rfl
 
 theorem validLifecycle_read_without_open_false :
-    validLifecycle .closed [.read 1024] = false := by native_decide
+    validLifecycle .closed [.read 1024] = false := by rfl
 
 theorem validLifecycle_double_close_false :
     validLifecycle .closed [.open "/tmp/f" .readOnly, .close, .close] = false := by
-  native_decide
+  rfl
 
 theorem validLifecycle_write_after_close_false :
     validLifecycle .closed [.open "/tmp/f" .writeOnly, .close, .write 10] = false := by
-  native_decide
+  rfl
 
 /-! ## Mode Safety -/
 
