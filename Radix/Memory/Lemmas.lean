@@ -274,4 +274,29 @@ theorem Buffer.checkedReadU32LE_some (buf : Buffer) (offset : Nat)
     buf.checkedReadU32LE offset = some (buf.readU32LE offset h) := by
   simp [Buffer.checkedReadU32LE, h]
 
+theorem Buffer.checkedReadU32LE_none (buf : Buffer) (offset : Nat)
+    (h : ¬ offset + 4 ≤ buf.bytes.size) :
+    buf.checkedReadU32LE offset = none := by
+  simp [Buffer.checkedReadU32LE, h]
+
+theorem Buffer.checkedReadU64BE_some (buf : Buffer) (offset : Nat)
+    (h : offset + 8 ≤ buf.bytes.size) :
+    buf.checkedReadU64BE offset = some (buf.readU64BE offset h) := by
+  simp [Buffer.checkedReadU64BE, h]
+
+theorem Buffer.checkedReadU64BE_none (buf : Buffer) (offset : Nat)
+    (h : ¬ offset + 8 ≤ buf.bytes.size) :
+    buf.checkedReadU64BE offset = none := by
+  simp [Buffer.checkedReadU64BE, h]
+
+theorem Buffer.checkedReadU64LE_some (buf : Buffer) (offset : Nat)
+    (h : offset + 8 ≤ buf.bytes.size) :
+    buf.checkedReadU64LE offset = some (buf.readU64LE offset h) := by
+  simp [Buffer.checkedReadU64LE, h]
+
+theorem Buffer.checkedReadU64LE_none (buf : Buffer) (offset : Nat)
+    (h : ¬ offset + 8 ≤ buf.bytes.size) :
+    buf.checkedReadU64LE offset = none := by
+  simp [Buffer.checkedReadU64LE, h]
+
 end Radix.Memory
