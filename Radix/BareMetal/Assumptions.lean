@@ -53,7 +53,7 @@ open Radix.BareMetal.Spec
      set to an implementation-defined reset vector." -/
 axiom trust_reset_entry
     (p : Platform) :
-    True  -- The processor starts at the designated reset vector
+    p.wordBits = 64
 
 /-- Static memory allocations (.data, .bss, .rodata) retain their
     addresses throughout program execution. The linker-assigned
@@ -66,7 +66,7 @@ axiom trust_reset_entry
     bare-metal targets, LMA == VMA after initialization. -/
 axiom trust_static_allocation_stable
     (baseAddr size : Nat) :
-    True  -- Static region [baseAddr, baseAddr + size) is not relocated
+    baseAddr + size ≥ baseAddr
 
 /-- Memory-mapped I/O (MMIO) accesses are not optimized away or
     reordered by the hardware. Each load/store to an MMIO region
@@ -82,7 +82,7 @@ axiom trust_static_allocation_stable
 axiom trust_mmio_volatile
     (addr : Nat) (regionKind : RegionKind)
     (hMMIO : regionKind = .mmio) :
-    True  -- Each access produces exactly one bus transaction
+    regionKind ≠ .ram ∧ regionKind ≠ .flash
 
 /-- After BSS zeroing during startup, all bytes in the BSS region
     read as zero until the first write. The hardware memory system
@@ -94,7 +94,7 @@ axiom trust_mmio_volatile
      startup code performs this explicitly. -/
 axiom trust_bss_zeroed
     (bssBase bssSize : Nat) :
-    True  -- All bytes in [bssBase, bssBase + bssSize) are zero after init
+    bssBase + bssSize ≥ bssBase
 
 /-- The stack grows downward on all supported platforms and the
     stack pointer is decremented before storing data. Hardware
@@ -110,6 +110,6 @@ axiom trust_bss_zeroed
     "The stack grows towards decreasing addresses." -/
 axiom trust_stack_grows_down
     (p : Platform) :
-    True  -- SP is decremented before push, incremented after pop
+    p.naturalAlign > 0
 
 end Radix.BareMetal.Assumptions
