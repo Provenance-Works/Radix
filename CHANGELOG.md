@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-03-16
+
+### Fixed
+
+- **GCFree.Lifetime**: Add `heap` variant so `isBounded` is no longer trivially `true`
+  for all cases. `Lifetime.heap.isBounded = false` correctly models GC-managed lifetimes.
+- **AllocStrategy**: Add `heap` variant so `isGCFree` is no longer trivially `true`
+  for all cases. `AllocStrategy.heap.isGCFree = false` correctly models heap allocation.
+- **Theorem counts**: All module-level counts now match actual verified proof counts.
+
+### Added
+
+- **Bytes module**: 9 new proofs (signed type LE round-trips, signed BE/LE relationships,
+  signed bswap involution for Int16/Int32/Int64)
+- **Memory module**: 3 new proofs (checkedReadU32BE/LE some/none properties)
+- **BareMetal module**: `heap_not_isGCFree` proof, `gcfree_strategies_isGCFree` proof
+
+### Changed
+
+- **README/CHANGELOG**: Clarify Concurrency and BareMetal modules as specification models
+- Updated theorem count from 907+ to 908+
+
 ## [0.1.1] - 2026-03-16
 
 ### Fixed
@@ -82,20 +104,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - POSIX.1-2024 trust assumptions
 - 34 proofs (file state machine, lifecycle validation, IO faithfulness)
 
-#### Concurrency Model — Concurrency Module
-- C11/C++11 memory ordering model (Relaxed through SeqCst)
-- `AtomicCell` with atomic load/store/CAS/fetch operations
+#### Concurrency Specification Model — Concurrency Module
+- C11/C++11 memory ordering specification model (Relaxed through SeqCst)
+- `AtomicCell` with atomic load/store/CAS/fetch operations (pure state-machine model)
 - `happensBefore` partial order, `isDataRace`, `isLinearizable` definitions
 - 46 proofs (ordering strength, DRF, linearizability)
 
-#### Bare Metal Support — BareMetal Module
-- Platform model (x86_64, aarch64, riscv64)
+#### Bare Metal Specification — BareMetal Module
+- Platform specification model (x86_64, aarch64, riscv64)
 - Memory region kinds (Flash, RAM, MMIO, Reserved) with non-overlap invariants
 - Boot invariant specification (stack pointer, entry point, BSS zeroed)
 - Startup phase state machine with validation
-- `GCFreeConstraint` — GC-free allocation analysis
+- `GCFreeConstraint` — GC-free allocation analysis with `heap` variant for non-GC-free detection
 - Linker script model (`LinkerScript`, `Section`, `Symbol`)
-- 34 proofs (region disjointness, alignment, GC-free, startup sequence)
+- 35 proofs (region disjointness, alignment, GC-free, startup sequence)
 
 #### Infrastructure
 - Three-layer architecture (Spec → Impl → Bridge) with ADRs
@@ -105,6 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation in English and Japanese
 - 11 usage examples demonstrating all modules
 
-[Unreleased]: https://github.com/provenance-works/radix/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/provenance-works/radix/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/provenance-works/radix/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/provenance-works/radix/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/provenance-works/radix/releases/tag/v0.1.0
