@@ -7,3 +7,4 @@ import Radix.Bit.Ops
 import Radix.Bit.Scan
 import Radix.Bit.Field
 import Radix.Bit.Lemmas
+import Radix.Bit.Generic
