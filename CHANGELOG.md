@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-03-17
+
+### Fixed
+
+- **BareMetal axioms**: Replace trivially-provable axioms with genuinely unprovable
+  ones using opaque hardware types (`HWMemoryState`, `hwReadByte`). Axioms now
+  express real hardware contracts: `trust_reset_entry` (∃ aligned reset address),
+  `trust_static_allocation_stable` (memory stability across snapshots),
+  `trust_mmio_volatile` (side effects exist), `trust_bss_zeroed`,
+  `trust_stack_grows_down`.
+- **System axioms**: Fix circular `trust_lean_io_faithful` (previously presupposed
+  its own conclusion) and incorrect `trust_read_bounded` (was false for
+  `actual > 0 → actual ≤ count`). Now uses opaque `OSReadResult` type.
+- **System Spec**: Expand from trivial 2-state model (open/closed) to rich
+  model tracking file position, access mode (`readOnly`/`writeOnly`/`readWrite`/
+  `appendOnly`), cumulative bytes read/written. Pre/postconditions now enforce
+  mode-specific access control.
+- **System Lemmas**: Complete rewrite with 53 substantive theorems including
+  mode-aware preconditions, position-tracking postconditions, lifecycle validity
+  with access control, and axiom-based proofs.
+- **Concurrency axioms**: Replace trivially-provable `trust_atomic_word_access`,
+  `trust_cas_atomicity`, and `trust_fence_ordering` with genuinely unprovable
+  axioms using opaque `HWConcurrencyState` and `hwObservedAtomic`.
+- **Theorem count**: Corrected from inflated 914+ to accurate 854+.
+
+### Added
+
+- **Concurrency Lemmas**: 10 new proofs including `loads_not_conflicting`,
+  `sameThread_no_dataRace`, `ordered_no_dataRace`, `allLoads_isDataRaceFree`,
+  `atomicCAS_dichotomy`, `fetchAdd_compose`, `exchange_eq_successful_cas`,
+  `Trace.empty_isWellFormed`, `Trace.empty_isValid`.
+- **Memory Lemmas**: 4 new region algebra proofs: `contains_trans`,
+  `disjoint_of_contains`, `disjoint_sub`, `not_contains_empty_of_pos`.
+
 ## [0.1.2] - 2026-03-16
 
 ### Fixed
