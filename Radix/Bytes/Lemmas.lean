@@ -185,6 +185,63 @@ theorem Int64.toBigEndian_fromBigEndian (x : Int64) :
   simp only [Radix.UInt64.toBigEndian, Radix.UInt64.fromBigEndian, nativeEndian]
   exact congrArg Radix.UInt64.val (UInt64.bswap_bswap ⟨val⟩)
 
+/-! ## Signed Type Little-Endian Round-Trips -/
+
+theorem Int16.toLittleEndian_fromLittleEndian (x : Int16) :
+    Int16.fromLittleEndian (Int16.toLittleEndian x) = x := by
+  cases x with | mk val =>
+  simp only [Int16.toLittleEndian, Int16.fromLittleEndian, Radix.Int16.mk.injEq]
+  simp only [Radix.UInt16.toLittleEndian, Radix.UInt16.fromLittleEndian, nativeEndian]
+
+theorem Int32.toLittleEndian_fromLittleEndian (x : Int32) :
+    Int32.fromLittleEndian (Int32.toLittleEndian x) = x := by
+  cases x with | mk val =>
+  simp only [Int32.toLittleEndian, Int32.fromLittleEndian, Radix.Int32.mk.injEq]
+  simp only [Radix.UInt32.toLittleEndian, Radix.UInt32.fromLittleEndian, nativeEndian]
+
+theorem Int64.toLittleEndian_fromLittleEndian (x : Int64) :
+    Int64.fromLittleEndian (Int64.toLittleEndian x) = x := by
+  cases x with | mk val =>
+  simp only [Int64.toLittleEndian, Int64.fromLittleEndian, Radix.Int64.mk.injEq]
+  simp only [Radix.UInt64.toLittleEndian, Radix.UInt64.fromLittleEndian, nativeEndian]
+
+/-! ## Signed Type BE/LE Relationship -/
+
+theorem Int16.toBigEndian_eq_bswap_toLittleEndian (x : Int16) :
+    Int16.toBigEndian x = Int16.bswap (Int16.toLittleEndian x) := by
+  cases x with | mk val =>
+  simp only [Int16.toBigEndian, Int16.toLittleEndian, Int16.bswap, Radix.Int16.mk.injEq]
+  simp only [Radix.UInt16.toBigEndian, Radix.UInt16.toLittleEndian, nativeEndian]
+
+theorem Int32.toBigEndian_eq_bswap_toLittleEndian (x : Int32) :
+    Int32.toBigEndian x = Int32.bswap (Int32.toLittleEndian x) := by
+  cases x with | mk val =>
+  simp only [Int32.toBigEndian, Int32.toLittleEndian, Int32.bswap, Radix.Int32.mk.injEq]
+  simp only [Radix.UInt32.toBigEndian, Radix.UInt32.toLittleEndian, nativeEndian]
+
+theorem Int64.toBigEndian_eq_bswap_toLittleEndian (x : Int64) :
+    Int64.toBigEndian x = Int64.bswap (Int64.toLittleEndian x) := by
+  cases x with | mk val =>
+  simp only [Int64.toBigEndian, Int64.toLittleEndian, Int64.bswap, Radix.Int64.mk.injEq]
+  simp only [Radix.UInt64.toBigEndian, Radix.UInt64.toLittleEndian, nativeEndian]
+
+/-! ## Additional Signed Type Bswap Involution -/
+
+theorem Int16.bswap_bswap (x : Int16) : Int16.bswap (Int16.bswap x) = x := by
+  cases x with | mk val =>
+  simp only [Int16.bswap, Radix.Int16.mk.injEq]
+  exact congrArg Radix.UInt16.val (UInt16.bswap_bswap ⟨val⟩)
+
+theorem Int32.bswap_bswap (x : Int32) : Int32.bswap (Int32.bswap x) = x := by
+  cases x with | mk val =>
+  simp only [Int32.bswap, Radix.Int32.mk.injEq]
+  exact congrArg Radix.UInt32.val (UInt32.bswap_bswap ⟨val⟩)
+
+theorem Int64.bswap_bswap (x : Int64) : Int64.bswap (Int64.bswap x) = x := by
+  cases x with | mk val =>
+  simp only [Int64.bswap, Radix.Int64.mk.injEq]
+  exact congrArg Radix.UInt64.val (UInt64.bswap_bswap ⟨val⟩)
+
 /-! ## ByteSlice Properties -/
 
 @[simp] theorem ByteSlice.subslice_len (s : ByteSlice) (off len : Nat)
