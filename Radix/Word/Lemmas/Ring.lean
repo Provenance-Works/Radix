@@ -41,16 +41,16 @@ private theorem toBitVec_mul (x y : UInt8) :
 /-- Wrapping addition is commutative. -/
 theorem wrappingAdd_comm (x y : UInt8) :
     wrappingAdd x y = wrappingAdd y x := by
-  unfold wrappingAdd; congr 1; bv_decide
+  unfold wrappingAdd; congr 1; exact _root_.UInt8.add_comm x.val y.val
 
 /-- Wrapping addition is associative. -/
 theorem wrappingAdd_assoc (x y z : UInt8) :
     wrappingAdd (wrappingAdd x y) z = wrappingAdd x (wrappingAdd y z) := by
-  unfold wrappingAdd; congr 1; bv_decide
+  unfold wrappingAdd; congr 1; exact _root_.UInt8.add_assoc x.val y.val z.val
 
 /-- Zero is the additive identity. -/
 theorem wrappingAdd_zero (x : UInt8) : wrappingAdd x 0 = x := by
-  show wrappingAdd x ⟨0⟩ = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingAdd, Radix.UInt8.mk.injEq]; exact _root_.UInt8.add_zero xv
 
 /-- Wrapping multiplication is commutative. -/
 theorem wrappingMul_comm (x y : UInt8) :
@@ -92,14 +92,14 @@ private theorem toBitVec_mul (x y : UInt16) :
 
 theorem wrappingAdd_comm (x y : UInt16) :
     wrappingAdd x y = wrappingAdd y x := by
-  unfold wrappingAdd; congr 1; bv_decide
+  unfold wrappingAdd; congr 1; exact _root_.UInt16.add_comm x.val y.val
 
 theorem wrappingAdd_assoc (x y z : UInt16) :
     wrappingAdd (wrappingAdd x y) z = wrappingAdd x (wrappingAdd y z) := by
-  unfold wrappingAdd; congr 1; bv_decide
+  unfold wrappingAdd; congr 1; exact _root_.UInt16.add_assoc x.val y.val z.val
 
 theorem wrappingAdd_zero (x : UInt16) : wrappingAdd x 0 = x := by
-  show wrappingAdd x ⟨0⟩ = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingAdd, Radix.UInt16.mk.injEq]; exact _root_.UInt16.add_zero xv
 
 theorem wrappingMul_comm (x y : UInt16) :
     wrappingMul x y = wrappingMul y x := by
@@ -137,14 +137,14 @@ private theorem toBitVec_mul (x y : UInt32) :
 
 theorem wrappingAdd_comm (x y : UInt32) :
     wrappingAdd x y = wrappingAdd y x := by
-  unfold wrappingAdd; congr 1; bv_decide
+  unfold wrappingAdd; congr 1; exact _root_.UInt32.add_comm x.val y.val
 
 theorem wrappingAdd_assoc (x y z : UInt32) :
     wrappingAdd (wrappingAdd x y) z = wrappingAdd x (wrappingAdd y z) := by
-  unfold wrappingAdd; congr 1; bv_decide
+  unfold wrappingAdd; congr 1; exact _root_.UInt32.add_assoc x.val y.val z.val
 
 theorem wrappingAdd_zero (x : UInt32) : wrappingAdd x 0 = x := by
-  show wrappingAdd x ⟨0⟩ = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingAdd, Radix.UInt32.mk.injEq]; exact _root_.UInt32.add_zero xv
 
 theorem wrappingMul_comm (x y : UInt32) :
     wrappingMul x y = wrappingMul y x := by
@@ -182,14 +182,14 @@ private theorem toBitVec_mul (x y : UInt64) :
 
 theorem wrappingAdd_comm (x y : UInt64) :
     wrappingAdd x y = wrappingAdd y x := by
-  unfold wrappingAdd; congr 1; bv_decide
+  unfold wrappingAdd; congr 1; exact _root_.UInt64.add_comm x.val y.val
 
 theorem wrappingAdd_assoc (x y z : UInt64) :
     wrappingAdd (wrappingAdd x y) z = wrappingAdd x (wrappingAdd y z) := by
-  unfold wrappingAdd; congr 1; bv_decide
+  unfold wrappingAdd; congr 1; exact _root_.UInt64.add_assoc x.val y.val z.val
 
 theorem wrappingAdd_zero (x : UInt64) : wrappingAdd x 0 = x := by
-  show wrappingAdd x ⟨0⟩ = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingAdd, Radix.UInt64.mk.injEq]; exact _root_.UInt64.add_zero xv
 
 theorem wrappingMul_comm (x y : UInt64) :
     wrappingMul x y = wrappingMul y x := by
@@ -469,19 +469,19 @@ end IWord
 namespace UInt8
 
 theorem zero_wrappingAdd (x : UInt8) : wrappingAdd 0 x = x := by
-  show wrappingAdd ⟨0⟩ x = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd ⟨0⟩ x = x; cases x with | mk xv => simp only [wrappingAdd, Radix.UInt8.mk.injEq]; exact _root_.UInt8.zero_add xv
 
 theorem wrappingSub_zero (x : UInt8) : wrappingSub x 0 = x := by
-  show wrappingSub x ⟨0⟩ = x; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingSub, Radix.UInt8.mk.injEq]; exact _root_.UInt8.sub_zero xv
 
 theorem wrappingSub_self (x : UInt8) : wrappingSub x x = 0 := by
-  show wrappingSub x x = ⟨0⟩; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x x = ⟨0⟩; cases x with | mk xv => simp only [wrappingSub, Radix.UInt8.mk.injEq]; exact _root_.UInt8.sub_self xv
 
 /-- Additive inverse: `x + (-x) = 0` (mod 2⁸). -/
 theorem wrappingAdd_wrappingNeg (x : UInt8) :
     wrappingAdd x (wrappingNeg x) = 0 := by
   show wrappingAdd x (wrappingNeg x) = ⟨0⟩
-  cases x; unfold wrappingAdd wrappingNeg; congr 1; bv_decide
+  cases x with | mk xv => simp only [wrappingAdd, wrappingNeg, Radix.UInt8.mk.injEq]; rw [_root_.UInt8.zero_sub, _root_.UInt8.add_comm, _root_.UInt8.add_left_neg]
 
 theorem wrappingAdd_mul_distrib (x y z : UInt8) :
     wrappingMul (wrappingAdd x y) z =
@@ -494,18 +494,18 @@ end UInt8
 namespace UInt16
 
 theorem zero_wrappingAdd (x : UInt16) : wrappingAdd 0 x = x := by
-  show wrappingAdd ⟨0⟩ x = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd ⟨0⟩ x = x; cases x with | mk xv => simp only [wrappingAdd, Radix.UInt16.mk.injEq]; exact _root_.UInt16.zero_add xv
 
 theorem wrappingSub_zero (x : UInt16) : wrappingSub x 0 = x := by
-  show wrappingSub x ⟨0⟩ = x; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingSub, Radix.UInt16.mk.injEq]; exact _root_.UInt16.sub_zero xv
 
 theorem wrappingSub_self (x : UInt16) : wrappingSub x x = 0 := by
-  show wrappingSub x x = ⟨0⟩; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x x = ⟨0⟩; cases x with | mk xv => simp only [wrappingSub, Radix.UInt16.mk.injEq]; exact _root_.UInt16.sub_self xv
 
 theorem wrappingAdd_wrappingNeg (x : UInt16) :
     wrappingAdd x (wrappingNeg x) = 0 := by
   show wrappingAdd x (wrappingNeg x) = ⟨0⟩
-  cases x; unfold wrappingAdd wrappingNeg; congr 1; bv_decide
+  cases x with | mk xv => simp only [wrappingAdd, wrappingNeg, Radix.UInt16.mk.injEq]; rw [_root_.UInt16.zero_sub, _root_.UInt16.add_comm, _root_.UInt16.add_left_neg]
 
 theorem wrappingAdd_mul_distrib (x y z : UInt16) :
     wrappingMul (wrappingAdd x y) z =
@@ -518,18 +518,18 @@ end UInt16
 namespace UInt32
 
 theorem zero_wrappingAdd (x : UInt32) : wrappingAdd 0 x = x := by
-  show wrappingAdd ⟨0⟩ x = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd ⟨0⟩ x = x; cases x with | mk xv => simp only [wrappingAdd, Radix.UInt32.mk.injEq]; exact _root_.UInt32.zero_add xv
 
 theorem wrappingSub_zero (x : UInt32) : wrappingSub x 0 = x := by
-  show wrappingSub x ⟨0⟩ = x; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingSub, Radix.UInt32.mk.injEq]; exact _root_.UInt32.sub_zero xv
 
 theorem wrappingSub_self (x : UInt32) : wrappingSub x x = 0 := by
-  show wrappingSub x x = ⟨0⟩; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x x = ⟨0⟩; cases x with | mk xv => simp only [wrappingSub, Radix.UInt32.mk.injEq]; exact _root_.UInt32.sub_self xv
 
 theorem wrappingAdd_wrappingNeg (x : UInt32) :
     wrappingAdd x (wrappingNeg x) = 0 := by
   show wrappingAdd x (wrappingNeg x) = ⟨0⟩
-  cases x; unfold wrappingAdd wrappingNeg; congr 1; bv_decide
+  cases x with | mk xv => simp only [wrappingAdd, wrappingNeg, Radix.UInt32.mk.injEq]; rw [_root_.UInt32.zero_sub, _root_.UInt32.add_comm, _root_.UInt32.add_left_neg]
 
 theorem wrappingAdd_mul_distrib (x y z : UInt32) :
     wrappingMul (wrappingAdd x y) z =
@@ -542,18 +542,18 @@ end UInt32
 namespace UInt64
 
 theorem zero_wrappingAdd (x : UInt64) : wrappingAdd 0 x = x := by
-  show wrappingAdd ⟨0⟩ x = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd ⟨0⟩ x = x; cases x with | mk xv => simp only [wrappingAdd, Radix.UInt64.mk.injEq]; exact _root_.UInt64.zero_add xv
 
 theorem wrappingSub_zero (x : UInt64) : wrappingSub x 0 = x := by
-  show wrappingSub x ⟨0⟩ = x; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingSub, Radix.UInt64.mk.injEq]; exact _root_.UInt64.sub_zero xv
 
 theorem wrappingSub_self (x : UInt64) : wrappingSub x x = 0 := by
-  show wrappingSub x x = ⟨0⟩; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x x = ⟨0⟩; cases x with | mk xv => simp only [wrappingSub, Radix.UInt64.mk.injEq]; exact _root_.UInt64.sub_self xv
 
 theorem wrappingAdd_wrappingNeg (x : UInt64) :
     wrappingAdd x (wrappingNeg x) = 0 := by
   show wrappingAdd x (wrappingNeg x) = ⟨0⟩
-  cases x; unfold wrappingAdd wrappingNeg; congr 1; bv_decide
+  cases x with | mk xv => simp only [wrappingAdd, wrappingNeg, Radix.UInt64.mk.injEq]; rw [_root_.UInt64.zero_sub, _root_.UInt64.add_comm, _root_.UInt64.add_left_neg]
 
 theorem wrappingAdd_mul_distrib (x y z : UInt64) :
     wrappingMul (wrappingAdd x y) z =
@@ -566,18 +566,18 @@ end UInt64
 namespace Int8
 
 theorem zero_wrappingAdd (x : Int8) : wrappingAdd 0 x = x := by
-  show wrappingAdd ⟨0⟩ x = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd ⟨0⟩ x = x; cases x with | mk xv => simp only [wrappingAdd, Radix.Int8.mk.injEq]; exact _root_.UInt8.zero_add xv
 
 theorem wrappingSub_zero (x : Int8) : wrappingSub x 0 = x := by
-  show wrappingSub x ⟨0⟩ = x; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingSub, Radix.Int8.mk.injEq]; exact _root_.UInt8.sub_zero xv
 
 theorem wrappingSub_self (x : Int8) : wrappingSub x x = 0 := by
-  show wrappingSub x x = ⟨0⟩; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x x = ⟨0⟩; cases x with | mk xv => simp only [wrappingSub, Radix.Int8.mk.injEq]; exact _root_.UInt8.sub_self xv
 
 theorem wrappingAdd_wrappingNeg (x : Int8) :
     wrappingAdd x (wrappingNeg x) = 0 := by
   show wrappingAdd x (wrappingNeg x) = ⟨0⟩
-  cases x; unfold wrappingAdd wrappingNeg; congr 1; bv_decide
+  cases x with | mk xv => simp only [wrappingAdd, wrappingNeg, Radix.Int8.mk.injEq]; rw [_root_.UInt8.zero_sub, _root_.UInt8.add_comm, _root_.UInt8.add_left_neg]
 
 theorem wrappingAdd_mul_distrib (x y z : Int8) :
     wrappingMul (wrappingAdd x y) z =
@@ -590,18 +590,18 @@ end Int8
 namespace Int16
 
 theorem zero_wrappingAdd (x : Int16) : wrappingAdd 0 x = x := by
-  show wrappingAdd ⟨0⟩ x = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd ⟨0⟩ x = x; cases x with | mk xv => simp only [wrappingAdd, Radix.Int16.mk.injEq]; exact _root_.UInt16.zero_add xv
 
 theorem wrappingSub_zero (x : Int16) : wrappingSub x 0 = x := by
-  show wrappingSub x ⟨0⟩ = x; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingSub, Radix.Int16.mk.injEq]; exact _root_.UInt16.sub_zero xv
 
 theorem wrappingSub_self (x : Int16) : wrappingSub x x = 0 := by
-  show wrappingSub x x = ⟨0⟩; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x x = ⟨0⟩; cases x with | mk xv => simp only [wrappingSub, Radix.Int16.mk.injEq]; exact _root_.UInt16.sub_self xv
 
 theorem wrappingAdd_wrappingNeg (x : Int16) :
     wrappingAdd x (wrappingNeg x) = 0 := by
   show wrappingAdd x (wrappingNeg x) = ⟨0⟩
-  cases x; unfold wrappingAdd wrappingNeg; congr 1; bv_decide
+  cases x with | mk xv => simp only [wrappingAdd, wrappingNeg, Radix.Int16.mk.injEq]; rw [_root_.UInt16.zero_sub, _root_.UInt16.add_comm, _root_.UInt16.add_left_neg]
 
 theorem wrappingAdd_mul_distrib (x y z : Int16) :
     wrappingMul (wrappingAdd x y) z =
@@ -614,18 +614,18 @@ end Int16
 namespace Int32
 
 theorem zero_wrappingAdd (x : Int32) : wrappingAdd 0 x = x := by
-  show wrappingAdd ⟨0⟩ x = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd ⟨0⟩ x = x; cases x with | mk xv => simp only [wrappingAdd, Radix.Int32.mk.injEq]; exact _root_.UInt32.zero_add xv
 
 theorem wrappingSub_zero (x : Int32) : wrappingSub x 0 = x := by
-  show wrappingSub x ⟨0⟩ = x; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingSub, Radix.Int32.mk.injEq]; exact _root_.UInt32.sub_zero xv
 
 theorem wrappingSub_self (x : Int32) : wrappingSub x x = 0 := by
-  show wrappingSub x x = ⟨0⟩; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x x = ⟨0⟩; cases x with | mk xv => simp only [wrappingSub, Radix.Int32.mk.injEq]; exact _root_.UInt32.sub_self xv
 
 theorem wrappingAdd_wrappingNeg (x : Int32) :
     wrappingAdd x (wrappingNeg x) = 0 := by
   show wrappingAdd x (wrappingNeg x) = ⟨0⟩
-  cases x; unfold wrappingAdd wrappingNeg; congr 1; bv_decide
+  cases x with | mk xv => simp only [wrappingAdd, wrappingNeg, Radix.Int32.mk.injEq]; rw [_root_.UInt32.zero_sub, _root_.UInt32.add_comm, _root_.UInt32.add_left_neg]
 
 theorem wrappingAdd_mul_distrib (x y z : Int32) :
     wrappingMul (wrappingAdd x y) z =
@@ -638,18 +638,18 @@ end Int32
 namespace Int64
 
 theorem zero_wrappingAdd (x : Int64) : wrappingAdd 0 x = x := by
-  show wrappingAdd ⟨0⟩ x = x; cases x; unfold wrappingAdd; congr 1; bv_decide
+  show wrappingAdd ⟨0⟩ x = x; cases x with | mk xv => simp only [wrappingAdd, Radix.Int64.mk.injEq]; exact _root_.UInt64.zero_add xv
 
 theorem wrappingSub_zero (x : Int64) : wrappingSub x 0 = x := by
-  show wrappingSub x ⟨0⟩ = x; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x ⟨0⟩ = x; cases x with | mk xv => simp only [wrappingSub, Radix.Int64.mk.injEq]; exact _root_.UInt64.sub_zero xv
 
 theorem wrappingSub_self (x : Int64) : wrappingSub x x = 0 := by
-  show wrappingSub x x = ⟨0⟩; cases x; unfold wrappingSub; congr 1; bv_decide
+  show wrappingSub x x = ⟨0⟩; cases x with | mk xv => simp only [wrappingSub, Radix.Int64.mk.injEq]; exact _root_.UInt64.sub_self xv
 
 theorem wrappingAdd_wrappingNeg (x : Int64) :
     wrappingAdd x (wrappingNeg x) = 0 := by
   show wrappingAdd x (wrappingNeg x) = ⟨0⟩
-  cases x; unfold wrappingAdd wrappingNeg; congr 1; bv_decide
+  cases x with | mk xv => simp only [wrappingAdd, wrappingNeg, Radix.Int64.mk.injEq]; rw [_root_.UInt64.zero_sub, _root_.UInt64.add_comm, _root_.UInt64.add_left_neg]
 
 theorem wrappingAdd_mul_distrib (x y z : Int64) :
     wrappingMul (wrappingAdd x y) z =
