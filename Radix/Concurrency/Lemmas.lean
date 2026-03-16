@@ -231,4 +231,81 @@ theorem Trace.singleton_isDataRaceFree (e : MemoryEvent) :
   intro ⟨hConf, _, _, _⟩
   exact hConf.1 rfl
 
+/-! ## Conflicting / Data-Race Properties -/
+
+/-- Two loads never conflict (neither is a write). -/
+theorem loads_not_conflicting (a b : MemoryEvent)
+    (haLoad : a.kind = .load) (hbLoad : b.kind = .load) :
+    ¬conflicting a b := by
+  intro ⟨_, _, _, hWrite⟩
+  cases hWrite with
+  | inl h => simp [AccessKind.isWrite, haLoad] at h
+  | inr h => simp [AccessKind.isWrite, hbLoad] at h
+
+/-- Same-thread events never form a data race (data races require
+    different threads). -/
+theorem sameThread_no_dataRace (a b : MemoryEvent)
+    (hThread : a.id.thread = b.id.thread) :
+    ¬isDataRace a b := by
+  intro ⟨_, hDiffThread, _, _⟩
+  exact hDiffThread hThread
+
+/-- If two events are ordered by happens-before in either direction,
+    they do not form a data race. -/
+theorem ordered_no_dataRace (a b : MemoryEvent)
+    (hOrdered : happensBefore a b ∨ happensBefore b a) :
+    ¬isDataRace a b := by
+  intro ⟨_, _, hNotAB, hNotBA⟩
+  cases hOrdered with
+  | inl h => exact hNotAB h
+  | inr h => exact hNotBA h
+
+/-- A trace consisting only of read events is data-race free. -/
+theorem Trace.allLoads_isDataRaceFree (t : Trace)
+    (hAllLoads : ∀ e, e ∈ t.events → e.kind = .load) :
+    t.isDataRaceFree := by
+  intro a b ha hb hRace
+  have := loads_not_conflicting a b (hAllLoads a ha) (hAllLoads b hb)
+  exact this hRace.1
+
+/-! ## CAS Correctness -/
+
+/-- A CAS either succeeds and updates, or fails and preserves.
+    This is the fundamental CAS disjunction. -/
+theorem atomicCAS_dichotomy (cell : AtomicCell) (expected desired : Nat)
+    (succOrder failOrder : MemoryOrder) :
+    let r := atomicCAS cell expected desired succOrder failOrder
+    (r.1.success = true ∧ r.2.val = desired) ∨
+    (r.1.success = false ∧ r.2 = cell) := by
+  simp [atomicCAS]
+  split
+  · left; exact ⟨rfl, rfl⟩
+  · right; exact ⟨rfl, rfl⟩
+
+/-- Two consecutive fetchAdd operations compose additively. -/
+theorem fetchAdd_compose (cell : AtomicCell) (d1 d2 : Nat)
+    (o1 o2 : MemoryOrder) :
+    let (_, cell') := fetchAdd cell d1 o1
+    (fetchAdd cell' d2 o2).2.val = cell.val + d1 + d2 := by
+  simp [fetchAdd]
+
+/-- atomicExchange is equivalent to a CAS that always succeeds. -/
+theorem exchange_eq_successful_cas (cell : AtomicCell) (newVal : Nat)
+    (order : MemoryOrder) :
+    (atomicExchange cell newVal order).2.val =
+    (atomicCAS cell cell.val newVal order order).2.val := by
+  simp [atomicExchange, atomicCAS]
+
+/-! ## Well-Formedness -/
+
+/-- An empty trace is well-formed. -/
+theorem Trace.empty_isWellFormed :
+    (Trace.mk []).isWellFormed := by
+  simp [Trace.isWellFormed]
+
+/-- An empty trace is valid (well-formed with unique IDs). -/
+theorem Trace.empty_isValid :
+    (Trace.mk []).isValid := by
+  exact ⟨Trace.empty_isWellFormed, by simp [Trace.hasUniqueIds]⟩
+
 end Radix.Concurrency
