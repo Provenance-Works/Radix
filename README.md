@@ -8,10 +8,10 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Lean](https://img.shields.io/badge/Lean-4.29.0--rc4-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PHRleHQgeD0iMCIgeT0iMjAiIGZvbnQtc2l6ZT0iMjAiPkw8L3RleHQ+PC9zdmc+)](https://lean-lang.org/)
 [![v0.1.1](https://img.shields.io/badge/version-0.1.1-green.svg)](CHANGELOG.md)
-[![Theorems](https://img.shields.io/badge/theorems-908%2B-brightgreen.svg)](#verification-status)
+[![Theorems](https://img.shields.io/badge/theorems-914%2B-brightgreen.svg)](#verification-status)
 [![sorry-free](https://img.shields.io/badge/sorry-free-%E2%9C%93-brightgreen.svg)](#verification-status)
 
-*908+ verified theorems. Zero `sorry`. Zero-cost abstractions.*
+*914+ verified theorems. Zero `sorry`. Zero-cost abstractions.*
 
 [Documentation](docs/en/README.md) · [Quick Start](#quick-start) · [Examples](examples/) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
@@ -40,11 +40,11 @@ Radix eliminates this trade-off:
 | **Word** | 10 integer types (U/Int 8–64, UWord, IWord), 4 arithmetic modes | 334 |
 | **Bit** | Boolean algebra, shifts, rotates, scanning, bit fields | 264 |
 | **Bytes** | Endianness, bswap, ByteSlice | 60 |
-| **Memory** | Buffer, Ptr, LayoutDesc, region disjointness | 43 |
+| **Memory** | Buffer, Ptr, LayoutDesc, region disjointness | 48 |
 | **Binary** | Format DSL, parser, serializer, LEB128 | 92 |
 | **System** | File I/O state machine, SysError, FD, withFile bracket | 34 |
 | **Concurrency** | C11 memory ordering specification model, AtomicCell, CAS, happens-before | 46 |
-| **BareMetal** | Platform specification model, memory map, linker scripts, startup, GC-free | 35 |
+| **BareMetal** | Platform specification model, memory map, linker scripts, startup, GC-free | 36 |
 
 ### Architecture
 
@@ -146,7 +146,7 @@ See [examples/](examples/) for 11 complete, runnable examples covering all modul
 
 | Metric | Status |
 |--------|--------|
-| Total theorems | 908+ |
+| Total theorems | 914+ |
 | `sorry` statements | **0** |
 | Proof-to-code ratio | ~0.9:1 |
 | Trusted computing base | Lean 4 kernel + Mathlib + named `trust_*` axioms |
@@ -185,7 +185,7 @@ lake exe bench
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap.
 
-- **v0.1.0** (current) — 908+ theorems, 8 modules, three-layer architecture
+- **v0.1.0** (current) — 914+ theorems, 8 modules, three-layer architecture
 - **v0.2.0** "Bedrock" — Ring buffers, bitmaps, CRC, numeric typeclasses, memory pools
 - **v0.3.0** "Composable" — UTF-8, error correction, DMA, region algebra, timers
 

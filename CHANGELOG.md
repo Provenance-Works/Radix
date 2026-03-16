@@ -21,13 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Bytes module**: 9 new proofs (signed type LE round-trips, signed BE/LE relationships,
   signed bswap involution for Int16/Int32/Int64)
-- **Memory module**: 3 new proofs (checkedReadU32BE/LE some/none properties)
-- **BareMetal module**: `heap_not_isGCFree` proof, `gcfree_strategies_isGCFree` proof
+- **Memory module**: 8 new proofs (checkedReadU32BE/LE some/none, checkedReadU64BE/LE some/none)
+- **BareMetal module**: `heap_not_isGCFree`, `gcfree_strategies_isGCFree`, `default_forbids_heap` proofs
 
 ### Changed
 
 - **README/CHANGELOG**: Clarify Concurrency and BareMetal modules as specification models
-- Updated theorem count from 907+ to 908+
+- Updated theorem count from 907+ to 914+
 
 ## [0.1.1] - 2026-03-16
 
@@ -117,7 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Startup phase state machine with validation
 - `GCFreeConstraint` — GC-free allocation analysis with `heap` variant for non-GC-free detection
 - Linker script model (`LinkerScript`, `Section`, `Symbol`)
-- 35 proofs (region disjointness, alignment, GC-free, startup sequence)
+- 36 proofs (region disjointness, alignment, GC-free, startup sequence)
 
 #### Infrastructure
 - Three-layer architecture (Spec → Impl → Bridge) with ADRs
