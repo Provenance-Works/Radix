@@ -163,6 +163,10 @@ theorem GCFreeConstraint.default_forbids_arena :
     AllocStrategy.arena ∉ GCFreeConstraint.default.allowedStrategies := by
   simp [GCFreeConstraint.default]
 
+theorem GCFreeConstraint.default_forbids_heap :
+    AllocStrategy.heap ∉ GCFreeConstraint.default.allowedStrategies := by
+  simp [GCFreeConstraint.default]
+
 theorem GCFreeConstraint.withArena_allows_arena :
     AllocStrategy.arena ∈ (GCFreeConstraint.withArena 8192).allowedStrategies := by
   simp [GCFreeConstraint.withArena]
