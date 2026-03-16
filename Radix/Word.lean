@@ -12,3 +12,4 @@ import Radix.Word.Lemmas.Ring
 import Radix.Word.Lemmas.Overflow
 import Radix.Word.Lemmas.BitVec
 import Radix.Word.Lemmas.Conv
+import Radix.Word.Lemmas.Generic
