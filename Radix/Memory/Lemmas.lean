@@ -299,4 +299,34 @@ theorem Buffer.checkedReadU64LE_none (buf : Buffer) (offset : Nat)
     buf.checkedReadU64LE offset = none := by
   simp [Buffer.checkedReadU64LE, h]
 
+/-! ## Region Transitivity -/
+
+open Spec in
+theorem Spec.Region.contains_trans (a b c : Spec.Region)
+    (hab : Spec.Region.contains a b) (hbc : Spec.Region.contains b c) :
+    Spec.Region.contains a c := by
+  simp [Spec.Region.contains, Spec.Region.endOffset] at *
+  omega
+
+open Spec in
+theorem Spec.Region.disjoint_of_contains (outer inner other : Spec.Region)
+    (hc : Spec.Region.contains outer inner)
+    (hd : Spec.Region.disjoint outer other) :
+    Spec.Region.disjoint inner other := by
+  simp [Spec.Region.disjoint, Spec.Region.contains, Spec.Region.endOffset] at *
+  omega
+
+open Spec in
+theorem Spec.Region.disjoint_sub (a a' b b' : Spec.Region)
+    (ha : Spec.Region.contains a a') (hb : Spec.Region.contains b b')
+    (hd : Spec.Region.disjoint a b) :
+    Spec.Region.disjoint a' b' := by
+  simp [Spec.Region.disjoint, Spec.Region.contains, Spec.Region.endOffset] at *
+  omega
+
+open Spec in
+theorem Spec.Region.not_contains_empty_of_pos (r : Spec.Region) (hr : 0 < r.size) :
+    ¬ Spec.Region.contains Spec.Region.empty r := by
+  simp [Spec.Region.contains, Spec.Region.endOffset, Spec.Region.empty]; omega
+
 end Radix.Memory
