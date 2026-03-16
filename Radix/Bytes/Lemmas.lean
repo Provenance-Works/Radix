@@ -197,4 +197,197 @@ theorem Int64.toBigEndian_fromBigEndian (x : Int64) :
 @[simp] theorem ByteSlice.ofByteArray_len (arr : ByteArray) :
     (ByteSlice.ofByteArray arr).len = arr.size := rfl
 
+/-! ## Spec-Level Byte Swap Involution (BitVec) -/
+
+/-- Spec-level bswap16 involution at BitVec level. -/
+theorem Bytes.Spec.bswap16_involution_proof :
+    Bytes.Spec.bswap16_involution := by
+  intro x
+  simp only [Bytes.Spec.bswap16, Bytes.Spec.extractByte]
+  bv_decide
+
+/-- Spec-level bswap32 involution at BitVec level. -/
+theorem Bytes.Spec.bswap32_involution_proof :
+    Bytes.Spec.bswap32_involution := by
+  intro x
+  simp only [Bytes.Spec.bswap32, Bytes.Spec.extractByte]
+  bv_decide
+
+/-- Spec-level bswap64 involution at BitVec level. -/
+theorem Bytes.Spec.bswap64_involution_proof :
+    Bytes.Spec.bswap64_involution := by
+  intro x
+  simp only [Bytes.Spec.bswap64, Bytes.Spec.extractByte]
+  bv_decide
+
+/-! ## Spec-Level Endian Round-Trip (BitVec) -/
+
+/-- Spec-level big-endian 16-bit round-trip. -/
+theorem Bytes.Spec.toBE_fromBE_roundtrip16_proof :
+    Bytes.Spec.toBE_fromBE_roundtrip16 := by
+  intro x
+  simp only [Bytes.Spec.fromBigEndian16,
+             Bytes.Spec.toBigEndian16]
+  exact Bytes.Spec.bswap16_involution_proof x
+
+/-- Spec-level big-endian 32-bit round-trip. -/
+theorem Bytes.Spec.toBE_fromBE_roundtrip32_proof :
+    Bytes.Spec.toBE_fromBE_roundtrip32 := by
+  intro x
+  simp only [Bytes.Spec.fromBigEndian32,
+             Bytes.Spec.toBigEndian32]
+  exact Bytes.Spec.bswap32_involution_proof x
+
+/-- Spec-level big-endian 64-bit round-trip. -/
+theorem Bytes.Spec.toBE_fromBE_roundtrip64_proof :
+    Bytes.Spec.toBE_fromBE_roundtrip64 := by
+  intro x
+  simp only [Bytes.Spec.fromBigEndian64,
+             Bytes.Spec.toBigEndian64]
+  exact Bytes.Spec.bswap64_involution_proof x
+
+/-- Spec-level little-endian 16-bit round-trip. -/
+theorem Bytes.Spec.toLE_fromLE_roundtrip16_proof :
+    Bytes.Spec.toLE_fromLE_roundtrip16 := by
+  intro x
+  simp [Bytes.Spec.fromLittleEndian16,
+        Bytes.Spec.toLittleEndian16]
+
+/-- Spec-level little-endian 32-bit round-trip. -/
+theorem Bytes.Spec.toLE_fromLE_roundtrip32_proof :
+    Bytes.Spec.toLE_fromLE_roundtrip32 := by
+  intro x
+  simp [Bytes.Spec.fromLittleEndian32,
+        Bytes.Spec.toLittleEndian32]
+
+/-- Spec-level little-endian 64-bit round-trip. -/
+theorem Bytes.Spec.toLE_fromLE_roundtrip64_proof :
+    Bytes.Spec.toLE_fromLE_roundtrip64 := by
+  intro x
+  simp [Bytes.Spec.fromLittleEndian64,
+        Bytes.Spec.toLittleEndian64]
+
+/-! ## Spec-Level ByteSlice Read-After-Write -/
+
+/-- Read-after-write at the same offset returns the written value. -/
+theorem Bytes.Spec.readU8_writeU8_same_proof :
+    Bytes.Spec.readU8_writeU8_same := by
+  intro s off v h
+  simp [Bytes.Spec.ByteSliceSpec.readU8,
+        Bytes.Spec.ByteSliceSpec.writeU8]
+
+/-- Read-after-write at a different offset returns the original value. -/
+theorem Bytes.Spec.readU8_writeU8_diff_proof :
+    Bytes.Spec.readU8_writeU8_diff := by
+  intro s i j v hi hj hne
+  simp [Bytes.Spec.ByteSliceSpec.readU8,
+        Bytes.Spec.ByteSliceSpec.writeU8, hne]
+
+/-! ## Additional ByteSlice Properties -/
+
+/-- Subslice start is computed correctly. -/
+@[simp] theorem ByteSlice.subslice_start (s : ByteSlice) (off len : Nat)
+    (h : off + len ≤ s.len) :
+    (s.subslice off len h).start = s.start + off := rfl
+
+/-- WriteU8 preserves the underlying array size. -/
+theorem ByteSlice.writeU8_bytes_size (s : ByteSlice) (off : Nat)
+    (v : _root_.UInt8) (h : off < s.len) :
+    (s.writeU8 off v h).bytes.size = s.bytes.size := by
+  unfold ByteSlice.writeU8
+  show (ByteArray.set s.bytes (s.start + off) v _).size = s.bytes.size
+  unfold ByteArray.size ByteArray.set
+  simp
+
+/-- Checked readU8 returns some iff offset is in bounds. -/
+theorem ByteSlice.checkedReadU8_isSome (s : ByteSlice) (off : Nat)
+    (h : off < s.len) :
+    (s.checkedReadU8 off).isSome = true := by
+  simp [ByteSlice.checkedReadU8, dif_pos h]
+
+/-- Checked readU8 returns none iff offset is out of bounds. -/
+theorem ByteSlice.checkedReadU8_isNone (s : ByteSlice) (off : Nat)
+    (h : ¬ off < s.len) :
+    s.checkedReadU8 off = none := by
+  simp [ByteSlice.checkedReadU8, dif_neg h]
+
+/-- Checked writeU8 returns some iff offset is in bounds. -/
+theorem ByteSlice.checkedWriteU8_isSome (s : ByteSlice) (off : Nat)
+    (v : _root_.UInt8) (h : off < s.len) :
+    (s.checkedWriteU8 off v).isSome = true := by
+  simp [ByteSlice.checkedWriteU8, dif_pos h]
+
+/-- Checked writeU8 returns none iff offset is out of bounds. -/
+theorem ByteSlice.checkedWriteU8_isNone (s : ByteSlice) (off : Nat)
+    (v : _root_.UInt8) (h : ¬ off < s.len) :
+    s.checkedWriteU8 off v = none := by
+  simp [ByteSlice.checkedWriteU8, dif_neg h]
+
+/-- Checked readU16 returns some iff sufficient space. -/
+theorem ByteSlice.checkedReadU16_isSome (s : ByteSlice) (off : Nat)
+    (e : Bytes.Spec.Endian) (h : off + 2 ≤ s.len) :
+    (s.checkedReadU16 off e).isSome = true := by
+  simp [ByteSlice.checkedReadU16, dif_pos h]
+
+/-- Checked readU16 returns none iff insufficient space. -/
+theorem ByteSlice.checkedReadU16_isNone (s : ByteSlice) (off : Nat)
+    (e : Bytes.Spec.Endian) (h : ¬ off + 2 ≤ s.len) :
+    s.checkedReadU16 off e = none := by
+  simp [ByteSlice.checkedReadU16, dif_neg h]
+
+/-- Checked readU32 returns some iff sufficient space. -/
+theorem ByteSlice.checkedReadU32_isSome (s : ByteSlice) (off : Nat)
+    (e : Bytes.Spec.Endian) (h : off + 4 ≤ s.len) :
+    (s.checkedReadU32 off e).isSome = true := by
+  simp [ByteSlice.checkedReadU32, dif_pos h]
+
+/-- Checked readU32 returns none iff insufficient space. -/
+theorem ByteSlice.checkedReadU32_isNone (s : ByteSlice) (off : Nat)
+    (e : Bytes.Spec.Endian) (h : ¬ off + 4 ≤ s.len) :
+    s.checkedReadU32 off e = none := by
+  simp [ByteSlice.checkedReadU32, dif_neg h]
+
+/-- Checked readU64 returns some iff sufficient space. -/
+theorem ByteSlice.checkedReadU64_isSome (s : ByteSlice) (off : Nat)
+    (e : Bytes.Spec.Endian) (h : off + 8 ≤ s.len) :
+    (s.checkedReadU64 off e).isSome = true := by
+  simp [ByteSlice.checkedReadU64, dif_pos h]
+
+/-- Checked readU64 returns none iff insufficient space. -/
+theorem ByteSlice.checkedReadU64_isNone (s : ByteSlice) (off : Nat)
+    (e : Bytes.Spec.Endian) (h : ¬ off + 8 ≤ s.len) :
+    s.checkedReadU64 off e = none := by
+  simp [ByteSlice.checkedReadU64, dif_neg h]
+
+/-- Empty slice is empty. -/
+theorem ByteSlice.empty_isEmpty : ByteSlice.empty.isEmpty = true := rfl
+
+/-- Zeros slice is not empty when n > 0. -/
+theorem ByteSlice.zeros_not_empty (n : Nat) (h : 0 < n) :
+    (ByteSlice.zeros n).isEmpty = false := by
+  simp [ByteSlice.isEmpty, ByteSlice.zeros]
+  omega
+
+/-- ofByteArray preserves start at 0. -/
+@[simp] theorem ByteSlice.ofByteArray_start (arr : ByteArray) :
+    (ByteSlice.ofByteArray arr).start = 0 := rfl
+
+/-- WriteU16 preserves slice length. -/
+theorem ByteSlice.writeU16_len (s : ByteSlice) (off : Nat) (v : Radix.UInt16)
+    (e : Bytes.Spec.Endian) (h : off + 2 ≤ s.len) :
+    (s.writeU16 off v e h).len = s.len := by
+  unfold ByteSlice.writeU16; split <;> rfl
+
+/-- WriteU32 preserves slice length. -/
+theorem ByteSlice.writeU32_len (s : ByteSlice) (off : Nat) (v : Radix.UInt32)
+    (e : Bytes.Spec.Endian) (h : off + 4 ≤ s.len) :
+    (s.writeU32 off v e h).len = s.len := by
+  unfold ByteSlice.writeU32; split <;> rfl
+
+/-- WriteU64 preserves slice length. -/
+theorem ByteSlice.writeU64_len (s : ByteSlice) (off : Nat) (v : Radix.UInt64)
+    (e : Bytes.Spec.Endian) (h : off + 8 ≤ s.len) :
+    (s.writeU64 off v e h).len = s.len := by
+  unfold ByteSlice.writeU64; split <;> rfl
+
 end Radix
