@@ -37,11 +37,11 @@ open Atomic
 
 /-! ## Memory Ordering Strength Properties -/
 
-theorem MemoryOrder.strength_relaxed : MemoryOrder.relaxed.strength = 0 := rfl
-theorem MemoryOrder.strength_acquire : MemoryOrder.acquire.strength = 1 := rfl
-theorem MemoryOrder.strength_release : MemoryOrder.release.strength = 1 := rfl
-theorem MemoryOrder.strength_acqRel  : MemoryOrder.acqRel.strength = 2 := rfl
-theorem MemoryOrder.strength_seqCst  : MemoryOrder.seqCst.strength = 3 := rfl
+@[simp] theorem MemoryOrder.strength_relaxed : MemoryOrder.relaxed.strength = 0 := rfl
+@[simp] theorem MemoryOrder.strength_acquire : MemoryOrder.acquire.strength = 1 := rfl
+@[simp] theorem MemoryOrder.strength_release : MemoryOrder.release.strength = 1 := rfl
+@[simp] theorem MemoryOrder.strength_acqRel  : MemoryOrder.acqRel.strength = 2 := rfl
+@[simp] theorem MemoryOrder.strength_seqCst  : MemoryOrder.seqCst.strength = 3 := rfl
 
 theorem MemoryOrder.seqCst_isAtLeast_all (o : MemoryOrder) :
     MemoryOrder.seqCst.isAtLeast o = true := by
@@ -53,12 +53,12 @@ theorem MemoryOrder.isAtLeast_self (o : MemoryOrder) :
 
 /-! ## Ordering Validity Properties -/
 
-theorem validLoadOrder_relaxed : validLoadOrder .relaxed = true := rfl
-theorem validLoadOrder_acquire : validLoadOrder .acquire = true := rfl
-theorem validLoadOrder_seqCst  : validLoadOrder .seqCst = true := rfl
-theorem validStoreOrder_relaxed : validStoreOrder .relaxed = true := rfl
-theorem validStoreOrder_release : validStoreOrder .release = true := rfl
-theorem validStoreOrder_seqCst  : validStoreOrder .seqCst = true := rfl
+@[simp] theorem validLoadOrder_relaxed : validLoadOrder .relaxed = true := rfl
+@[simp] theorem validLoadOrder_acquire : validLoadOrder .acquire = true := rfl
+@[simp] theorem validLoadOrder_seqCst  : validLoadOrder .seqCst = true := rfl
+@[simp] theorem validStoreOrder_relaxed : validStoreOrder .relaxed = true := rfl
+@[simp] theorem validStoreOrder_release : validStoreOrder .release = true := rfl
+@[simp] theorem validStoreOrder_seqCst  : validStoreOrder .seqCst = true := rfl
 theorem validRMWOrder_all (o : MemoryOrder) : validRMWOrder o = true := by
   cases o <;> rfl
 
@@ -79,16 +79,16 @@ theorem strengthen_comm_strength (a b : MemoryOrder) :
 
 /-! ## HasAcquire / HasRelease Classification -/
 
-theorem seqCst_hasAcquire : hasAcquireSemantics .seqCst = true := rfl
-theorem seqCst_hasRelease : hasReleaseSemantics .seqCst = true := rfl
-theorem acqRel_hasAcquire : hasAcquireSemantics .acqRel = true := rfl
-theorem acqRel_hasRelease : hasReleaseSemantics .acqRel = true := rfl
+@[simp] theorem seqCst_hasAcquire : hasAcquireSemantics .seqCst = true := rfl
+@[simp] theorem seqCst_hasRelease : hasReleaseSemantics .seqCst = true := rfl
+@[simp] theorem acqRel_hasAcquire : hasAcquireSemantics .acqRel = true := rfl
+@[simp] theorem acqRel_hasRelease : hasReleaseSemantics .acqRel = true := rfl
 
-theorem acquire_hasAcquire : hasAcquireSemantics .acquire = true := rfl
-theorem release_hasRelease : hasReleaseSemantics .release = true := rfl
+@[simp] theorem acquire_hasAcquire : hasAcquireSemantics .acquire = true := rfl
+@[simp] theorem release_hasRelease : hasReleaseSemantics .release = true := rfl
 
-theorem relaxed_no_acquire : hasAcquireSemantics .relaxed = false := rfl
-theorem relaxed_no_release : hasReleaseSemantics .relaxed = false := rfl
+@[simp] theorem relaxed_no_acquire : hasAcquireSemantics .relaxed = false := rfl
+@[simp] theorem relaxed_no_release : hasReleaseSemantics .relaxed = false := rfl
 
 /-! ## CAS Failure Ordering Properties -/
 
@@ -147,19 +147,19 @@ theorem atomicCAS_previous_is_current (cell : AtomicCell) (expected desired : Na
 
 /-! ## Fetch-and-Modify Properties -/
 
-theorem fetchAdd_returns_previous (cell : AtomicCell) (delta : Nat)
+@[simp] theorem fetchAdd_returns_previous (cell : AtomicCell) (delta : Nat)
     (order : MemoryOrder) :
     (fetchAdd cell delta order).1.previous = cell.val := rfl
 
-theorem fetchAdd_updates_value (cell : AtomicCell) (delta : Nat)
+@[simp] theorem fetchAdd_updates_value (cell : AtomicCell) (delta : Nat)
     (order : MemoryOrder) :
     (fetchAdd cell delta order).2.val = cell.val + delta := rfl
 
-theorem fetchSub_returns_previous (cell : AtomicCell) (delta : Nat)
+@[simp] theorem fetchSub_returns_previous (cell : AtomicCell) (delta : Nat)
     (order : MemoryOrder) :
     (fetchSub cell delta order).1.previous = cell.val := rfl
 
-theorem fetchSub_updates_value (cell : AtomicCell) (delta : Nat)
+@[simp] theorem fetchSub_updates_value (cell : AtomicCell) (delta : Nat)
     (order : MemoryOrder) :
     (fetchSub cell delta order).2.val = cell.val - delta := rfl
 
@@ -167,11 +167,11 @@ theorem fetchAdd_zero_identity (cell : AtomicCell) (order : MemoryOrder) :
     (fetchAdd cell 0 order).2 = cell := by
   simp [fetchAdd]
 
-theorem atomicExchange_returns_previous (cell : AtomicCell) (newVal : Nat)
+@[simp] theorem atomicExchange_returns_previous (cell : AtomicCell) (newVal : Nat)
     (order : MemoryOrder) :
     (atomicExchange cell newVal order).1.previous = cell.val := rfl
 
-theorem atomicExchange_sets_value (cell : AtomicCell) (newVal : Nat)
+@[simp] theorem atomicExchange_sets_value (cell : AtomicCell) (newVal : Nat)
     (order : MemoryOrder) :
     (atomicExchange cell newVal order).2.val = newVal := rfl
 
