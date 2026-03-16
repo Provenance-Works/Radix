@@ -34,14 +34,14 @@ open Assumptions
 
 /-! ## Access Mode Properties -/
 
-theorem FileAccessMode.readOnly_canRead : FileAccessMode.readOnly.canRead = true := rfl
-theorem FileAccessMode.readOnly_not_canWrite : FileAccessMode.readOnly.canWrite = false := rfl
-theorem FileAccessMode.writeOnly_canWrite : FileAccessMode.writeOnly.canWrite = true := rfl
-theorem FileAccessMode.writeOnly_not_canRead : FileAccessMode.writeOnly.canRead = false := rfl
-theorem FileAccessMode.readWrite_canRead : FileAccessMode.readWrite.canRead = true := rfl
-theorem FileAccessMode.readWrite_canWrite : FileAccessMode.readWrite.canWrite = true := rfl
-theorem FileAccessMode.appendOnly_canWrite : FileAccessMode.appendOnly.canWrite = true := rfl
-theorem FileAccessMode.appendOnly_not_canRead : FileAccessMode.appendOnly.canRead = false := rfl
+@[simp] theorem FileAccessMode.readOnly_canRead : FileAccessMode.readOnly.canRead = true := rfl
+@[simp] theorem FileAccessMode.readOnly_not_canWrite : FileAccessMode.readOnly.canWrite = false := rfl
+@[simp] theorem FileAccessMode.writeOnly_canWrite : FileAccessMode.writeOnly.canWrite = true := rfl
+@[simp] theorem FileAccessMode.writeOnly_not_canRead : FileAccessMode.writeOnly.canRead = false := rfl
+@[simp] theorem FileAccessMode.readWrite_canRead : FileAccessMode.readWrite.canRead = true := rfl
+@[simp] theorem FileAccessMode.readWrite_canWrite : FileAccessMode.readWrite.canWrite = true := rfl
+@[simp] theorem FileAccessMode.appendOnly_canWrite : FileAccessMode.appendOnly.canWrite = true := rfl
+@[simp] theorem FileAccessMode.appendOnly_not_canRead : FileAccessMode.appendOnly.canRead = false := rfl
 
 /-! ## Precondition Properties -/
 
@@ -126,16 +126,16 @@ theorem validStep_open_close (info : OpenFileState) :
     validStep (.open info) .close = true := by
   simp [validStep, FileState.isOpen]
 
-theorem validStep_closed_open (path : String) (mode : FileAccessMode) :
+@[simp] theorem validStep_closed_open (path : String) (mode : FileAccessMode) :
     validStep .closed (.open path mode) = true := rfl
 
-theorem validStep_closed_read_false (n : Nat) :
+@[simp] theorem validStep_closed_read_false (n : Nat) :
     validStep .closed (.read n) = false := rfl
 
-theorem validStep_closed_write_false (n : Nat) :
+@[simp] theorem validStep_closed_write_false (n : Nat) :
     validStep .closed (.write n) = false := rfl
 
-theorem validStep_closed_close_false :
+@[simp] theorem validStep_closed_close_false :
     validStep .closed .close = false := rfl
 
 /-! ## Next State Properties -/
@@ -144,7 +144,7 @@ theorem nextState_open_opens (state : FileState) (path : String) (mode : FileAcc
     (nextState state (.open path mode)).isOpen = true := by
   simp [nextState, FileState.isOpen]
 
-theorem nextState_close_closes (state : FileState) :
+@[simp] theorem nextState_close_closes (state : FileState) :
     nextState state .close = .closed := rfl
 
 theorem nextState_read_preserves_mode (info : OpenFileState) (n : Nat) :
