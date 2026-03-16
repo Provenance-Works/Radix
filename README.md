@@ -7,7 +7,7 @@
 [![CI](https://github.com/provenance-works/radix/actions/workflows/ci.yml/badge.svg)](https://github.com/provenance-works/radix/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Lean](https://img.shields.io/badge/Lean-4.29.0--rc4-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PHRleHQgeD0iMCIgeT0iMjAiIGZvbnQtc2l6ZT0iMjAiPkw8L3RleHQ+PC9zdmc+)](https://lean-lang.org/)
-[![v0.1.0](https://img.shields.io/badge/version-0.1.0-green.svg)](CHANGELOG.md)
+[![v0.1.1](https://img.shields.io/badge/version-0.1.1-green.svg)](CHANGELOG.md)
 [![Theorems](https://img.shields.io/badge/theorems-907%2B-brightgreen.svg)](#verification-status)
 [![sorry-free](https://img.shields.io/badge/sorry-free-%E2%9C%93-brightgreen.svg)](#verification-status)
 
