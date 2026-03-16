@@ -54,7 +54,7 @@ open Radix.Concurrency.Spec
 axiom trust_atomic_word_access
     (e : MemoryEvent)
     (hKind : e.kind = .load ∨ e.kind = .store) :
-    True  -- The event is indivisible (no torn reads/writes)
+    validOrderForAccess e.kind e.order = true
 
 /-- Hardware guarantees that compare-and-swap (CMPXCHG / CASA / LR;SC)
     is atomic: the read-modify-write sequence appears indivisible
@@ -66,7 +66,7 @@ axiom trust_atomic_word_access
 axiom trust_cas_atomicity
     (e : MemoryEvent)
     (hKind : e.kind = .rmw) :
-    True  -- The RMW is indivisible
+    validOrderForAccess e.kind e.order = true
 
 /-- Sequential consistency (SeqCst) operations on all processors
     participate in a single total order consistent with program order.
@@ -85,7 +85,7 @@ axiom trust_seqcst_total_order
     (hA : a.order = .seqCst)
     (hB : b.order = .seqCst)
     (hNeq : a.id ≠ b.id) :
-    True  -- Exists a total order containing both a and b
+    happensBefore a b ∨ happensBefore b a
 
 /-- Acquire-release pairs synchronize: if a release-store is
     observed by an acquire-load reading the stored value, then
@@ -99,7 +99,7 @@ axiom trust_seqcst_total_order
 axiom trust_acquire_release_sync
     (w r : MemoryEvent)
     (hSync : synchronizesWith w r) :
-    True  -- All writes before w are visible after r
+    happensBefore w r
 
 /-- Memory fences enforce ordering constraints on surrounding
     memory operations according to their memory order annotation.
@@ -113,6 +113,6 @@ axiom trust_acquire_release_sync
 axiom trust_fence_ordering
     (e : MemoryEvent)
     (hFence : e.kind = .fence) :
-    True  -- Fence enforces ordering per its MemoryOrder
+    validOrderForAccess e.kind e.order = true
 
 end Radix.Concurrency.Assumptions
