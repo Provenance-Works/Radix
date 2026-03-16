@@ -49,45 +49,45 @@ namespace UInt8
 /-! ### Commutativity -/
 
 theorem band_comm (x y : UInt8) : band x y = band y x := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt8.and_comm x.val y.val
 theorem bor_comm (x y : UInt8) : bor x y = bor y x := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt8.or_comm x.val y.val
 theorem bxor_comm (x y : UInt8) : bxor x y = bxor y x := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt8.xor_comm x.val y.val
 /-! ### Associativity -/
 
 theorem band_assoc (x y z : UInt8) : band (band x y) z = band x (band y z) := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt8.and_assoc x.val y.val z.val
 theorem bor_assoc (x y z : UInt8) : bor (bor x y) z = bor x (bor y z) := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt8.or_assoc x.val y.val z.val
 theorem bxor_assoc (x y z : UInt8) : bxor (bxor x y) z = bxor x (bxor y z) := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt8.xor_assoc x.val y.val z.val
 /-! ### Identity -/
 
 theorem band_allOnes (x : UInt8) : band x ⟨255⟩ = x := by
-  cases x; unfold band; congr 1; bv_decide
+  cases x with | mk xv => unfold band; congr 1; exact _root_.UInt8.eq_of_toBitVec_eq BitVec.and_allOnes
 theorem bor_zero (x : UInt8) : bor x 0 = x := by
-  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; bv_decide
+  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; exact _root_.UInt8.or_zero
 theorem bxor_zero (x : UInt8) : bxor x 0 = x := by
-  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; exact _root_.UInt8.xor_zero
 /-! ### Annihilation -/
 
 theorem band_zero (x : UInt8) : band x 0 = 0 := by
-  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; bv_decide
+  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; exact _root_.UInt8.and_zero
 theorem bor_allOnes (x : UInt8) : bor x ⟨255⟩ = ⟨255⟩ := by
-  cases x; unfold bor; congr 1; bv_decide
+  cases x with | mk xv => unfold bor; congr 1; exact _root_.UInt8.eq_of_toBitVec_eq BitVec.or_allOnes
 /-! ### Self-inverse -/
 
 theorem bxor_self (x : UInt8) : bxor x x = 0 := by
-  show bxor x x = ⟨0⟩; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x x = ⟨0⟩; cases x; unfold bxor; congr 1; exact _root_.UInt8.xor_self
 theorem bnot_bnot (x : UInt8) : bnot (bnot x) = x := by
-  cases x; unfold bnot; congr 1; bv_decide
+  cases x; unfold bnot; congr 1; exact _root_.UInt8.not_not
 /-! ### De Morgan's Laws -/
 
 theorem demorgan_and (x y : UInt8) : bnot (band x y) = bor (bnot x) (bnot y) := by
-  unfold bnot band bor; congr 1; bv_decide
+  unfold bnot band bor; simp only [Radix.UInt8.mk.injEq]; show _root_.UInt8.complement (_root_.UInt8.land x.val y.val) = _root_.UInt8.lor (_root_.UInt8.complement x.val) (_root_.UInt8.complement y.val); unfold _root_.UInt8.complement _root_.UInt8.land _root_.UInt8.lor; congr 1; exact BitVec.not_and
 theorem demorgan_or (x y : UInt8) : bnot (bor x y) = band (bnot x) (bnot y) := by
-  unfold bnot bor band; congr 1; bv_decide
+  unfold bnot bor band; simp only [Radix.UInt8.mk.injEq]; show _root_.UInt8.complement (_root_.UInt8.lor x.val y.val) = _root_.UInt8.land (_root_.UInt8.complement x.val) (_root_.UInt8.complement y.val); unfold _root_.UInt8.complement _root_.UInt8.lor _root_.UInt8.land; congr 1; exact BitVec.not_or
 /-! ### Shift Properties -/
 
 /-- Shifting by 0 is identity. -/
@@ -119,35 +119,35 @@ end UInt8
 namespace UInt16
 
 theorem band_comm (x y : UInt16) : band x y = band y x := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt16.and_comm x.val y.val
 theorem bor_comm (x y : UInt16) : bor x y = bor y x := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt16.or_comm x.val y.val
 theorem bxor_comm (x y : UInt16) : bxor x y = bxor y x := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt16.xor_comm x.val y.val
 theorem band_assoc (x y z : UInt16) : band (band x y) z = band x (band y z) := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt16.and_assoc x.val y.val z.val
 theorem bor_assoc (x y z : UInt16) : bor (bor x y) z = bor x (bor y z) := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt16.or_assoc x.val y.val z.val
 theorem bxor_assoc (x y z : UInt16) : bxor (bxor x y) z = bxor x (bxor y z) := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt16.xor_assoc x.val y.val z.val
 theorem band_allOnes (x : UInt16) : band x ⟨65535⟩ = x := by
-  cases x; unfold band; congr 1; bv_decide
+  cases x with | mk xv => unfold band; congr 1; exact _root_.UInt16.eq_of_toBitVec_eq BitVec.and_allOnes
 theorem bor_zero (x : UInt16) : bor x 0 = x := by
-  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; bv_decide
+  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; exact _root_.UInt16.or_zero
 theorem bxor_zero (x : UInt16) : bxor x 0 = x := by
-  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; exact _root_.UInt16.xor_zero
 theorem band_zero (x : UInt16) : band x 0 = 0 := by
-  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; bv_decide
+  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; exact _root_.UInt16.and_zero
 theorem bor_allOnes (x : UInt16) : bor x ⟨65535⟩ = ⟨65535⟩ := by
-  cases x; unfold bor; congr 1; bv_decide
+  cases x with | mk xv => unfold bor; congr 1; exact _root_.UInt16.eq_of_toBitVec_eq BitVec.or_allOnes
 theorem bxor_self (x : UInt16) : bxor x x = 0 := by
-  show bxor x x = ⟨0⟩; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x x = ⟨0⟩; cases x; unfold bxor; congr 1; exact _root_.UInt16.xor_self
 theorem bnot_bnot (x : UInt16) : bnot (bnot x) = x := by
-  cases x; unfold bnot; congr 1; bv_decide
+  cases x; unfold bnot; congr 1; exact _root_.UInt16.not_not
 theorem demorgan_and (x y : UInt16) : bnot (band x y) = bor (bnot x) (bnot y) := by
-  unfold bnot band bor; congr 1; bv_decide
+  unfold bnot band bor; simp only [Radix.UInt16.mk.injEq]; show _root_.UInt16.complement (_root_.UInt16.land x.val y.val) = _root_.UInt16.lor (_root_.UInt16.complement x.val) (_root_.UInt16.complement y.val); unfold _root_.UInt16.complement _root_.UInt16.land _root_.UInt16.lor; congr 1; exact BitVec.not_and
 theorem demorgan_or (x y : UInt16) : bnot (bor x y) = band (bnot x) (bnot y) := by
-  unfold bnot bor band; congr 1; bv_decide
+  unfold bnot bor band; simp only [Radix.UInt16.mk.injEq]; show _root_.UInt16.complement (_root_.UInt16.lor x.val y.val) = _root_.UInt16.land (_root_.UInt16.complement x.val) (_root_.UInt16.complement y.val); unfold _root_.UInt16.complement _root_.UInt16.lor _root_.UInt16.land; congr 1; exact BitVec.not_or
 theorem shl_zero (x : UInt16) : shl x 0 = x := by
   show shl x ⟨0⟩ = x; cases x; simp [shl, fromBitVec, toBitVec]
 theorem shrLogical_zero (x : UInt16) : shrLogical x 0 = x := by
@@ -169,35 +169,35 @@ end UInt16
 namespace UInt32
 
 theorem band_comm (x y : UInt32) : band x y = band y x := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt32.and_comm x.val y.val
 theorem bor_comm (x y : UInt32) : bor x y = bor y x := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt32.or_comm x.val y.val
 theorem bxor_comm (x y : UInt32) : bxor x y = bxor y x := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt32.xor_comm x.val y.val
 theorem band_assoc (x y z : UInt32) : band (band x y) z = band x (band y z) := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt32.and_assoc x.val y.val z.val
 theorem bor_assoc (x y z : UInt32) : bor (bor x y) z = bor x (bor y z) := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt32.or_assoc x.val y.val z.val
 theorem bxor_assoc (x y z : UInt32) : bxor (bxor x y) z = bxor x (bxor y z) := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt32.xor_assoc x.val y.val z.val
 theorem band_allOnes (x : UInt32) : band x ⟨4294967295⟩ = x := by
-  cases x; unfold band; congr 1; bv_decide
+  cases x with | mk xv => unfold band; congr 1; exact _root_.UInt32.eq_of_toBitVec_eq BitVec.and_allOnes
 theorem bor_zero (x : UInt32) : bor x 0 = x := by
-  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; bv_decide
+  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; exact _root_.UInt32.or_zero
 theorem bxor_zero (x : UInt32) : bxor x 0 = x := by
-  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; exact _root_.UInt32.xor_zero
 theorem band_zero (x : UInt32) : band x 0 = 0 := by
-  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; bv_decide
+  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; exact _root_.UInt32.and_zero
 theorem bor_allOnes (x : UInt32) : bor x ⟨4294967295⟩ = ⟨4294967295⟩ := by
-  cases x; unfold bor; congr 1; bv_decide
+  cases x with | mk xv => unfold bor; congr 1; exact _root_.UInt32.eq_of_toBitVec_eq BitVec.or_allOnes
 theorem bxor_self (x : UInt32) : bxor x x = 0 := by
-  show bxor x x = ⟨0⟩; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x x = ⟨0⟩; cases x; unfold bxor; congr 1; exact _root_.UInt32.xor_self
 theorem bnot_bnot (x : UInt32) : bnot (bnot x) = x := by
-  cases x; unfold bnot; congr 1; bv_decide
+  cases x; unfold bnot; congr 1; exact _root_.UInt32.not_not
 theorem demorgan_and (x y : UInt32) : bnot (band x y) = bor (bnot x) (bnot y) := by
-  unfold bnot band bor; congr 1; bv_decide
+  unfold bnot band bor; simp only [Radix.UInt32.mk.injEq]; show _root_.UInt32.complement (_root_.UInt32.land x.val y.val) = _root_.UInt32.lor (_root_.UInt32.complement x.val) (_root_.UInt32.complement y.val); unfold _root_.UInt32.complement _root_.UInt32.land _root_.UInt32.lor; congr 1; exact BitVec.not_and
 theorem demorgan_or (x y : UInt32) : bnot (bor x y) = band (bnot x) (bnot y) := by
-  unfold bnot bor band; congr 1; bv_decide
+  unfold bnot bor band; simp only [Radix.UInt32.mk.injEq]; show _root_.UInt32.complement (_root_.UInt32.lor x.val y.val) = _root_.UInt32.land (_root_.UInt32.complement x.val) (_root_.UInt32.complement y.val); unfold _root_.UInt32.complement _root_.UInt32.lor _root_.UInt32.land; congr 1; exact BitVec.not_or
 theorem shl_zero (x : UInt32) : shl x 0 = x := by
   show shl x ⟨0⟩ = x; cases x; simp [shl, fromBitVec, toBitVec]
 theorem shrLogical_zero (x : UInt32) : shrLogical x 0 = x := by
@@ -219,35 +219,35 @@ end UInt32
 namespace UInt64
 
 theorem band_comm (x y : UInt64) : band x y = band y x := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt64.and_comm x.val y.val
 theorem bor_comm (x y : UInt64) : bor x y = bor y x := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt64.or_comm x.val y.val
 theorem bxor_comm (x y : UInt64) : bxor x y = bxor y x := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt64.xor_comm x.val y.val
 theorem band_assoc (x y z : UInt64) : band (band x y) z = band x (band y z) := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt64.and_assoc x.val y.val z.val
 theorem bor_assoc (x y z : UInt64) : bor (bor x y) z = bor x (bor y z) := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt64.or_assoc x.val y.val z.val
 theorem bxor_assoc (x y z : UInt64) : bxor (bxor x y) z = bxor x (bxor y z) := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt64.xor_assoc x.val y.val z.val
 theorem band_allOnes (x : UInt64) : band x ⟨18446744073709551615⟩ = x := by
-  cases x; unfold band; congr 1; bv_decide
+  cases x with | mk xv => unfold band; congr 1; exact _root_.UInt64.eq_of_toBitVec_eq BitVec.and_allOnes
 theorem bor_zero (x : UInt64) : bor x 0 = x := by
-  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; bv_decide
+  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; exact _root_.UInt64.or_zero
 theorem bxor_zero (x : UInt64) : bxor x 0 = x := by
-  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; exact _root_.UInt64.xor_zero
 theorem band_zero (x : UInt64) : band x 0 = 0 := by
-  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; bv_decide
+  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; exact _root_.UInt64.and_zero
 theorem bor_allOnes (x : UInt64) : bor x ⟨18446744073709551615⟩ = ⟨18446744073709551615⟩ := by
-  cases x; unfold bor; congr 1; bv_decide
+  cases x with | mk xv => unfold bor; congr 1; exact _root_.UInt64.eq_of_toBitVec_eq BitVec.or_allOnes
 theorem bxor_self (x : UInt64) : bxor x x = 0 := by
-  show bxor x x = ⟨0⟩; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x x = ⟨0⟩; cases x; unfold bxor; congr 1; exact _root_.UInt64.xor_self
 theorem bnot_bnot (x : UInt64) : bnot (bnot x) = x := by
-  cases x; unfold bnot; congr 1; bv_decide
+  cases x; unfold bnot; congr 1; exact _root_.UInt64.not_not
 theorem demorgan_and (x y : UInt64) : bnot (band x y) = bor (bnot x) (bnot y) := by
-  unfold bnot band bor; congr 1; bv_decide
+  unfold bnot band bor; simp only [Radix.UInt64.mk.injEq]; show _root_.UInt64.complement (_root_.UInt64.land x.val y.val) = _root_.UInt64.lor (_root_.UInt64.complement x.val) (_root_.UInt64.complement y.val); unfold _root_.UInt64.complement _root_.UInt64.land _root_.UInt64.lor; congr 1; exact BitVec.not_and
 theorem demorgan_or (x y : UInt64) : bnot (bor x y) = band (bnot x) (bnot y) := by
-  unfold bnot bor band; congr 1; bv_decide
+  unfold bnot bor band; simp only [Radix.UInt64.mk.injEq]; show _root_.UInt64.complement (_root_.UInt64.lor x.val y.val) = _root_.UInt64.land (_root_.UInt64.complement x.val) (_root_.UInt64.complement y.val); unfold _root_.UInt64.complement _root_.UInt64.lor _root_.UInt64.land; congr 1; exact BitVec.not_or
 theorem shl_zero (x : UInt64) : shl x 0 = x := by
   show shl x ⟨0⟩ = x; cases x; simp [shl, fromBitVec, toBitVec]
 theorem shrLogical_zero (x : UInt64) : shrLogical x 0 = x := by
@@ -292,7 +292,7 @@ theorem popcount_bxor (x y : UInt8) :
 theorem hammingDistance_comm (x y : UInt8) :
     hammingDistance x y = hammingDistance y x := by
   show popcount ⟨x.val ^^^ y.val⟩ = popcount ⟨y.val ^^^ x.val⟩
-  congr 1; congr 1; bv_decide
+  congr 1; congr 1; exact _root_.UInt8.xor_comm x.val y.val
 
 end UInt8
 
@@ -313,7 +313,7 @@ theorem popcount_bxor (x y : UInt16) :
 theorem hammingDistance_comm (x y : UInt16) :
     hammingDistance x y = hammingDistance y x := by
   show popcount ⟨x.val ^^^ y.val⟩ = popcount ⟨y.val ^^^ x.val⟩
-  congr 1; congr 1; bv_decide
+  congr 1; congr 1; exact _root_.UInt16.xor_comm x.val y.val
 
 end UInt16
 
@@ -334,7 +334,7 @@ theorem popcount_bxor (x y : UInt32) :
 theorem hammingDistance_comm (x y : UInt32) :
     hammingDistance x y = hammingDistance y x := by
   show popcount ⟨x.val ^^^ y.val⟩ = popcount ⟨y.val ^^^ x.val⟩
-  congr 1; congr 1; bv_decide
+  congr 1; congr 1; exact _root_.UInt32.xor_comm x.val y.val
 
 end UInt32
 
@@ -355,7 +355,7 @@ theorem popcount_bxor (x y : UInt64) :
 theorem hammingDistance_comm (x y : UInt64) :
     hammingDistance x y = hammingDistance y x := by
   show popcount ⟨x.val ^^^ y.val⟩ = popcount ⟨y.val ^^^ x.val⟩
-  congr 1; congr 1; bv_decide
+  congr 1; congr 1; exact _root_.UInt64.xor_comm x.val y.val
 
 end UInt64
 
@@ -521,28 +521,28 @@ end UInt64
 namespace Int8
 
 theorem band_comm (x y : Int8) : band x y = band y x := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt8.and_comm x.val y.val
 theorem bor_comm (x y : Int8) : bor x y = bor y x := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt8.or_comm x.val y.val
 theorem bxor_comm (x y : Int8) : bxor x y = bxor y x := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt8.xor_comm x.val y.val
 
 theorem band_assoc (x y z : Int8) : band (band x y) z = band x (band y z) := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt8.and_assoc x.val y.val z.val
 theorem bor_assoc (x y z : Int8) : bor (bor x y) z = bor x (bor y z) := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt8.or_assoc x.val y.val z.val
 theorem bxor_assoc (x y z : Int8) : bxor (bxor x y) z = bxor x (bxor y z) := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt8.xor_assoc x.val y.val z.val
 
 theorem bxor_self (x : Int8) : bxor x x = ⟨0⟩ := by
-  cases x; unfold bxor; congr 1; bv_decide
+  cases x; unfold bxor; congr 1; exact _root_.UInt8.xor_self
 theorem bnot_bnot (x : Int8) : bnot (bnot x) = x := by
-  cases x; unfold bnot; congr 1; bv_decide
+  cases x; unfold bnot; congr 1; exact _root_.UInt8.not_not
 
 theorem demorgan_and (x y : Int8) : bnot (band x y) = bor (bnot x) (bnot y) := by
-  unfold bnot band bor; congr 1; bv_decide
+  unfold bnot band bor; simp only [Radix.Int8.mk.injEq]; show _root_.UInt8.complement (_root_.UInt8.land x.val y.val) = _root_.UInt8.lor (_root_.UInt8.complement x.val) (_root_.UInt8.complement y.val); unfold _root_.UInt8.complement _root_.UInt8.land _root_.UInt8.lor; congr 1; exact BitVec.not_and
 theorem demorgan_or (x y : Int8) : bnot (bor x y) = band (bnot x) (bnot y) := by
-  unfold bnot bor band; congr 1; bv_decide
+  unfold bnot bor band; simp only [Radix.Int8.mk.injEq]; show _root_.UInt8.complement (_root_.UInt8.lor x.val y.val) = _root_.UInt8.land (_root_.UInt8.complement x.val) (_root_.UInt8.complement y.val); unfold _root_.UInt8.complement _root_.UInt8.lor _root_.UInt8.land; congr 1; exact BitVec.not_or
 
 end Int8
 
@@ -553,28 +553,28 @@ end Int8
 namespace Int16
 
 theorem band_comm (x y : Int16) : band x y = band y x := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt16.and_comm x.val y.val
 theorem bor_comm (x y : Int16) : bor x y = bor y x := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt16.or_comm x.val y.val
 theorem bxor_comm (x y : Int16) : bxor x y = bxor y x := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt16.xor_comm x.val y.val
 
 theorem band_assoc (x y z : Int16) : band (band x y) z = band x (band y z) := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt16.and_assoc x.val y.val z.val
 theorem bor_assoc (x y z : Int16) : bor (bor x y) z = bor x (bor y z) := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt16.or_assoc x.val y.val z.val
 theorem bxor_assoc (x y z : Int16) : bxor (bxor x y) z = bxor x (bxor y z) := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt16.xor_assoc x.val y.val z.val
 
 theorem bxor_self (x : Int16) : bxor x x = ⟨0⟩ := by
-  cases x; unfold bxor; congr 1; bv_decide
+  cases x; unfold bxor; congr 1; exact _root_.UInt16.xor_self
 theorem bnot_bnot (x : Int16) : bnot (bnot x) = x := by
-  cases x; unfold bnot; congr 1; bv_decide
+  cases x; unfold bnot; congr 1; exact _root_.UInt16.not_not
 
 theorem demorgan_and (x y : Int16) : bnot (band x y) = bor (bnot x) (bnot y) := by
-  unfold bnot band bor; congr 1; bv_decide
+  unfold bnot band bor; simp only [Radix.Int16.mk.injEq]; show _root_.UInt16.complement (_root_.UInt16.land x.val y.val) = _root_.UInt16.lor (_root_.UInt16.complement x.val) (_root_.UInt16.complement y.val); unfold _root_.UInt16.complement _root_.UInt16.land _root_.UInt16.lor; congr 1; exact BitVec.not_and
 theorem demorgan_or (x y : Int16) : bnot (bor x y) = band (bnot x) (bnot y) := by
-  unfold bnot bor band; congr 1; bv_decide
+  unfold bnot bor band; simp only [Radix.Int16.mk.injEq]; show _root_.UInt16.complement (_root_.UInt16.lor x.val y.val) = _root_.UInt16.land (_root_.UInt16.complement x.val) (_root_.UInt16.complement y.val); unfold _root_.UInt16.complement _root_.UInt16.lor _root_.UInt16.land; congr 1; exact BitVec.not_or
 
 end Int16
 
@@ -585,28 +585,28 @@ end Int16
 namespace Int32
 
 theorem band_comm (x y : Int32) : band x y = band y x := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt32.and_comm x.val y.val
 theorem bor_comm (x y : Int32) : bor x y = bor y x := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt32.or_comm x.val y.val
 theorem bxor_comm (x y : Int32) : bxor x y = bxor y x := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt32.xor_comm x.val y.val
 
 theorem band_assoc (x y z : Int32) : band (band x y) z = band x (band y z) := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt32.and_assoc x.val y.val z.val
 theorem bor_assoc (x y z : Int32) : bor (bor x y) z = bor x (bor y z) := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt32.or_assoc x.val y.val z.val
 theorem bxor_assoc (x y z : Int32) : bxor (bxor x y) z = bxor x (bxor y z) := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt32.xor_assoc x.val y.val z.val
 
 theorem bxor_self (x : Int32) : bxor x x = ⟨0⟩ := by
-  cases x; unfold bxor; congr 1; bv_decide
+  cases x; unfold bxor; congr 1; exact _root_.UInt32.xor_self
 theorem bnot_bnot (x : Int32) : bnot (bnot x) = x := by
-  cases x; unfold bnot; congr 1; bv_decide
+  cases x; unfold bnot; congr 1; exact _root_.UInt32.not_not
 
 theorem demorgan_and (x y : Int32) : bnot (band x y) = bor (bnot x) (bnot y) := by
-  unfold bnot band bor; congr 1; bv_decide
+  unfold bnot band bor; simp only [Radix.Int32.mk.injEq]; show _root_.UInt32.complement (_root_.UInt32.land x.val y.val) = _root_.UInt32.lor (_root_.UInt32.complement x.val) (_root_.UInt32.complement y.val); unfold _root_.UInt32.complement _root_.UInt32.land _root_.UInt32.lor; congr 1; exact BitVec.not_and
 theorem demorgan_or (x y : Int32) : bnot (bor x y) = band (bnot x) (bnot y) := by
-  unfold bnot bor band; congr 1; bv_decide
+  unfold bnot bor band; simp only [Radix.Int32.mk.injEq]; show _root_.UInt32.complement (_root_.UInt32.lor x.val y.val) = _root_.UInt32.land (_root_.UInt32.complement x.val) (_root_.UInt32.complement y.val); unfold _root_.UInt32.complement _root_.UInt32.lor _root_.UInt32.land; congr 1; exact BitVec.not_or
 
 end Int32
 
@@ -617,28 +617,28 @@ end Int32
 namespace Int64
 
 theorem band_comm (x y : Int64) : band x y = band y x := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt64.and_comm x.val y.val
 theorem bor_comm (x y : Int64) : bor x y = bor y x := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt64.or_comm x.val y.val
 theorem bxor_comm (x y : Int64) : bxor x y = bxor y x := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt64.xor_comm x.val y.val
 
 theorem band_assoc (x y z : Int64) : band (band x y) z = band x (band y z) := by
-  unfold band; congr 1; bv_decide
+  unfold band; congr 1; exact _root_.UInt64.and_assoc x.val y.val z.val
 theorem bor_assoc (x y z : Int64) : bor (bor x y) z = bor x (bor y z) := by
-  unfold bor; congr 1; bv_decide
+  unfold bor; congr 1; exact _root_.UInt64.or_assoc x.val y.val z.val
 theorem bxor_assoc (x y z : Int64) : bxor (bxor x y) z = bxor x (bxor y z) := by
-  unfold bxor; congr 1; bv_decide
+  unfold bxor; congr 1; exact _root_.UInt64.xor_assoc x.val y.val z.val
 
 theorem bxor_self (x : Int64) : bxor x x = ⟨0⟩ := by
-  cases x; unfold bxor; congr 1; bv_decide
+  cases x; unfold bxor; congr 1; exact _root_.UInt64.xor_self
 theorem bnot_bnot (x : Int64) : bnot (bnot x) = x := by
-  cases x; unfold bnot; congr 1; bv_decide
+  cases x; unfold bnot; congr 1; exact _root_.UInt64.not_not
 
 theorem demorgan_and (x y : Int64) : bnot (band x y) = bor (bnot x) (bnot y) := by
-  unfold bnot band bor; congr 1; bv_decide
+  unfold bnot band bor; simp only [Radix.Int64.mk.injEq]; show _root_.UInt64.complement (_root_.UInt64.land x.val y.val) = _root_.UInt64.lor (_root_.UInt64.complement x.val) (_root_.UInt64.complement y.val); unfold _root_.UInt64.complement _root_.UInt64.land _root_.UInt64.lor; congr 1; exact BitVec.not_and
 theorem demorgan_or (x y : Int64) : bnot (bor x y) = band (bnot x) (bnot y) := by
-  unfold bnot bor band; congr 1; bv_decide
+  unfold bnot bor band; simp only [Radix.Int64.mk.injEq]; show _root_.UInt64.complement (_root_.UInt64.lor x.val y.val) = _root_.UInt64.land (_root_.UInt64.complement x.val) (_root_.UInt64.complement y.val); unfold _root_.UInt64.complement _root_.UInt64.lor _root_.UInt64.land; congr 1; exact BitVec.not_or
 
 end Int64
 
@@ -920,15 +920,15 @@ end UInt64
 namespace Int8
 
 theorem band_allOnes (x : Int8) : band x ⟨255⟩ = x := by
-  cases x; unfold band; congr 1; bv_decide
+  cases x with | mk xv => unfold band; congr 1; exact _root_.UInt8.eq_of_toBitVec_eq BitVec.and_allOnes
 theorem bor_zero (x : Int8) : bor x 0 = x := by
-  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; bv_decide
+  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; exact _root_.UInt8.or_zero
 theorem bxor_zero (x : Int8) : bxor x 0 = x := by
-  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; exact _root_.UInt8.xor_zero
 theorem band_zero (x : Int8) : band x 0 = 0 := by
-  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; bv_decide
+  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; exact _root_.UInt8.and_zero
 theorem bor_allOnes (x : Int8) : bor x ⟨255⟩ = ⟨255⟩ := by
-  cases x; unfold bor; congr 1; bv_decide
+  cases x with | mk xv => unfold bor; congr 1; exact _root_.UInt8.eq_of_toBitVec_eq BitVec.or_allOnes
 theorem shl_zero (x : Int8) : shl x 0 = x := by
   show shl x ⟨0⟩ = x; cases x; simp [shl, fromBitVec, toBitVec]
 theorem shrLogical_zero (x : Int8) : shrLogical x 0 = x := by
@@ -943,15 +943,15 @@ end Int8
 namespace Int16
 
 theorem band_allOnes (x : Int16) : band x ⟨65535⟩ = x := by
-  cases x; unfold band; congr 1; bv_decide
+  cases x with | mk xv => unfold band; congr 1; exact _root_.UInt16.eq_of_toBitVec_eq BitVec.and_allOnes
 theorem bor_zero (x : Int16) : bor x 0 = x := by
-  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; bv_decide
+  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; exact _root_.UInt16.or_zero
 theorem bxor_zero (x : Int16) : bxor x 0 = x := by
-  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; exact _root_.UInt16.xor_zero
 theorem band_zero (x : Int16) : band x 0 = 0 := by
-  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; bv_decide
+  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; exact _root_.UInt16.and_zero
 theorem bor_allOnes (x : Int16) : bor x ⟨65535⟩ = ⟨65535⟩ := by
-  cases x; unfold bor; congr 1; bv_decide
+  cases x with | mk xv => unfold bor; congr 1; exact _root_.UInt16.eq_of_toBitVec_eq BitVec.or_allOnes
 theorem shl_zero (x : Int16) : shl x 0 = x := by
   show shl x ⟨0⟩ = x; cases x; simp [shl, fromBitVec, toBitVec]
 theorem shrLogical_zero (x : Int16) : shrLogical x 0 = x := by
@@ -966,15 +966,15 @@ end Int16
 namespace Int32
 
 theorem band_allOnes (x : Int32) : band x ⟨4294967295⟩ = x := by
-  cases x; unfold band; congr 1; bv_decide
+  cases x with | mk xv => unfold band; congr 1; exact _root_.UInt32.eq_of_toBitVec_eq BitVec.and_allOnes
 theorem bor_zero (x : Int32) : bor x 0 = x := by
-  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; bv_decide
+  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; exact _root_.UInt32.or_zero
 theorem bxor_zero (x : Int32) : bxor x 0 = x := by
-  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; exact _root_.UInt32.xor_zero
 theorem band_zero (x : Int32) : band x 0 = 0 := by
-  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; bv_decide
+  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; exact _root_.UInt32.and_zero
 theorem bor_allOnes (x : Int32) : bor x ⟨4294967295⟩ = ⟨4294967295⟩ := by
-  cases x; unfold bor; congr 1; bv_decide
+  cases x with | mk xv => unfold bor; congr 1; exact _root_.UInt32.eq_of_toBitVec_eq BitVec.or_allOnes
 theorem shl_zero (x : Int32) : shl x 0 = x := by
   show shl x ⟨0⟩ = x; cases x; simp [shl, fromBitVec, toBitVec]
 theorem shrLogical_zero (x : Int32) : shrLogical x 0 = x := by
@@ -989,15 +989,15 @@ end Int32
 namespace Int64
 
 theorem band_allOnes (x : Int64) : band x ⟨18446744073709551615⟩ = x := by
-  cases x; unfold band; congr 1; bv_decide
+  cases x with | mk xv => unfold band; congr 1; exact _root_.UInt64.eq_of_toBitVec_eq BitVec.and_allOnes
 theorem bor_zero (x : Int64) : bor x 0 = x := by
-  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; bv_decide
+  show bor x ⟨0⟩ = x; cases x; unfold bor; congr 1; exact _root_.UInt64.or_zero
 theorem bxor_zero (x : Int64) : bxor x 0 = x := by
-  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; bv_decide
+  show bxor x ⟨0⟩ = x; cases x; unfold bxor; congr 1; exact _root_.UInt64.xor_zero
 theorem band_zero (x : Int64) : band x 0 = 0 := by
-  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; bv_decide
+  show band x ⟨0⟩ = ⟨0⟩; cases x; unfold band; congr 1; exact _root_.UInt64.and_zero
 theorem bor_allOnes (x : Int64) : bor x ⟨18446744073709551615⟩ = ⟨18446744073709551615⟩ := by
-  cases x; unfold bor; congr 1; bv_decide
+  cases x with | mk xv => unfold bor; congr 1; exact _root_.UInt64.eq_of_toBitVec_eq BitVec.or_allOnes
 theorem shl_zero (x : Int64) : shl x 0 = x := by
   show shl x ⟨0⟩ = x; cases x; simp [shl, fromBitVec, toBitVec]
 theorem shrLogical_zero (x : Int64) : shrLogical x 0 = x := by
@@ -1088,7 +1088,7 @@ theorem popcount_bxor (x y : Int8) :
 theorem hammingDistance_comm (x y : Int8) :
     hammingDistance x y = hammingDistance y x := by
   show popcount ⟨x.val ^^^ y.val⟩ = popcount ⟨y.val ^^^ x.val⟩
-  congr 1; congr 1; bv_decide
+  congr 1; congr 1; exact _root_.UInt8.xor_comm x.val y.val
 end Int8
 
 namespace Int16
@@ -1100,7 +1100,7 @@ theorem popcount_bxor (x y : Int16) :
 theorem hammingDistance_comm (x y : Int16) :
     hammingDistance x y = hammingDistance y x := by
   show popcount ⟨x.val ^^^ y.val⟩ = popcount ⟨y.val ^^^ x.val⟩
-  congr 1; congr 1; bv_decide
+  congr 1; congr 1; exact _root_.UInt16.xor_comm x.val y.val
 end Int16
 
 namespace Int32
@@ -1112,7 +1112,7 @@ theorem popcount_bxor (x y : Int32) :
 theorem hammingDistance_comm (x y : Int32) :
     hammingDistance x y = hammingDistance y x := by
   show popcount ⟨x.val ^^^ y.val⟩ = popcount ⟨y.val ^^^ x.val⟩
-  congr 1; congr 1; bv_decide
+  congr 1; congr 1; exact _root_.UInt32.xor_comm x.val y.val
 end Int32
 
 namespace Int64
@@ -1124,7 +1124,7 @@ theorem popcount_bxor (x y : Int64) :
 theorem hammingDistance_comm (x y : Int64) :
     hammingDistance x y = hammingDistance y x := by
   show popcount ⟨x.val ^^^ y.val⟩ = popcount ⟨y.val ^^^ x.val⟩
-  congr 1; congr 1; bv_decide
+  congr 1; congr 1; exact _root_.UInt64.xor_comm x.val y.val
 end Int64
 
 /-! ================================================================ -/
