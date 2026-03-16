@@ -24,28 +24,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shifts and rotates with Rust-style `count % bitWidth` normalization (FR-002.1a)
 - Bit scanning: `clz`, `ctz`, `popcount`, `bitReverse`, `hammingDistance`
 - Bit fields: `testBit`, `setBit`, `clearBit`, `toggleBit`, `extractBits`, `insertBits`
-- 140+ bitwise operation proofs (De Morgan, shift identities, field round-trips)
+- 264 bitwise operation proofs (De Morgan, shift identities, field round-trips)
 
 #### Byte Order — Bytes Module
 - Endianness model (`big`, `little`)
 - `bswap` for 16/32/64-bit values
 - `toBigEndian`/`fromBigEndian`, `toLittleEndian`/`fromLittleEndian`
 - `ByteSlice` — bounds-checked `ByteArray` view with endian-aware reads
-- 40+ proofs (bswap involution, BE/LE round-trips)
+- 60 proofs (bswap involution, BE/LE round-trips, Spec Prop proofs, ByteSlice properties)
 
 #### Memory Model — Memory Module
 - `Region` with disjointness and containment specifications
 - `Buffer` — `ByteArray`-based memory with proof-carrying read/write
 - `Ptr n` — byte-width-parametric pointer abstraction
 - `FieldDesc`, `LayoutDesc` — packed struct layout computation
-- 18 proofs (buffer size preservation, region disjointness, alignment)
+- 43 proofs (buffer size preservation, read-after-write, region disjointness, alignment, layout)
 
 #### Binary Format DSL — Binary Module
 - `Format` inductive — declarative binary layout description
 - Format-driven parser with endianness support
 - Format-driven serializer
 - LEB128 variable-length integer encoding/decoding (unsigned and signed)
-- LEB128 mathematical specification with 77 round-trip proofs
+- LEB128 mathematical specification with 77 proofs (round-trips, size bounds, encoding validity)
 - 15 format validity proofs
 
 #### System Call Interface — System Module
@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `withFile` bracket pattern for resource safety
 - `sysRead`, `sysWrite`, `sysSeek` with pre/postcondition specs
 - POSIX.1-2024 trust assumptions
+- 34 proofs (file state machine, lifecycle validation, IO faithfulness)
 
 #### Concurrency Model — Concurrency Module
 - C11/C++11 memory ordering model (Relaxed through SeqCst)
