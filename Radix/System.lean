@@ -7,3 +7,4 @@ import Radix.System.Error
 import Radix.System.FD
 import Radix.System.IO
 import Radix.System.Assumptions
+import Radix.System.Lemmas
