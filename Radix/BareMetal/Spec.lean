@@ -245,6 +245,8 @@ inductive AllocStrategy where
   | arena
   /-- No allocation (pure computation). -/
   | none
+  /-- Heap allocation requiring GC or reference counting. -/
+  | heap
   deriving DecidableEq, Repr
 
 /-- Whether an allocation strategy is GC-free safe. -/
@@ -253,6 +255,7 @@ def AllocStrategy.isGCFree : AllocStrategy → Bool
   | .stack  => true
   | .arena  => true
   | .none   => true
+  | .heap   => false
 
 /-- A function's allocation profile. -/
 structure AllocProfile where

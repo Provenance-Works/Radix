@@ -1005,6 +1005,7 @@ private def testBareMetal : IO Unit :=
   assert (Lifetime.static.isBounded) "static bounded"
   assert (Lifetime.stack.isBounded) "stack bounded"
   assert (Lifetime.compileTime.isBounded) "compileTime bounded"
+  assert (!Lifetime.heap.isBounded) "heap not bounded"
 
   -- Stack frames
   let frame : StackFrame := { name := "main", localBytes := 64, savedRegs := 16, padding := 0 }

@@ -143,9 +143,13 @@ theorem isAligned_zero (align : Nat) :
 
 /-! ## GC-Free Properties -/
 
-theorem AllocStrategy.all_isGCFree (s : AllocStrategy) :
+theorem AllocStrategy.gcfree_strategies_isGCFree (s : AllocStrategy)
+    (h : s ≠ .heap) :
     s.isGCFree = true := by
-  cases s <;> rfl
+  cases s <;> simp_all [AllocStrategy.isGCFree]
+
+theorem AllocStrategy.heap_not_isGCFree :
+    AllocStrategy.heap.isGCFree = false := rfl
 
 theorem GCFreeConstraint.default_allows_static :
     AllocStrategy.static ∈ GCFreeConstraint.default.allowedStrategies := by

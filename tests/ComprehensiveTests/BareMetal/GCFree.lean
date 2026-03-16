@@ -21,6 +21,7 @@ def runBareMetalGCFreeTests : IO Nat := do
   assert (Lifetime.stack.isBounded == true) "stack bounded"
   assert (Lifetime.arena.isBounded == true) "arena bounded"
   assert (Lifetime.compileTime.isBounded == true) "compileTime bounded"
+  assert (Lifetime.heap.isBounded == false) "heap not bounded"
 
   -- ## ForbiddenPattern.description
   assert (ForbiddenPattern.unboundedAlloc.description != "") "unboundedAlloc desc"
