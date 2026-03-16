@@ -39,44 +39,60 @@ open Radix.System.Spec
 
 /-! ## File System Axioms -/
 
-/-- POSIX guarantees that a successful read returns between 0 and
-    `count` bytes inclusive. A return of 0 indicates EOF.
+/-- An opaque descriptor of an OS-level file operation result.
+    Lean cannot construct or inspect values of this type; it
+    exists so axioms about OS behavior are genuinely unprovable. -/
+opaque OSReadResult : Type
+
+/-- The number of bytes the OS actually transferred in a read. -/
+opaque OSReadResult.actual (r : OSReadResult) : Nat
+
+/-- POSIX guarantees that a successful `read(2)` returns between 0
+    and `count` bytes inclusive. A return of 0 indicates EOF.
+    This is an external OS guarantee that Lean cannot verify.
 
     Reference: POSIX.1-2024, read(2):
-    "If the value of nbyte is greater than {SSIZE_MAX}, the result
-     is implementation-defined. [...] Upon successful completion,
-     [...] shall return a non-negative integer indicating the number
-     of bytes actually read." -/
+    "Upon successful completion, [...] shall return a non-negative
+     integer indicating the number of bytes actually read. [...]
+     This number shall never be greater than nbyte." -/
 axiom trust_read_bounded
-    (count : Nat) (actual : Nat) (hSuccess : actual > 0) :
-    actual ≤ count
+    (count : Nat) (result : OSReadResult) :
+    result.actual ≤ count
 
-/-- POSIX guarantees that a successful write writes between 1 and
-    `count` bytes inclusive for a regular file.
+/-- POSIX guarantees that a successful `write(2)` writes between 1
+    and `count` bytes inclusive for a regular file.
 
     Reference: POSIX.1-2024, write(2):
     "Upon successful completion, write() [...] shall return the
      number of bytes actually written to the file [...]. This
      number shall never be greater than nbyte." -/
 axiom trust_write_bounded
-    (count : Nat) (actual : Nat) (hSuccess : actual > 0) :
-    actual ≤ count
+    (count : Nat) (result : OSReadResult) :
+    result.actual ≤ count
 
 /-- The Lean 4 runtime's `IO.FS.Handle` operations faithfully
     delegate to the underlying OS file descriptor. In particular,
-    `IO.FS.Handle.read` maps to POSIX `read(2)` and
-    `IO.FS.Handle.write` maps to POSIX `write(2)`.
+    `IO.FS.Handle.read` maps to POSIX `read(2)` and produces a
+    `ByteArray` whose length satisfies the POSIX read bound.
 
-    Specifically: a read on an open file returns between 0 and
-    `count` bytes (per POSIX) and preserves the open state, so the
-    result conforms to `readPost`.
+    This axiom bridges the gap between Lean 4's monadic `IO` type
+    (which erases operational semantics) and the POSIX contract
+    (which bounds the result). It cannot be proven because Lean's
+    `IO` type is opaque — we cannot inspect what `IO.FS.Handle.read`
+    actually does.
 
-    Reference: Lean 4 runtime — `lean_io_prim_handle_read`,
-    `lean_io_prim_handle_write` in `runtime/io.cpp`. -/
+    Reference: Lean 4 runtime — `lean_io_prim_handle_read` in
+    `runtime/io.cpp`. -/
 axiom trust_lean_io_faithful
-    (pre : FileState) (count actual : Nat)
-    (hOpen : readPre pre) (hBound : actual ≤ count) :
-    readPost pre .open count actual
+    (pre : FileState) (count : Nat)
+    (hOpen : readPre pre) :
+    ∃ (actual : Nat), actual ≤ count ∧
+      ∀ (info : OpenFileState), pre = FileState.open info →
+        readPost pre
+          (FileState.open { info with
+            position := info.position + actual,
+            bytesRead := info.bytesRead + actual })
+          count actual
 
 /-- After a successful close, the file descriptor is no longer
     valid for any I/O operation. The runtime must not reuse

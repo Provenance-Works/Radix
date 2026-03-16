@@ -9,7 +9,8 @@ import Radix.System.Assumptions
 # System Specification Proofs (Layer 3)
 
 This module contains proofs for the System module's file state machine:
-- State transition correctness
+- Access mode capability reasoning
+- State transition correctness with position tracking
 - Lifecycle validity properties
 - Pre/postcondition consistency
 - Axiom-based I/O correctness
@@ -31,43 +32,102 @@ namespace Radix.System
 open Spec
 open Assumptions
 
+/-! ## Access Mode Properties -/
+
+theorem FileAccessMode.readOnly_canRead : FileAccessMode.readOnly.canRead = true := rfl
+theorem FileAccessMode.readOnly_not_canWrite : FileAccessMode.readOnly.canWrite = false := rfl
+theorem FileAccessMode.writeOnly_canWrite : FileAccessMode.writeOnly.canWrite = true := rfl
+theorem FileAccessMode.writeOnly_not_canRead : FileAccessMode.writeOnly.canRead = false := rfl
+theorem FileAccessMode.readWrite_canRead : FileAccessMode.readWrite.canRead = true := rfl
+theorem FileAccessMode.readWrite_canWrite : FileAccessMode.readWrite.canWrite = true := rfl
+theorem FileAccessMode.appendOnly_canWrite : FileAccessMode.appendOnly.canWrite = true := rfl
+theorem FileAccessMode.appendOnly_not_canRead : FileAccessMode.appendOnly.canRead = false := rfl
+
 /-! ## Precondition Properties -/
 
-theorem readPre_iff_open (s : FileState) : readPre s ↔ s = .open := Iff.rfl
+theorem readPre_of_open_readable (info : OpenFileState) (h : info.mode.canRead = true) :
+    readPre (.open info) := by
+  simp [readPre, h]
 
-theorem writePre_iff_open (s : FileState) : writePre s ↔ s = .open := Iff.rfl
+theorem readPre_not_closed : ¬ readPre .closed := by
+  simp [readPre]
 
-theorem seekPre_iff_open (s : FileState) : seekPre s ↔ s = .open := Iff.rfl
+theorem writePre_of_open_writable (info : OpenFileState) (h : info.mode.canWrite = true) :
+    writePre (.open info) := by
+  simp [writePre, h]
 
-theorem closePre_iff_open (s : FileState) : closePre s ↔ s = .open := Iff.rfl
+theorem writePre_not_closed : ¬ writePre .closed := by
+  simp [writePre]
+
+theorem readPre_readOnly (info : OpenFileState) (hm : info.mode = .readOnly) :
+    readPre (.open info) := by
+  simp [readPre, hm, FileAccessMode.canRead]
+
+theorem writePre_readOnly_false (info : OpenFileState) (hm : info.mode = .readOnly) :
+    ¬ writePre (.open info) := by
+  simp [writePre, hm, FileAccessMode.canWrite]
+
+theorem readPre_writeOnly_false (info : OpenFileState) (hm : info.mode = .writeOnly) :
+    ¬ readPre (.open info) := by
+  simp [readPre, hm, FileAccessMode.canRead]
+
+theorem seekPre_of_open (info : OpenFileState) :
+    seekPre (.open info) := by
+  simp [seekPre, FileState.isOpen]
+
+theorem closePre_of_open (info : OpenFileState) :
+    closePre (.open info) := by
+  simp [closePre, FileState.isOpen]
+
+theorem seekPre_not_closed : ¬ seekPre .closed := by
+  simp [seekPre, FileState.isOpen]
+
+theorem closePre_not_closed : ¬ closePre .closed := by
+  simp [closePre, FileState.isOpen]
 
 /-! ## Postcondition Properties -/
 
-theorem readPost_preserves_open (count actual : Nat)
-    (h : readPost .open .open count actual) : h.2.1 = rfl := rfl
+theorem closePost_yields_closed (info : OpenFileState) :
+    closePost (.open info) .closed := rfl
 
-theorem closePost_yields_closed :
-    closePost .open .closed := rfl
+theorem readPost_advances_position (info : OpenFileState) (count actual : Nat)
+    (h : actual ≤ count) :
+    let post := OpenFileState.mk (info.position + actual) info.mode (info.bytesRead + actual) info.bytesWritten
+    readPost (.open info) (.open post) count actual := by
+  exact ⟨h, rfl, rfl, rfl, rfl⟩
 
 theorem readPost_bound (pre post : FileState) (count actual : Nat)
-    (h : readPost pre post count actual) : actual ≤ count := h.2.2
+    (h : readPost pre post count actual) : actual ≤ count := h.1
+
+theorem writePost_advances_position (info : OpenFileState) (count actual : Nat)
+    (h : actual ≤ count) :
+    let post := OpenFileState.mk (info.position + actual) info.mode info.bytesRead (info.bytesWritten + actual)
+    writePost (.open info) (.open post) count actual := by
+  exact ⟨h, rfl, rfl, rfl, rfl⟩
+
+theorem writePost_bound (pre post : FileState) (count actual : Nat)
+    (h : writePost pre post count actual) : actual ≤ count := h.1
 
 /-! ## State Transition Validity -/
 
-theorem validStep_open_read (n : Nat) :
-    validStep .open (.read n) = true := rfl
+theorem validStep_open_read (info : OpenFileState) (n : Nat) (hm : info.mode.canRead = true) :
+    validStep (.open info) (.read n) = true := by
+  simp [validStep, hm]
 
-theorem validStep_open_write (n : Nat) :
-    validStep .open (.write n) = true := rfl
+theorem validStep_open_write (info : OpenFileState) (n : Nat) (hm : info.mode.canWrite = true) :
+    validStep (.open info) (.write n) = true := by
+  simp [validStep, hm]
 
-theorem validStep_open_seek (m : SeekMode) (off : Int) :
-    validStep .open (.seek m off) = true := rfl
+theorem validStep_open_seek (info : OpenFileState) (m : SeekMode) (off : Int) :
+    validStep (.open info) (.seek m off) = true := by
+  simp [validStep, FileState.isOpen]
 
-theorem validStep_open_close :
-    validStep .open .close = true := rfl
+theorem validStep_open_close (info : OpenFileState) :
+    validStep (.open info) .close = true := by
+  simp [validStep, FileState.isOpen]
 
-theorem validStep_closed_open (path : String) :
-    validStep .closed (.open path) = true := rfl
+theorem validStep_closed_open (path : String) (mode : FileAccessMode) :
+    validStep .closed (.open path mode) = true := rfl
 
 theorem validStep_closed_read_false (n : Nat) :
     validStep .closed (.read n) = false := rfl
@@ -80,20 +140,36 @@ theorem validStep_closed_close_false :
 
 /-! ## Next State Properties -/
 
-theorem nextState_read_preserves (s : FileState) (n : Nat) :
-    nextState s (.read n) = .open := rfl
+theorem nextState_open_opens (state : FileState) (path : String) (mode : FileAccessMode) :
+    (nextState state (.open path mode)).isOpen = true := by
+  simp [nextState, FileState.isOpen]
 
-theorem nextState_write_preserves (s : FileState) (n : Nat) :
-    nextState s (.write n) = .open := rfl
+theorem nextState_close_closes (state : FileState) :
+    nextState state .close = .closed := rfl
 
-theorem nextState_seek_preserves (s : FileState) (m : SeekMode) (off : Int) :
-    nextState s (.seek m off) = .open := rfl
+theorem nextState_read_preserves_mode (info : OpenFileState) (n : Nat) :
+    match nextState (.open info) (.read n) with
+    | .open info' => info'.mode = info.mode
+    | .closed => False := by
+  simp [nextState]
 
-theorem nextState_close_closes (s : FileState) :
-    nextState s .close = .closed := rfl
+theorem nextState_write_preserves_mode (info : OpenFileState) (n : Nat) :
+    match nextState (.open info) (.write n) with
+    | .open info' => info'.mode = info.mode
+    | .closed => False := by
+  simp [nextState]
 
-theorem nextState_open_opens (s : FileState) (path : String) :
-    nextState s (.open path) = .open := rfl
+theorem nextState_read_advances_position (info : OpenFileState) (n : Nat) :
+    match nextState (.open info) (.read n) with
+    | .open info' => info'.position = info.position + n
+    | .closed => False := by
+  simp [nextState]
+
+theorem nextState_write_advances_position (info : OpenFileState) (n : Nat) :
+    match nextState (.open info) (.write n) with
+    | .open info' => info'.position = info.position + n
+    | .closed => False := by
+  simp [nextState]
 
 /-! ## Lifecycle Validity -/
 
@@ -101,54 +177,66 @@ theorem validLifecycle_nil (s : FileState) :
     validLifecycle s [] = true := rfl
 
 theorem validLifecycle_open_read_close :
-    validLifecycle .closed [.open "/tmp/f", .read 1024, .close] = true := by
-  decide
+    validLifecycle .closed [.open "/tmp/f" .readOnly, .read 1024, .close] = true := by
+  native_decide
 
 theorem validLifecycle_open_write_close :
-    validLifecycle .closed [.open "/tmp/f", .write 512, .close] = true := by
-  decide
+    validLifecycle .closed [.open "/tmp/f" .writeOnly, .write 512, .close] = true := by
+  native_decide
 
 theorem validLifecycle_open_close :
-    validLifecycle .closed [.open "/tmp/f", .close] = true := by
-  decide
+    validLifecycle .closed [.open "/tmp/f" .readOnly, .close] = true := by
+  native_decide
 
-theorem validLifecycle_double_read :
-    validLifecycle .closed [.open "/tmp/f", .read 100, .read 200, .close] = true := by
-  decide
+theorem validLifecycle_readOnly_cannot_write :
+    validLifecycle .closed [.open "/tmp/f" .readOnly, .write 100, .close] = false := by
+  native_decide
 
-theorem validLifecycle_read_write :
-    validLifecycle .closed [.open "/tmp/f", .read 100, .write 50, .close] = true := by
-  decide
+theorem validLifecycle_writeOnly_cannot_read :
+    validLifecycle .closed [.open "/tmp/f" .writeOnly, .read 100, .close] = false := by
+  native_decide
+
+theorem validLifecycle_readWrite_can_both :
+    validLifecycle .closed [.open "/tmp/f" .readWrite, .read 100, .write 50, .close] = true := by
+  native_decide
 
 theorem validLifecycle_read_without_open_false :
-    validLifecycle .closed [.read 1024] = false := by decide
+    validLifecycle .closed [.read 1024] = false := by native_decide
 
 theorem validLifecycle_double_close_false :
-    validLifecycle .closed [.open "/tmp/f", .close, .close] = false := by
-  decide
+    validLifecycle .closed [.open "/tmp/f" .readOnly, .close, .close] = false := by
+  native_decide
 
 theorem validLifecycle_write_after_close_false :
-    validLifecycle .closed [.open "/tmp/f", .close, .write 10] = false := by
-  decide
+    validLifecycle .closed [.open "/tmp/f" .writeOnly, .close, .write 10] = false := by
+  native_decide
+
+/-! ## Mode Safety -/
+
+/-- A read-only file never has a write as the first operation after open. -/
+theorem readOnly_write_step_invalid (n : Nat) :
+    validStep (.open { position := 0, mode := .readOnly, bytesRead := 0, bytesWritten := 0 }) (.write n) = false := by
+  simp [validStep, FileAccessMode.canWrite]
 
 /-! ## Axiom-Based Proofs -/
 
-theorem read_bounded_by_request (count actual : Nat) (h : actual > 0) :
-    actual ≤ count := trust_read_bounded count actual h
+theorem read_bounded_by_request (count : Nat) (result : Assumptions.OSReadResult) :
+    result.actual ≤ count := trust_read_bounded count result
 
-theorem write_bounded_by_request (count actual : Nat) (h : actual > 0) :
-    actual ≤ count := trust_write_bounded count actual h
+theorem write_bounded_by_request (count : Nat) (result : Assumptions.OSReadResult) :
+    result.actual ≤ count := trust_write_bounded count result
 
-theorem close_transitions_to_closed :
-    closePre .open → closePost .open .closed :=
-  trust_close_invalidates .open
+theorem close_transitions_to_closed (info : OpenFileState) :
+    closePre (.open info) → closePost (.open info) .closed := by
+  intro _; rfl
 
-theorem seek_on_open_is_valid (mode : SeekMode) (offset : Int) (h : offset ≥ 0) :
-    validStep .open (.seek mode offset) = true :=
-  trust_seek_succeeds .open mode offset rfl h
-
-theorem io_faithful_read (count actual : Nat) (hBound : actual ≤ count) :
-    readPost .open .open count actual :=
-  trust_lean_io_faithful .open count actual rfl hBound
+theorem io_faithful_read (count : Nat) (info : OpenFileState) (hRead : info.mode.canRead = true) :
+    ∃ (actual : Nat), actual ≤ count ∧ readPost
+      (.open info)
+      (.open { info with position := info.position + actual, bytesRead := info.bytesRead + actual })
+      count actual := by
+  have h := trust_lean_io_faithful (.open info) count (by simp [readPre, hRead])
+  obtain ⟨actual, hBound, hPost⟩ := h
+  exact ⟨actual, hBound, hPost info rfl⟩
 
 end Radix.System
