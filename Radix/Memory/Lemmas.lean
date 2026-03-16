@@ -131,4 +131,132 @@ theorem Buffer.checkedReadU8_none (buf : Buffer) (offset : Nat)
     buf.checkedReadU8 offset = none := by
   simp [Buffer.checkedReadU8, h]
 
+/-! ## Read-After-Write: Non-Overlapping Offsets -/
+
+theorem Buffer.readU8_writeU8_ne (buf : Buffer) (i j : Nat) (val : Radix.UInt8)
+    (hw : i < buf.bytes.size) (hr : j < buf.bytes.size) (hne : i ≠ j) :
+    (buf.writeU8 i val hw).readU8 j
+      (by rw [show (buf.writeU8 i val hw).bytes.size = buf.bytes.size from by
+            unfold Buffer.writeU8 ByteArray.set ByteArray.size; simp]; exact hr) = buf.readU8 j hr := by
+  unfold Buffer.readU8 Buffer.writeU8
+  simp only [ByteArray.get, ByteArray.set, Array.getElem_set, hne, ↓reduceIte]
+  rfl
+
+/-! ## Region Properties -/
+
+open Spec in
+theorem Spec.Region.contains_refl (r : Spec.Region) : Spec.Region.contains r r := by
+  simp [Spec.Region.contains, Spec.Region.endOffset]
+
+open Spec in
+theorem Spec.Region.inBounds_start (r : Spec.Region) (h : 0 < r.size) :
+    Spec.Region.inBounds r r.start := by
+  simp [Spec.Region.inBounds, Spec.Region.endOffset]; omega
+
+open Spec in
+theorem Spec.Region.not_inBounds_empty (off : Nat) :
+    ¬ Spec.Region.inBounds Spec.Region.empty off := by
+  simp [Spec.Region.inBounds, Spec.Region.endOffset, Spec.Region.empty]
+
+open Spec in
+theorem Spec.Region.contains_inBounds (outer inner : Spec.Region) (off : Nat)
+    (hc : Spec.Region.contains outer inner) (hb : Spec.Region.inBounds inner off) :
+    Spec.Region.inBounds outer off := by
+  simp [Spec.Region.contains, Spec.Region.inBounds, Spec.Region.endOffset] at *
+  omega
+
+open Spec in
+theorem Spec.Region.disjoint_not_inBounds_left (a b : Spec.Region) (off : Nat)
+    (hd : Spec.Region.disjoint a b) (hb : Spec.Region.inBounds a off) :
+    ¬ Spec.Region.inBounds b off := by
+  simp [Spec.Region.disjoint, Spec.Region.inBounds, Spec.Region.endOffset] at *
+  omega
+
+open Spec in
+theorem Spec.Region.disjoint_of_size_zero_left (r : Spec.Region) :
+    Spec.Region.disjoint { start := 0, size := 0 } r := by
+  simp [Spec.Region.disjoint, Spec.Region.endOffset]
+
+/-! ## BufferSpec Precondition Properties -/
+
+open Spec in
+theorem Spec.BufferSpec.readPre_of_readNPre (spec : Spec.BufferSpec) (offset n : Nat)
+    (h : Spec.BufferSpec.readNPre spec offset n) (hn : 0 < n) :
+    Spec.BufferSpec.readPre spec offset := by
+  simp [Spec.BufferSpec.readPre, Spec.BufferSpec.readNPre] at *; omega
+
+open Spec in
+theorem Spec.BufferSpec.writePre_of_writeNPre (spec : Spec.BufferSpec) (offset n : Nat)
+    (h : Spec.BufferSpec.writeNPre spec offset n) (hn : 0 < n) :
+    Spec.BufferSpec.writePre spec offset := by
+  simp [Spec.BufferSpec.writePre, Spec.BufferSpec.writeNPre] at *; omega
+
+open Spec in
+theorem Spec.BufferSpec.readNPre_mono (spec : Spec.BufferSpec) (offset m n : Nat)
+    (h : Spec.BufferSpec.readNPre spec offset n) (hmn : m ≤ n) :
+    Spec.BufferSpec.readNPre spec offset m := by
+  simp [Spec.BufferSpec.readNPre] at *; omega
+
+/-! ## Additional Alignment Properties -/
+
+open Spec in
+theorem Spec.isAligned_self (align : Nat) (h : align > 0) : Spec.isAligned align align := by
+  simp [Spec.isAligned, h]
+
+open Spec in
+theorem Spec.isAligned_add (offset align : Nat)
+    (h1 : Spec.isAligned offset align) :
+    Spec.isAligned (offset + align) align := by
+  simp [Spec.isAligned] at *
+  obtain ⟨hpos, hmod⟩ := h1
+  exact ⟨hpos, by omega⟩
+
+open Spec in
+theorem Spec.isAligned_of_dvd (offset align : Nat) (h1 : align > 0) (h2 : align ∣ offset) :
+    Spec.isAligned offset align := by
+  simp [Spec.isAligned, h1]
+  exact Nat.mod_eq_zero_of_dvd h2
+
+/-! ## Additional Layout Properties -/
+
+theorem LayoutDesc.appendField_fields (desc : LayoutDesc) (name : String) (size : Nat) :
+    (desc.appendField name size).fields =
+    desc.fields ++ [{ name := name, offset := desc.totalSize, size := size }] := rfl
+
+theorem LayoutDesc.appendField_preserves_prev_fields (desc : LayoutDesc) (name : String) (size : Nat) :
+    (desc.appendField name size).fields.take desc.fields.length = desc.fields := by
+  simp [LayoutDesc.appendField]
+
+/-! ## Additional Buffer Checked API Properties -/
+
+theorem Buffer.checkedWriteU8_some (buf : Buffer) (offset : Nat) (val : Radix.UInt8)
+    (h : offset < buf.bytes.size) :
+    buf.checkedWriteU8 offset val = some (buf.writeU8 offset val h) := by
+  simp [Buffer.checkedWriteU8, h]
+
+theorem Buffer.checkedWriteU8_none (buf : Buffer) (offset : Nat) (val : Radix.UInt8)
+    (h : ¬ offset < buf.bytes.size) :
+    buf.checkedWriteU8 offset val = none := by
+  simp [Buffer.checkedWriteU8, h]
+
+theorem Buffer.checkedReadU16BE_some (buf : Buffer) (offset : Nat)
+    (h : offset + 2 ≤ buf.bytes.size) :
+    buf.checkedReadU16BE offset = some (buf.readU16BE offset h) := by
+  simp [Buffer.checkedReadU16BE, h]
+
+theorem Buffer.checkedReadU16BE_none (buf : Buffer) (offset : Nat)
+    (h : ¬ offset + 2 ≤ buf.bytes.size) :
+    buf.checkedReadU16BE offset = none := by
+  simp [Buffer.checkedReadU16BE, h]
+
+theorem Buffer.checkedReadU16LE_some (buf : Buffer) (offset : Nat)
+    (h : offset + 2 ≤ buf.bytes.size) :
+    buf.checkedReadU16LE offset = some (buf.readU16LE offset h) := by
+  simp [Buffer.checkedReadU16LE, h]
+
+theorem Buffer.checkedReadU16LE_none (buf : Buffer) (offset : Nat)
+    (h : ¬ offset + 2 ≤ buf.bytes.size) :
+    buf.checkedReadU16LE offset = none := by
+  simp [Buffer.checkedReadU16LE, h]
+
 end Radix.Memory
