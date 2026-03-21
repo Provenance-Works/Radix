@@ -7,6 +7,8 @@ import Radix.Word.Int
 import Radix.Word.Size
 import Radix.Word.Arith
 import Radix.Bit.Ops
+import Radix.Bit.Scan
+import Radix.Bit.Field
 
 /-!
 # Numeric Typeclasses (Layer 2)
@@ -65,9 +67,11 @@ class BoundedUInt (α : Type) extends LawfulFixedWidth α where
   /-- `minVal` has `toNat = 0`. -/
   toNat_minVal : toNat minVal = 0
   /-- `maxVal` has `toNat = 2^bitWidth - 1`. -/
-  toNat_maxVal : toNat maxVal = 2 ^ FixedWidth.bitWidth - 1
+  toNat_maxVal : toNat maxVal = 2 ^ bitWidth - 1
   /-- Wrapping addition is the same as `+`. -/
   wrappingAdd_eq_add : ∀ x y : α, wrappingAdd x y = x + y
+  /-- `toBitVec minVal = 0`: the minimum unsigned value maps to zero bit-vector. -/
+  toBitVec_minVal : toBitVec minVal = 0
 
 instance : BoundedUInt UInt8 where
   minVal := UInt8.minVal
@@ -84,6 +88,7 @@ instance : BoundedUInt UInt8 where
   toNat_minVal := by native_decide
   toNat_maxVal := by native_decide
   wrappingAdd_eq_add := by intro x y; rfl
+  toBitVec_minVal := by native_decide
 
 instance : BoundedUInt UInt16 where
   minVal := UInt16.minVal
@@ -100,6 +105,7 @@ instance : BoundedUInt UInt16 where
   toNat_minVal := by native_decide
   toNat_maxVal := by native_decide
   wrappingAdd_eq_add := by intro x y; rfl
+  toBitVec_minVal := by native_decide
 
 instance : BoundedUInt UInt32 where
   minVal := UInt32.minVal
@@ -116,6 +122,7 @@ instance : BoundedUInt UInt32 where
   toNat_minVal := by native_decide
   toNat_maxVal := by native_decide
   wrappingAdd_eq_add := by intro x y; rfl
+  toBitVec_minVal := by native_decide
 
 instance : BoundedUInt UInt64 where
   minVal := UInt64.minVal
@@ -132,6 +139,7 @@ instance : BoundedUInt UInt64 where
   toNat_minVal := by native_decide
   toNat_maxVal := by native_decide
   wrappingAdd_eq_add := by intro x y; rfl
+  toBitVec_minVal := by native_decide
 
 /-! ## BoundedInt Typeclass -/
 
@@ -149,9 +157,9 @@ class BoundedInt (α : Type) extends FixedWidth α, Add α, Sub α, Mul α, Neg 
   /-- Convert from `Int`, truncating to `bitWidth` bits. -/
   fromInt : Int → α
   /-- `toInt minVal = -2^(bitWidth-1)`. -/
-  toInt_minVal : toInt minVal = -(2 ^ (FixedWidth.bitWidth - 1) : Nat)
+  toInt_minVal : toInt minVal = -(2 ^ (bitWidth - 1) : Nat)
   /-- `toInt maxVal = 2^(bitWidth-1) - 1`. -/
-  toInt_maxVal : toInt maxVal = 2 ^ (FixedWidth.bitWidth - 1) - 1
+  toInt_maxVal : toInt maxVal = 2 ^ (bitWidth - 1) - 1
 
 instance : BoundedInt Int8 where
   minVal := Int8.minVal
@@ -274,19 +282,19 @@ instance : BitwiseOps Int64 where
 /-! ## Generic Functions -/
 
 /-- Generic zero (minVal for unsigned). -/
-@[inline] def genericZero [BoundedUInt α] : α := BoundedUInt.minVal
+@[inline] def genericZero {α : Type} [BoundedUInt α] : α := BoundedUInt.minVal
 
 /-- Generic maximum value. -/
-@[inline] def genericMaxVal [BoundedUInt α] : α := BoundedUInt.maxVal
+@[inline] def genericMaxVal {α : Type} [BoundedUInt α] : α := BoundedUInt.maxVal
 
 /-- Generic popcount via `BitwiseOps`. -/
-@[inline] def genericPopcount [BitwiseOps α] (x : α) : α := BitwiseOps.popcount x
+@[inline] def genericPopcount {α : Type} [BitwiseOps α] (x : α) : α := BitwiseOps.popcount x
 
 /-- Check if a value is zero using `toNat`. -/
-@[inline] def isZero [BoundedUInt α] (x : α) : Bool := BoundedUInt.toNat x == 0
+@[inline] def isZero {α : Type} [BoundedUInt α] (x : α) : Bool := BoundedUInt.toNat x == 0
 
 /-- Check if a value is the maximum using `toNat`. -/
-@[inline] def isMax [BoundedUInt α] (x : α) : Bool :=
+@[inline] def isMax {α : Type} [BoundedUInt α] (x : α) : Bool :=
   BoundedUInt.toNat x == BoundedUInt.toNat (BoundedUInt.maxVal (α := α))
 
 end Radix
