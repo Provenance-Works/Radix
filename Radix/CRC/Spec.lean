@@ -58,19 +58,11 @@ def add (a b : GF2Poly) : GF2Poly := ⟨a.coeffs ^^^ b.coeffs⟩
 /-- XOR (same as add in GF(2)). -/
 def xor (a b : GF2Poly) : GF2Poly := add a b
 
-/-- Degree of the polynomial (-1 for zero polynomial, represented as 0). -/
+/-- Degree of the polynomial (0 for zero polynomial).
+    For non-zero polynomials, this is the position of the highest set bit. -/
 def degree (p : GF2Poly) : Nat :=
   if p.coeffs == 0 then 0
-  else go p.coeffs 0
-where
-  go : Nat → Nat → Nat
-    | 0, d => d
-    | n + 1, d => if (n + 1) > 0 then
-        -- Find highest set bit
-        go ((n + 1) / 2) (if (n + 1) % 2 == 1 then d else d)
-      else d
-    -- Simple fallback: use Nat.log2
-  termination_by n => n
+  else Nat.log2 p.coeffs
 
 /-- Degree computed via Nat.log2 (simpler, used for proofs). -/
 def degreeSimple (p : GF2Poly) : Nat :=
