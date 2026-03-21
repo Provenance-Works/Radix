@@ -54,7 +54,7 @@ namespace Buffer
 
 /-! ## Internal helpers -/
 
-private theorem set_size_eq (a : ByteArray) (i : Nat) (v : _root_.UInt8)
+theorem set_size_eq (a : ByteArray) (i : Nat) (v : _root_.UInt8)
     (h : i < a.size) : (a.set i v h).size = a.size := by
   unfold ByteArray.set ByteArray.size; simp
 
