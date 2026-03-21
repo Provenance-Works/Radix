@@ -7,6 +7,8 @@ import Radix.Bit.Field
 import Radix.Bytes
 import Radix.Bytes.Order
 import Radix.Binary.Leb128
+import Radix.RingBuffer
+import Radix.CRC
 
 /-!
 # Radix Phase 4 — Microbenchmarks (P4-02)
@@ -383,6 +385,115 @@ private def benchBitFields : IO Unit := do
     return acc
 
 /-! ================================================================ -/
+/-! ## Ring Buffer Benchmarks                                        -/
+/-! ================================================================ -/
+
+private def benchRingBuffer : IO Unit := do
+  IO.println "Ring Buffer (v0.2.0):"
+  let data := genRandomArray numIter 10
+
+  -- Push throughput: push N bytes into ring buffer
+  bench "push" do
+    let mut rb := Radix.RingBuffer.RingBuf.new numIter
+    let mut acc : UInt64 := 0
+    for v in data do
+      let byte : Radix.UInt8 := ⟨v.toUInt8⟩
+      match rb.push byte with
+      | some rb' => rb := rb'; acc := acc + 1
+      | none => acc := acc + 0
+    return acc
+
+  -- Pop throughput: push all, then pop all
+  bench "pop" do
+    let mut rb := Radix.RingBuffer.RingBuf.new 1024
+    -- Fill buffer
+    for i in [:1024] do
+      let byte : Radix.UInt8 := ⟨(data[i % data.size]!).toUInt8⟩
+      match rb.push byte with
+      | some rb' => rb := rb'
+      | none => pure ()
+    -- Pop all repeatedly
+    let mut acc : UInt64 := 0
+    for _ in [:numIter] do
+      match rb.pop with
+      | some (val, rb') =>
+        acc := acc + val.val.toUInt64
+        rb := rb'
+      | none =>
+        -- Refill
+        rb := Radix.RingBuffer.RingBuf.new 1024
+        for j in [:1024] do
+          let byte : Radix.UInt8 := ⟨(data[j % data.size]!).toUInt8⟩
+          match rb.push byte with
+          | some rb' => rb := rb'
+          | none => pure ()
+    return acc
+
+  -- Push+Pop interleaved (realistic usage pattern)
+  bench "pushForce" do
+    let mut rb := Radix.RingBuffer.RingBuf.new 256
+    let mut acc : UInt64 := 0
+    for v in data do
+      let byte : Radix.UInt8 := ⟨v.toUInt8⟩
+      rb := rb.pushForce byte
+      acc := acc + 1
+    return acc
+
+/-! ================================================================ -/
+/-! ## CRC-32 Benchmarks                                             -/
+/-! ================================================================ -/
+
+private def benchCRC32 : IO Unit := do
+  IO.println "CRC-32 (v0.2.0):"
+
+  -- Generate test data: 1 KB block
+  let block1k : ByteArray := Id.run do
+    let mut rng := PRNG.new 42
+    let mut ba : ByteArray := .empty
+    for _ in [:1024] do
+      let (rng', v) := rng.next
+      rng := rng'
+      ba := ba.push v.toUInt8
+    return ba
+
+  -- CRC-32 of 1 KB block (table-driven)
+  bench "compute-1KB" do
+    let mut acc : UInt64 := 0
+    for _ in [:numIter] do
+      let crc := Radix.CRC.CRC32.compute block1k
+      acc := acc ^^^ crc.val.toUInt64
+    return acc
+
+  -- CRC-32 streaming (init/update/finalize) with 256-byte chunks
+  bench "streaming-4x256B" do
+    let chunk0 := block1k.extract 0 256
+    let chunk1 := block1k.extract 256 512
+    let chunk2 := block1k.extract 512 768
+    let chunk3 := block1k.extract 768 1024
+    let mut acc : UInt64 := 0
+    for _ in [:numIter] do
+      let crc := Radix.CRC.CRC32.init
+      let crc := Radix.CRC.CRC32.update crc chunk0
+      let crc := Radix.CRC.CRC32.update crc chunk1
+      let crc := Radix.CRC.CRC32.update crc chunk2
+      let crc := Radix.CRC.CRC32.update crc chunk3
+      let result := Radix.CRC.CRC32.finalize crc
+      acc := acc ^^^ result.val.toUInt64
+    return acc
+
+  -- CRC-32 single-byte updates (worst case)
+  let block64 := block1k.extract 0 64
+  bench "byte-at-a-time-64B" do
+    let mut acc : UInt64 := 0
+    for _ in [:numIter] do
+      let mut crc := Radix.CRC.CRC32.init
+      for i in [:block64.size] do
+        crc := Radix.CRC.CRC32.updateByte crc block64[i]!
+      let result := Radix.CRC.CRC32.finalize crc
+      acc := acc ^^^ result.val.toUInt64
+    return acc
+
+/-! ================================================================ -/
 /-! ## Main                                                          -/
 /-! ================================================================ -/
 
@@ -406,6 +517,11 @@ def main : IO Unit := do
   benchSignedArith
   IO.println ""
   benchBitFields
+  IO.println ""
+
+  benchRingBuffer
+  IO.println ""
+  benchCRC32
   IO.println ""
 
   IO.println "Benchmarks complete."
