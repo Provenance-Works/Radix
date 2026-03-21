@@ -52,52 +52,42 @@ theorem push_count (rb : RingBuf) (val : Radix.UInt8) (rb' : RingBuf)
     (h : rb.push val = some rb') :
     rb'.count = rb.count + 1 := by
   simp [RingBuf.push] at h
-  split at h
-  · simp at h; exact h.2.2.1
-  · contradiction
+  obtain ⟨_, heq⟩ := h
+  subst heq; rfl
 
 /-- `push` preserves capacity. -/
 theorem push_capacity (rb : RingBuf) (val : Radix.UInt8) (rb' : RingBuf)
     (h : rb.push val = some rb') :
     rb'.capacity = rb.capacity := by
   simp [RingBuf.push] at h
-  split at h
-  · simp at h; exact h.1
-  · contradiction
+  obtain ⟨_, heq⟩ := h
+  subst heq; rfl
 
 /-- `pop` decrements count by 1. -/
 theorem pop_count (rb : RingBuf) (v : Radix.UInt8) (rb' : RingBuf)
     (h : rb.pop = some (v, rb')) :
     rb'.count = rb.count - 1 := by
   simp [RingBuf.pop] at h
-  split at h
-  · simp at h; exact h.2.2.2.1
-  · contradiction
+  obtain ⟨_, hval, heq⟩ := h
+  subst heq; rfl
 
 /-- `pop` preserves capacity. -/
 theorem pop_capacity (rb : RingBuf) (v : Radix.UInt8) (rb' : RingBuf)
     (h : rb.pop = some (v, rb')) :
     rb'.capacity = rb.capacity := by
   simp [RingBuf.pop] at h
-  split at h
-  · simp at h; exact h.2.1
-  · contradiction
+  obtain ⟨_, hval, heq⟩ := h
+  subst heq; rfl
 
 /-- `push` returns `none` iff the buffer is full. -/
 theorem push_none_iff_full (rb : RingBuf) (val : Radix.UInt8) :
     rb.push val = none ↔ ¬(rb.count < rb.capacity) := by
   simp [RingBuf.push]
-  constructor
-  · intro h; split at h <;> [contradiction; omega]
-  · intro h; simp [h]
 
 /-- `pop` returns `none` iff the buffer is empty. -/
 theorem pop_none_iff_empty (rb : RingBuf) :
     rb.pop = none ↔ rb.count = 0 := by
   simp [RingBuf.pop]
-  constructor
-  · intro h; split at h <;> [omega; rfl]
-  · intro h; simp [h]
 
 /-- `clear` produces a buffer with count 0. -/
 theorem clear_count (rb : RingBuf) :
@@ -125,13 +115,10 @@ theorem push_pop_new (cap : Nat) (val : Radix.UInt8) (hcap : cap > 0) :
       | some (v, _) => v = val
       | none => False
     | none => False := by
-  simp [RingBuf.new, RingBuf.push, RingBuf.pop,
-        Memory.Buffer.zeros, Memory.Buffer.size, ByteArray.size,
-        Memory.Buffer.writeU8, Memory.Buffer.readU8]
-  constructor
-  · omega
-  · intro _
-    simp [ByteArray.get, ByteArray.set, Array.getElem_set]
+  simp [RingBuf.new, RingBuf.push, RingBuf.pop, hcap,
+        Memory.Buffer.zeros, Memory.Buffer.writeU8, Memory.Buffer.readU8]
+  congr 1
+  simp [ByteArray.get, ByteArray.set]
 
 /-! ## Size Conservation -/
 
@@ -140,22 +127,19 @@ theorem push_buf_size (rb : RingBuf) (val : Radix.UInt8) (rb' : RingBuf)
     (h : rb.push val = some rb') :
     rb'.buf.size = rb.capacity := by
   simp [RingBuf.push] at h
-  split at h
-  · simp at h
-    have := h.2.2.2
-    rw [this]
-    simp [Memory.Buffer.size, Memory.Buffer.writeU8, ByteArray.set, ByteArray.size]
-    exact rb.hSize
-  · contradiction
+  obtain ⟨_, heq⟩ := h
+  subst heq
+  unfold Memory.Buffer.writeU8 Memory.Buffer.size
+  rw [Memory.Buffer.set_size_eq]
+  exact rb.hSize
 
 /-- The buffer size never changes across pop operations. -/
 theorem pop_buf_size (rb : RingBuf) (v : Radix.UInt8) (rb' : RingBuf)
     (h : rb.pop = some (v, rb')) :
     rb'.buf.size = rb.capacity := by
   simp [RingBuf.pop] at h
-  split at h
-  · simp at h
-    exact h.2.2.2.2
-  · contradiction
+  obtain ⟨_, _, heq⟩ := h
+  subst heq
+  exact rb.hSize
 
 end Radix.RingBuffer

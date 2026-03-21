@@ -90,8 +90,10 @@ def new (capacity : Nat) : RingBuf :=
 def push (rb : RingBuf) (val : Radix.UInt8) : Option RingBuf :=
   if h : rb.count < rb.capacity then
     -- tail is valid because count < capacity
+    have hcap : rb.capacity > 0 := by omega
     have htail_valid : rb.tail < rb.buf.bytes.size := by
-      rw [rb.hSize]; exact rb.hTail (by omega)
+      have h1 := rb.hSize; simp [Memory.Buffer.size] at h1
+      have h2 := rb.hTail hcap; omega
     let buf' := rb.buf.writeU8 rb.tail val htail_valid
     let newTail := (rb.tail + 1) % rb.capacity
     some {
@@ -104,7 +106,9 @@ def push (rb : RingBuf) (val : Radix.UInt8) : Option RingBuf :=
       hHead := rb.hHead
       hTail := fun hcap => Nat.mod_lt _ hcap
       hSize := by
-        simp [Memory.Buffer.size, Memory.Buffer.writeU8, ByteArray.set, ByteArray.size] at *
+        show (Memory.Buffer.writeU8 rb.buf rb.tail val htail_valid).size = rb.capacity
+        unfold Memory.Buffer.writeU8 Memory.Buffer.size
+        rw [Memory.Buffer.set_size_eq]
         exact rb.hSize
     }
   else none
@@ -116,23 +120,28 @@ def pushForce (rb : RingBuf) (val : Radix.UInt8) : RingBuf :=
     | some rb' => rb'
     | none => rb  -- unreachable: count < capacity implies push succeeds
   else
-    -- Overwrite oldest: advance head, then write at tail
-    have htail_valid : rb.tail < rb.buf.bytes.size := by
-      rw [rb.hSize]; exact rb.hTail (by omega)
-    let buf' := rb.buf.writeU8 rb.tail val htail_valid
-    let newTail := (rb.tail + 1) % rb.capacity
-    let newHead := (rb.head + 1) % rb.capacity
-    { buf := buf'
-      capacity := rb.capacity
-      head := newHead
-      tail := newTail
-      count := rb.count
-      hCount := rb.hCount
-      hHead := fun hcap => Nat.mod_lt _ hcap
-      hTail := fun hcap => Nat.mod_lt _ hcap
-      hSize := by
-        simp [Memory.Buffer.size, Memory.Buffer.writeU8, ByteArray.set, ByteArray.size] at *
-        exact rb.hSize }
+    if hcap : rb.capacity > 0 then
+      -- Overwrite oldest: advance head, then write at tail
+      have htail_valid : rb.tail < rb.buf.bytes.size := by
+        have h1 := rb.hSize; simp [Memory.Buffer.size] at h1
+        have h2 := rb.hTail hcap; omega
+      let buf' := rb.buf.writeU8 rb.tail val htail_valid
+      let newTail := (rb.tail + 1) % rb.capacity
+      let newHead := (rb.head + 1) % rb.capacity
+      { buf := buf'
+        capacity := rb.capacity
+        head := newHead
+        tail := newTail
+        count := rb.count
+        hCount := rb.hCount
+        hHead := fun hcap => Nat.mod_lt _ hcap
+        hTail := fun hcap => Nat.mod_lt _ hcap
+        hSize := by
+          show (Memory.Buffer.writeU8 rb.buf rb.tail val htail_valid).size = rb.capacity
+          unfold Memory.Buffer.writeU8 Memory.Buffer.size
+          rw [Memory.Buffer.set_size_eq]
+          exact rb.hSize }
+    else rb  -- capacity = 0: no-op
 
 /-! ## Pop (Dequeue) -/
 
@@ -140,8 +149,10 @@ def pushForce (rb : RingBuf) (val : Radix.UInt8) : RingBuf :=
     Returns `none` if the buffer is empty. -/
 def pop (rb : RingBuf) : Option (Radix.UInt8 × RingBuf) :=
   if h : rb.count > 0 then
+    have hcap : rb.capacity > 0 := by have := rb.hCount; omega
     have hhead_valid : rb.head < rb.buf.bytes.size := by
-      rw [rb.hSize]; exact rb.hHead (by omega)
+      have h1 := rb.hSize; simp [Memory.Buffer.size] at h1
+      have h2 := rb.hHead hcap; omega
     let val := rb.buf.readU8 rb.head hhead_valid
     let newHead := (rb.head + 1) % rb.capacity
     some (val, {
@@ -150,7 +161,7 @@ def pop (rb : RingBuf) : Option (Radix.UInt8 × RingBuf) :=
       head := newHead
       tail := rb.tail
       count := rb.count - 1
-      hCount := by omega
+      hCount := by have := rb.hCount; omega
       hHead := fun hcap => Nat.mod_lt _ hcap
       hTail := rb.hTail
       hSize := rb.hSize
@@ -162,8 +173,10 @@ def pop (rb : RingBuf) : Option (Radix.UInt8 × RingBuf) :=
 /-- Peek at the front element without removing it. -/
 def peek (rb : RingBuf) : Option Radix.UInt8 :=
   if h : rb.count > 0 then
+    have hcap : rb.capacity > 0 := by have := rb.hCount; omega
     have hhead_valid : rb.head < rb.buf.bytes.size := by
-      rw [rb.hSize]; exact rb.hHead (by omega)
+      have h1 := rb.hSize; simp [Memory.Buffer.size] at h1
+      have h2 := rb.hHead hcap; omega
     some (rb.buf.readU8 rb.head hhead_valid)
   else none
 
