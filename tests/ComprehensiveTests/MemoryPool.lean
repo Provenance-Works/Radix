@@ -44,9 +44,12 @@ def runMemoryPoolTests : IO Nat := do
       assert (bp2.remaining == 160) "bump remaining after 96"
 
       -- ## Read/Write
-      let bp3 := bp2.writeU8 0 ⟨42⟩ (by omega)
-      let v := bp3.readU8 0 (by omega)
-      assert (v.toNat == 42) "bump write/read round-trip"
+      if hCap : 0 < bp2.capacity then
+        let bp3 := bp2.writeU8 0 ⟨42⟩ hCap
+        let v := bp3.readU8 0 hCap
+        assert (v.toNat == 42) "bump write/read round-trip"
+      else
+        assert false "capacity should be > 0"
 
       -- ## Reset
       let bpReset := bp2.reset
@@ -61,17 +64,17 @@ def runMemoryPoolTests : IO Nat := do
         assert (off3 == 0) "bump after reset: offset 0"
 
   -- ## Zero-size allocation fails
-  assert (bp.alloc 0 == none) "bump alloc 0 fails"
+  assert ((bp.alloc 0).isNone) "bump alloc 0 fails"
 
   -- ## Exhaust capacity
   match bp.alloc 256 with
   | none => assert false "bump alloc full capacity should work"
   | some (_, bpFull) =>
     assert (bpFull.remaining == 0) "bump full remaining"
-    assert (bpFull.alloc 1 == none) "bump alloc when full fails"
+    assert ((bpFull.alloc 1).isNone) "bump alloc when full fails"
 
   -- ## Overflow: allocate more than capacity
-  assert (bp.alloc 257 == none) "bump alloc > capacity fails"
+  assert ((bp.alloc 257).isNone) "bump alloc > capacity fails"
 
   -- ## Aligned allocation
   match bp.allocAligned 32 8 with
@@ -124,7 +127,7 @@ def runMemoryPoolTests : IO Nat := do
     match sp1.free blockIdx with
     | none => assert false "first free should work"
     | some sp2 =>
-      assert (sp2.free blockIdx == none) "slab double-free detected"
+      assert ((sp2.free blockIdx).isNone) "slab double-free detected"
 
   -- ## Exhaust all blocks
   let mut spEx := sp
@@ -137,7 +140,7 @@ def runMemoryPoolTests : IO Nat := do
       spEx := sp'
   assert (spEx.freeCount == 0) "slab all allocated: freeCount 0"
   assert (spEx.allocatedCount == 8) "slab all allocated: allocatedCount 8"
-  assert (spEx.alloc == none) "slab alloc when exhausted fails"
+  assert (spEx.alloc.isNone) "slab alloc when exhausted fails"
 
   -- ## Free all blocks
   for idx in allocatedIndices do
@@ -151,10 +154,13 @@ def runMemoryPoolTests : IO Nat := do
   match sp.alloc with
   | none => assert false "slab alloc for write test"
   | some (blockIdx, _, sp1) =>
-    let sp2 := sp1.writeBlockU8 blockIdx 0 ⟨0xAB⟩
-      (by omega) (by omega)
-    let v := sp2.readBlockU8 blockIdx 0 (by omega) (by omega)
-    assert (v.toNat == 0xAB) "slab write/read round-trip"
+    if hBlock : blockIdx < sp1.blockCount then
+      have hByte : 0 < sp1.blockSize := sp1.hBlockSize
+      let sp2 := sp1.writeBlockU8 blockIdx 0 ⟨0xAB⟩ hBlock hByte
+      let v := sp2.readBlockU8 blockIdx 0 hBlock hByte
+      assert (v.toNat == 0xAB) "slab write/read round-trip"
+    else
+      assert false "blockIdx should be < blockCount"
 
   -- ## canAlloc
   assert (sp.canAlloc == true) "slab canAlloc on fresh"

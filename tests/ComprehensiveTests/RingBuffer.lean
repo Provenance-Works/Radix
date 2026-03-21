@@ -48,7 +48,7 @@ def runRingBufferTests : IO Nat := do
   assert (rbFill.isFull) "filled isFull"
 
   -- Push when full should fail
-  assert (rbFill.push ⟨99⟩ == none) "push to full returns none"
+  assert (rbFill.push ⟨99⟩ |>.isNone) "push to full returns none"
 
   -- Pop all in FIFO order
   for i in [:4] do
@@ -60,7 +60,7 @@ def runRingBufferTests : IO Nat := do
   assert (rbFill.isEmpty) "empty after draining"
 
   -- Pop from empty should fail
-  assert (rbFill.pop == none) "pop from empty returns none"
+  assert (rbFill.pop |>.isNone) "pop from empty returns none"
 
   -- ## pushForce (overwrite mode)
   let mut rbForce := RingBuf.new 3
@@ -75,7 +75,7 @@ def runRingBufferTests : IO Nat := do
   -- ## pushMany / popMany
   let mut rbBulk := RingBuf.new 16
   let data : List Radix.UInt8 := [⟨1⟩, ⟨2⟩, ⟨3⟩, ⟨4⟩, ⟨5⟩]
-  rbBulk := rbBulk.pushMany data
+  rbBulk := (rbBulk.pushMany data).1
   assert (rbBulk.count == 5) "pushMany count"
 
   let (popped, rbBulk') := rbBulk.popMany 3
@@ -97,14 +97,14 @@ def runRingBufferTests : IO Nat := do
 
   -- ## drain
   let mut rbDrain := RingBuf.new 4
-  rbDrain := rbDrain.pushMany [⟨10⟩, ⟨20⟩, ⟨30⟩]
+  rbDrain := (rbDrain.pushMany [⟨10⟩, ⟨20⟩, ⟨30⟩]).1
   let (all, rbDrained) := rbDrain.drain
   assert (all.length == 3) "drain length"
   assert (rbDrained.isEmpty) "drain empty"
 
   -- ## toList
   let mut rbList := RingBuf.new 4
-  rbList := rbList.pushMany [⟨7⟩, ⟨8⟩, ⟨9⟩]
+  rbList := (rbList.pushMany [⟨7⟩, ⟨8⟩, ⟨9⟩]).1
   let lst := rbList.toList
   assert (lst.length == 3) "toList length"
 
@@ -112,6 +112,6 @@ def runRingBufferTests : IO Nat := do
   let rbZero := RingBuf.new 0
   assert (rbZero.capacity == 0) "zero cap capacity"
   assert (rbZero.isFull) "zero cap isFull"
-  assert (rbZero.push ⟨1⟩ == none) "zero cap push fails"
+  assert (rbZero.push ⟨1⟩ |>.isNone) "zero cap push fails"
 
   c.get

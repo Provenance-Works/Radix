@@ -101,8 +101,8 @@ def runCRCTests : IO Nat := do
   for _ in [:numIter] do
     let (rng', len) := rng.nextNat 32
     rng := rng'
-    let mut data1 := ByteArray.mkEmpty (len + 1)
-    let mut data2 := ByteArray.mkEmpty (len + 1)
+    let mut data1 := ByteArray.empty
+    let mut data2 := ByteArray.empty
     for _ in [:(len + 1)] do
       let (rng', b1) := rng.nextUInt8
       rng := rng'

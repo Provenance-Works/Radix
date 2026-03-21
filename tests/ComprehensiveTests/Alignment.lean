@@ -36,8 +36,8 @@ def runAlignmentTests : IO Nat := do
   assert (alignUp 7 1 == 7) "alignUp 7 1"
   assert (alignUp 13 8 == 16) "alignUp 13 8"
   assert (alignUp 16 8 == 16) "alignUp 16 8"
-  -- Edge: align=0 returns 0
-  assert (alignUp 5 0 == 0) "alignUp align=0"
+  -- Edge: align=0 returns offset unchanged
+  assert (alignUp 5 0 == 5) "alignUp align=0"
 
   -- ## alignDown
   assert (alignDown 0 4 == 0) "alignDown 0 4"
