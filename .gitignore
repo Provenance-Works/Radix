@@ -27,6 +27,7 @@ spec/
 
 # Compiled binaries
 benchmarks/baseline
+benchmarks/baseline_test
 c/*.o
 c/*.so
 c/*.dylib
