@@ -90,7 +90,10 @@ lean_lib ExamplesLib where
              `examples.Varint,
              `examples.FirmwareImage,
              `examples.LockFree,
-             `examples.SystemIO]
+             `examples.SystemIO,
+             `examples.BitmapDemo,
+             `examples.AlignmentDemo,
+             `examples.MemoryPoolDemo]
 
 lean_exe examples where
   root := `examples.Main

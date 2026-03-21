@@ -27,6 +27,9 @@ import examples.Varint
 import examples.FirmwareImage
 import examples.LockFree
 import examples.SystemIO
+import examples.BitmapDemo
+import examples.AlignmentDemo
+import examples.MemoryPoolDemo
 
 /-!
 # Radix Usage Examples (P4-03)
@@ -718,5 +721,15 @@ def main : IO Unit := do
   Examples.FirmwareImage.run
   Examples.LockFree.run
   Examples.SystemIO.run
+
+  IO.println ""
+  IO.println "=============================="
+  IO.println "v0.2.0 Feature Examples"
+  IO.println "=============================="
+  IO.println ""
+
+  Examples.BitmapDemo.main
+  Examples.AlignmentDemo.main
+  Examples.MemoryPoolDemo.main
 
   IO.println "All examples completed successfully!"
