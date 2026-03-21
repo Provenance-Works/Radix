@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-21
+
+### Added
+
+#### Ring Buffer (`Radix.RingBuffer`)
+- Fixed-capacity circular queue backed by `Memory.Buffer`
+- O(1) `push`, `pop`, `peek` with bounds-checked access
+- `pushForce` (overwrite-on-full), `pushMany`, `popMany`, `drain`, `clear`
+- Formal specification (`RingBufferState`) with FIFO ordering proofs
+- 24 theorems: invariant preservation, push/pop round-trip, capacity conservation
+
+#### Bitmap / Bitset (`Radix.Bitmap`)
+- Dense bit-array backed by `Array UInt64` (64 bits per word)
+- O(1) `set`, `clear`, `test`, `toggle`
+- Bulk operations: `popcount`, `findFirstSet`, `findFirstClear`
+- Set operations: `union`, `intersection`, `difference`, `complement`
+- Query operations: `isEmpty`, `isFull`, `isDisjoint`, `isSubsetOf`
+- Abstract specification (`BitmapState`) with set/clear round-trip proofs
+- 33 theorems: structural invariant preservation, boolean algebra properties
+
+#### CRC-32 / CRC-16 (`Radix.CRC`)
+- Table-driven CRC-32/ISO-HDLC (Ethernet, gzip, PNG)
+- Table-driven CRC-16/CCITT (X.25, HDLC, Bluetooth)
+- Streaming API: `init`/`update`/`finalize` for chunked processing
+- Mathematical specification via GF(2) polynomial division
+- Bit-by-bit reference implementations (`computeNaive`) for verification
+- 10 theorems: table size, streaming consistency, GF(2) algebra, empty data CRC
+
+#### Numeric Typeclasses (`Radix.Word.Numeric`)
+- `BoundedUInt`: generic unsigned integer trait (minVal, maxVal, toNat, wrapping/saturating/checked arithmetic)
+- `BoundedInt`: generic signed integer trait (minVal, maxVal, toInt, isNeg, fromInt)
+- `BitwiseOps`: generic bitwise operations trait (band, bor, bxor, bnot, testBit, popcount)
+- Instances for all 8 concrete types (UInt8/16/32/64, Int8/16/32/64)
+- Generic utility functions: `genericZero`, `genericMaxVal`, `isZero`, `isMax`
+- 4 theorems: wrapping addition identity/commutativity, min/max bounds
+
+#### Memory Pool Model (`Radix.MemoryPool`)
+- **Bump Allocator** (`BumpPool`): O(1) allocation, bulk reset, aligned allocation
+- **Slab Allocator** (`SlabPool`): O(1) fixed-size block allocation/deallocation
+- Abstract specification (`BumpState`, `SlabState`) with safety proofs
+- Double-free detection, capacity tracking, allocation offset correctness
+- 36 theorems: no double-free, capacity tracking, offset bounds, reset correctness
+
+#### Alignment Utilities (`Radix.Alignment`)
+- `alignUp`, `alignDown`, `isAligned`, `alignPadding` for general alignment
+- Power-of-two fast paths: `alignUpPow2`, `alignDownPow2`, `isAlignedPow2`
+- `HasAlignment` typeclass with instances for UInt8/16/32/64
+- 18 theorems: alignment sandwich (alignDown <= x <= alignUp), round-trip,
+  padding bounds, ops-vs-spec equivalence
+
+#### Testing & Benchmarks
+- Comprehensive tests for all 6 new modules (1,280 assertions)
+- Property-based tests for all 6 new modules
+- CRC-32 and Ring Buffer benchmarks with C baseline comparison
+- 3 new examples: `BitmapDemo`, `AlignmentDemo`, `MemoryPoolDemo`
+
+#### Documentation
+- English and Japanese API reference for all new modules
+- Three-layer architecture maintained across all new modules
+
+### Changed
+
+- Updated theorem count from 937+ to 1062+
+- Updated barrel file (`Radix.lean`) with all v0.2.0 module imports
+
 ## [0.1.3] - 2026-03-17
 
 ### Fixed
@@ -161,7 +226,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation in English and Japanese
 - 11 usage examples demonstrating all modules
 
-[Unreleased]: https://github.com/provenance-works/radix/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/provenance-works/radix/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/provenance-works/radix/compare/v0.1.3...v0.2.0
+[0.1.3]: https://github.com/provenance-works/radix/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/provenance-works/radix/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/provenance-works/radix/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/provenance-works/radix/releases/tag/v0.1.0
