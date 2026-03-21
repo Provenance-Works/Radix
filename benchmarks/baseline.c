@@ -10,6 +10,8 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #define NUM_ITER 1000000
@@ -189,6 +191,170 @@ static uint64_t bench_u32_bswap(void) {
 }
 
 /* ================================================================ */
+/* Ring Buffer (Circular Queue)                                      */
+/* ================================================================ */
+
+#define RINGBUF_CAP 1024
+
+typedef struct {
+    uint8_t buf[RINGBUF_CAP];
+    int head;
+    int tail;
+    int count;
+    int capacity;
+} RingBuf;
+
+static void ringbuf_init(RingBuf *rb, int cap) {
+    rb->head = 0;
+    rb->tail = 0;
+    rb->count = 0;
+    rb->capacity = cap;
+    for (int i = 0; i < cap; i++) rb->buf[i] = 0;
+}
+
+static int ringbuf_push(RingBuf *rb, uint8_t val) {
+    if (rb->count >= rb->capacity) return 0;
+    rb->buf[rb->tail] = val;
+    rb->tail = (rb->tail + 1) % rb->capacity;
+    rb->count++;
+    return 1;
+}
+
+static int ringbuf_pop(RingBuf *rb, uint8_t *out) {
+    if (rb->count == 0) return 0;
+    *out = rb->buf[rb->head];
+    rb->head = (rb->head + 1) % rb->capacity;
+    rb->count--;
+    return 1;
+}
+
+static void ringbuf_push_force(RingBuf *rb, uint8_t val) {
+    if (rb->count < rb->capacity) {
+        ringbuf_push(rb, val);
+    } else {
+        rb->buf[rb->tail] = val;
+        rb->tail = (rb->tail + 1) % rb->capacity;
+        rb->head = (rb->head + 1) % rb->capacity;
+    }
+}
+
+static uint64_t bench_ringbuf_push(void) {
+    RingBuf rb;
+    ringbuf_init(&rb, NUM_ITER < RINGBUF_CAP ? NUM_ITER : RINGBUF_CAP);
+    uint64_t acc = 0;
+    /* Push into a large-capacity buffer */
+    ringbuf_init(&rb, RINGBUF_CAP);
+    for (int i = 0; i < NUM_ITER; i++) {
+        uint8_t byte = (uint8_t)(data[i] & 0xFF);
+        /* Reset when full to keep pushing */
+        if (rb.count >= rb.capacity) {
+            rb.head = 0; rb.tail = 0; rb.count = 0;
+        }
+        acc += ringbuf_push(&rb, byte);
+    }
+    return acc;
+}
+
+static uint64_t bench_ringbuf_pop(void) {
+    RingBuf rb;
+    ringbuf_init(&rb, RINGBUF_CAP);
+    /* Fill buffer */
+    for (int i = 0; i < RINGBUF_CAP; i++)
+        ringbuf_push(&rb, (uint8_t)(data[i % NUM_ITER] & 0xFF));
+    uint64_t acc = 0;
+    for (int i = 0; i < NUM_ITER; i++) {
+        uint8_t val;
+        if (ringbuf_pop(&rb, &val)) {
+            acc += val;
+        } else {
+            /* Refill */
+            ringbuf_init(&rb, RINGBUF_CAP);
+            for (int j = 0; j < RINGBUF_CAP; j++)
+                ringbuf_push(&rb, (uint8_t)(data[j % NUM_ITER] & 0xFF));
+        }
+    }
+    return acc;
+}
+
+static uint64_t bench_ringbuf_pushforce(void) {
+    RingBuf rb;
+    ringbuf_init(&rb, 256);
+    uint64_t acc = 0;
+    for (int i = 0; i < NUM_ITER; i++) {
+        uint8_t byte = (uint8_t)(data[i] & 0xFF);
+        ringbuf_push_force(&rb, byte);
+        acc++;
+    }
+    return acc;
+}
+
+/* ================================================================ */
+/* CRC-32 (Table-driven, reflected)                                  */
+/* ================================================================ */
+
+#define CRC32_POLY 0xEDB88320U
+#define CRC32_INIT 0xFFFFFFFFU
+
+static uint32_t crc32_table[256];
+
+static void crc32_init_table(void) {
+    for (uint32_t i = 0; i < 256; i++) {
+        uint32_t crc = i;
+        for (int j = 0; j < 8; j++) {
+            if (crc & 1)
+                crc = (crc >> 1) ^ CRC32_POLY;
+            else
+                crc >>= 1;
+        }
+        crc32_table[i] = crc;
+    }
+}
+
+static uint32_t crc32_compute(const uint8_t *buf, size_t len) {
+    uint32_t crc = CRC32_INIT;
+    for (size_t i = 0; i < len; i++)
+        crc = crc32_table[(crc ^ buf[i]) & 0xFF] ^ (crc >> 8);
+    return crc ^ CRC32_INIT;
+}
+
+/* Pre-generated 1KB test block */
+static uint8_t crc_block_1k[1024];
+
+static void gen_crc_block(void) {
+    prng_seed(42);
+    for (int i = 0; i < 1024; i++)
+        crc_block_1k[i] = (uint8_t)(prng_next() & 0xFF);
+}
+
+static uint64_t bench_crc32_1kb(void) {
+    uint64_t acc = 0;
+    for (int i = 0; i < NUM_ITER; i++)
+        acc ^= crc32_compute(crc_block_1k, 1024);
+    return acc;
+}
+
+static uint64_t bench_crc32_streaming_4x256(void) {
+    uint64_t acc = 0;
+    for (int i = 0; i < NUM_ITER; i++) {
+        uint32_t crc = CRC32_INIT;
+        for (int c = 0; c < 4; c++) {
+            const uint8_t *chunk = crc_block_1k + c * 256;
+            for (int j = 0; j < 256; j++)
+                crc = crc32_table[(crc ^ chunk[j]) & 0xFF] ^ (crc >> 8);
+        }
+        acc ^= (crc ^ CRC32_INIT);
+    }
+    return acc;
+}
+
+static uint64_t bench_crc32_byte_at_a_time_64(void) {
+    uint64_t acc = 0;
+    for (int i = 0; i < NUM_ITER; i++)
+        acc ^= crc32_compute(crc_block_1k, 64);
+    return acc;
+}
+
+/* ================================================================ */
 /* Main                                                              */
 /* ================================================================ */
 
@@ -216,6 +382,21 @@ int main(void) {
     printf("Byte Order (UInt32):\n");
     gen_data(4);
     run_bench("bswap", bench_u32_bswap);
+    printf("\n");
+
+    printf("Ring Buffer:\n");
+    gen_data(10);
+    run_bench("push", bench_ringbuf_push);
+    run_bench("pop", bench_ringbuf_pop);
+    run_bench("pushForce", bench_ringbuf_pushforce);
+    printf("\n");
+
+    printf("CRC-32:\n");
+    crc32_init_table();
+    gen_crc_block();
+    run_bench("compute-1KB", bench_crc32_1kb);
+    run_bench("streaming-4x256B", bench_crc32_streaming_4x256);
+    run_bench("byte-at-a-time-64B", bench_crc32_byte_at_a_time_64);
     printf("\n");
 
     printf("C Baseline complete.\n");
