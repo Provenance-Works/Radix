@@ -235,37 +235,35 @@ theorem bump_new_remaining (cap : Nat) :
 
 /-- Allocation preserves validity. -/
 theorem bump_alloc_preserves_valid (s : BumpState) (size : Nat) (s' : BumpState)
-    (info : AllocInfo) (hValid : s.isValid)
-    (hAlloc : s.alloc size = some (s', info)) :
+    (info : AllocInfo)
+    (hAlloc : s.alloc size = some (s', info))
+    (_hValid : s.isValid) :
     s'.isValid := by
-  simp [BumpState.alloc] at hAlloc
+  unfold BumpState.alloc at hAlloc
   split at hAlloc
   · contradiction
-  · rename_i hSize
-    split at hAlloc
+  · split at hAlloc
     · contradiction
-    · rename_i hCap
-      simp at hCap
-      simp at hAlloc
-      obtain ⟨rfl, _⟩ := hAlloc
-      simp [BumpState.isValid] at *
-      omega
+    · rename_i hSize hCap; simp at hCap
+      injection hAlloc with hAlloc
+      have := congrArg Prod.fst hAlloc; simp at this; subst this
+      simp [BumpState.isValid] at *; omega
 
 /-- Allocation decreases remaining capacity. -/
 theorem bump_alloc_decreases_remaining (s : BumpState) (size : Nat) (s' : BumpState)
     (info : AllocInfo) (hAlloc : s.alloc size = some (s', info)) :
     s'.remaining = s.remaining - size := by
-  simp [BumpState.alloc] at hAlloc
+  unfold BumpState.alloc at hAlloc
   split at hAlloc
   · contradiction
   · split at hAlloc
     · contradiction
-    · simp at hAlloc
-      obtain ⟨rfl, _⟩ := hAlloc
-      simp [BumpState.remaining]
+    · injection hAlloc with hAlloc
+      have := congrArg Prod.fst hAlloc; simp at this; subst this
+      simp [BumpState.remaining]; omega
 
 /-- Reset restores full capacity. -/
-theorem bump_reset_remaining (s : BumpState) (hValid : s.isValid) :
+theorem bump_reset_remaining (s : BumpState) :
     (s.reset).remaining = s.capacity := by
   simp [BumpState.reset, BumpState.remaining]
 
@@ -278,48 +276,45 @@ theorem bump_reset_isValid (s : BumpState) :
 theorem bump_alloc_offset_eq_cursor (s : BumpState) (size : Nat) (s' : BumpState)
     (info : AllocInfo) (hAlloc : s.alloc size = some (s', info)) :
     info.offset = s.cursor := by
-  simp [BumpState.alloc] at hAlloc
+  unfold BumpState.alloc at hAlloc
   split at hAlloc
   · contradiction
   · split at hAlloc
     · contradiction
-    · simp at hAlloc
-      exact hAlloc.2.1
+    · injection hAlloc with hAlloc
+      have := congrArg Prod.snd hAlloc; simp at this; rw [← this]
 
 /-- Allocation returns an `allocated` state. -/
 theorem bump_alloc_state (s : BumpState) (size : Nat) (s' : BumpState)
     (info : AllocInfo) (hAlloc : s.alloc size = some (s', info)) :
     info.state = .allocated := by
-  simp [BumpState.alloc] at hAlloc
+  unfold BumpState.alloc at hAlloc
   split at hAlloc
   · contradiction
   · split at hAlloc
     · contradiction
-    · simp at hAlloc
-      exact hAlloc.2.2.2
+    · injection hAlloc with hAlloc
+      have := congrArg Prod.snd hAlloc; simp at this; rw [← this]
 
 /-- Zero-size allocation always fails. -/
 theorem bump_alloc_zero_fails (s : BumpState) :
     s.alloc 0 = none := by
-  simp [BumpState.alloc]
+  unfold BumpState.alloc; simp
 
 /-! ### Slab Allocator Properties -/
 
 /-- Fresh slab allocator is valid. -/
 theorem slab_new_isValid (bs bc : Nat) : (SlabState.new bs bc).isValid := by
-  simp [SlabState.new, SlabState.isValid]
-  constructor
+  unfold SlabState.new SlabState.isValid
+  simp only
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · intro idx hMem hContra
+    simp at hContra
   · intro idx hMem
     simp [List.mem_range] at hMem
-    intro hContra
-    exact absurd hContra (List.not_mem_nil idx)
-  · constructor
-    · intro idx hMem
-      simp [List.mem_range] at hMem
-      exact hMem
-    · constructor
-      · intro idx hMem; exact absurd hMem (List.not_mem_nil idx)
-      · simp [List.length_range]
+    exact hMem
+  · intro idx hMem; simp at hMem
+  · simp [List.length_range]
 
 /-- Fresh slab has all blocks free. -/
 theorem slab_new_freeCount (bs bc : Nat) :
@@ -335,15 +330,6 @@ theorem slab_alloc_empty_fails (s : SlabState) (h : s.freeBlocks = []) :
 theorem slab_double_free_fails (s : SlabState) (idx : Nat)
     (h : idx ∉ s.allocatedBlocks) :
     s.free idx = none := by
-  simp [SlabState.free]
-  intro hContra
-  exact absurd (List.mem_of_contains_eq_true hContra) h
-where
-  List.mem_of_contains_eq_true {α : Type} [BEq α] [LawfulBEq α]
-      {a : α} {l : List α} (h : l.contains a = true) : a ∈ l := by
-    simp [List.contains_iff_exists_beq] at h
-    obtain ⟨b, hMem, hEq⟩ := h
-    rw [BEq.eq_of_beq hEq]
-    exact hMem
+  simp [SlabState.free, h]
 
 end Radix.MemoryPool.Spec

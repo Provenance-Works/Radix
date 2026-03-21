@@ -52,7 +52,6 @@ structure BumpPool where
   hCursor : cursor ≤ capacity
   /-- Invariant: buffer size equals capacity. -/
   hBufSize : buf.size = capacity
-  deriving Repr
 
 namespace BumpPool
 
@@ -62,7 +61,7 @@ namespace BumpPool
     capacity := capacity
     cursor := 0
     hCursor := Nat.zero_le capacity
-    hBufSize := by simp [Buffer.zeros, Buffer.size, ByteArray.size, Array.size_replicate] }
+    hBufSize := by simp [Buffer.zeros, Buffer.size, ByteArray.size] }
 
 /-- Remaining free bytes in the pool. -/
 @[inline] def remaining (pool : BumpPool) : Nat := pool.capacity - pool.cursor
@@ -110,17 +109,17 @@ def allocAligned (pool : BumpPool) (size : Nat) (align : Nat) : Option (Nat × B
 /-- Write a byte into an allocated region of the pool. -/
 def writeU8 (pool : BumpPool) (offset : Nat) (val : Radix.UInt8)
     (h : offset < pool.capacity) : BumpPool :=
-  let hBuf : offset < pool.buf.size := by rw [pool.hBufSize]; exact h
+  have hBuf : offset < pool.buf.bytes.size := by
+    have := pool.hBufSize; simp [Buffer.size] at this; omega
   { pool with
     buf := pool.buf.writeU8 offset val hBuf
     hBufSize := by
-      simp [Buffer.writeU8, Buffer.size, ByteArray.size]
+      show (pool.buf.writeU8 offset val hBuf).size = pool.capacity
+      unfold Buffer.writeU8 Buffer.size
       rw [Buffer.set_size_eq]
       exact pool.hBufSize }
-
-/-- Read a byte from the pool. -/
 @[inline] def readU8 (pool : BumpPool) (offset : Nat) (h : offset < pool.capacity) : Radix.UInt8 :=
-  pool.buf.readU8 offset (by rw [pool.hBufSize]; exact h)
+  pool.buf.readU8 offset (by have := pool.hBufSize; simp [Buffer.size] at this; omega)
 
 end BumpPool
 
@@ -145,7 +144,6 @@ structure SlabPool where
   hBlockSize : blockSize > 0
   /-- Invariant: buffer size equals blockSize * blockCount. -/
   hBufSize : buf.size = blockSize * blockCount
-  deriving Repr
 
 namespace SlabPool
 
@@ -158,7 +156,10 @@ def new (blockSize : Nat) (blockCount : Nat) (hBS : blockSize > 0) : SlabPool :=
     freeList := (List.range blockCount).reverse  -- LIFO order
     allocated := []
     hBlockSize := hBS
-    hBufSize := by simp [Buffer.zeros, Buffer.size, ByteArray.size, Array.size_replicate] }
+    hBufSize := by
+      show (Buffer.zeros totalSize).size = blockSize * blockCount
+      simp [Buffer.zeros, Buffer.size, ByteArray.size]
+      rfl }
 
 /-- Number of free blocks available. -/
 @[inline] def freeCount (pool : SlabPool) : Nat := pool.freeList.length
@@ -194,20 +195,40 @@ def free (pool : SlabPool) (blockIdx : Nat) : Option SlabPool :=
 def writeBlockU8 (pool : SlabPool) (blockIdx : Nat) (byteOffset : Nat) (val : Radix.UInt8)
     (hBlock : blockIdx < pool.blockCount) (hByte : byteOffset < pool.blockSize) : SlabPool :=
   let offset := blockIdx * pool.blockSize + byteOffset
-  have hOff : offset < pool.buf.size := by
-    rw [pool.hBufSize]; omega
+  have hOff : offset < pool.buf.bytes.size := by
+    have h1 := pool.hBufSize; simp [Buffer.size] at h1; rw [h1]
+    show blockIdx * pool.blockSize + byteOffset < pool.blockSize * pool.blockCount
+    have h2 : blockIdx * pool.blockSize + byteOffset
+            < blockIdx * pool.blockSize + pool.blockSize := by omega
+    have h3 : blockIdx * pool.blockSize + pool.blockSize
+            ≤ pool.blockCount * pool.blockSize :=
+      Nat.add_one_mul blockIdx pool.blockSize ▸ Nat.mul_le_mul_right _ (by omega)
+    have h5 : pool.blockCount * pool.blockSize = pool.blockSize * pool.blockCount :=
+      Nat.mul_comm _ _
+    omega
   { pool with
     buf := pool.buf.writeU8 offset val hOff
     hBufSize := by
-      simp [Buffer.writeU8, Buffer.size, ByteArray.size]
+      show (pool.buf.writeU8 offset val hOff).size = pool.blockSize * pool.blockCount
+      unfold Buffer.writeU8 Buffer.size
       rw [Buffer.set_size_eq]
       exact pool.hBufSize }
 
-/-- Read a byte within a specific block. -/
 @[inline] def readBlockU8 (pool : SlabPool) (blockIdx : Nat) (byteOffset : Nat)
     (hBlock : blockIdx < pool.blockCount) (hByte : byteOffset < pool.blockSize) : Radix.UInt8 :=
   let offset := blockIdx * pool.blockSize + byteOffset
-  pool.buf.readU8 offset (by rw [pool.hBufSize]; omega)
+  have hOff : offset < pool.buf.bytes.size := by
+    have h1 := pool.hBufSize; simp [Buffer.size] at h1; rw [h1]
+    show blockIdx * pool.blockSize + byteOffset < pool.blockSize * pool.blockCount
+    have h2 : blockIdx * pool.blockSize + byteOffset
+            < blockIdx * pool.blockSize + pool.blockSize := by omega
+    have h3 : blockIdx * pool.blockSize + pool.blockSize
+            ≤ pool.blockCount * pool.blockSize :=
+      Nat.add_one_mul blockIdx pool.blockSize ▸ Nat.mul_le_mul_right _ (by omega)
+    have h5 : pool.blockCount * pool.blockSize = pool.blockSize * pool.blockCount :=
+      Nat.mul_comm _ _
+    omega
+  pool.buf.readU8 offset hOff
 
 end SlabPool
 

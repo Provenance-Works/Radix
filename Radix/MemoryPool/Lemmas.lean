@@ -47,33 +47,33 @@ theorem bump_new_cursor (cap : Nat) :
 theorem bump_alloc_offset (pool : BumpPool) (size : Nat) (off : Nat) (pool' : BumpPool)
     (hAlloc : pool.alloc size = some (off, pool')) :
     off = pool.cursor := by
-  simp [BumpPool.alloc] at hAlloc
+  unfold BumpPool.alloc at hAlloc
   split at hAlloc
   · contradiction
   · split at hAlloc
-    · simp at hAlloc; exact hAlloc.1
+    · simp at hAlloc; exact hAlloc.1.symm
     · contradiction
 
 /-- Allocation advances the cursor by exactly `size`. -/
 theorem bump_alloc_cursor (pool : BumpPool) (size : Nat) (off : Nat) (pool' : BumpPool)
     (hAlloc : pool.alloc size = some (off, pool')) :
     pool'.cursor = pool.cursor + size := by
-  simp [BumpPool.alloc] at hAlloc
+  unfold BumpPool.alloc at hAlloc
   split at hAlloc
   · contradiction
   · split at hAlloc
-    · simp at hAlloc; exact hAlloc.2.1
+    · simp at hAlloc; obtain ⟨_, h⟩ := hAlloc; subst h; rfl
     · contradiction
 
 /-- Allocation preserves capacity. -/
 theorem bump_alloc_capacity (pool : BumpPool) (size : Nat) (off : Nat) (pool' : BumpPool)
     (hAlloc : pool.alloc size = some (off, pool')) :
     pool'.capacity = pool.capacity := by
-  simp [BumpPool.alloc] at hAlloc
+  unfold BumpPool.alloc at hAlloc
   split at hAlloc
   · contradiction
   · split at hAlloc
-    · simp at hAlloc; exact hAlloc.2.2
+    · simp at hAlloc; obtain ⟨_, h⟩ := hAlloc; subst h; rfl
     · contradiction
 
 /-- Allocation decreases remaining capacity. -/
@@ -83,13 +83,14 @@ theorem bump_alloc_remaining (pool : BumpPool) (size : Nat) (off : Nat) (pool' :
   have hCur := bump_alloc_cursor pool size off pool' hAlloc
   have hCap := bump_alloc_capacity pool size off pool' hAlloc
   simp [BumpPool.remaining, hCur, hCap]
+  omega
 
 /-- Allocation returns an in-bounds offset. -/
 theorem bump_alloc_offset_in_bounds (pool : BumpPool) (size : Nat) (off : Nat) (pool' : BumpPool)
     (hAlloc : pool.alloc size = some (off, pool')) :
     off + size ≤ pool.capacity := by
   have hOff := bump_alloc_offset pool size off pool' hAlloc
-  simp [BumpPool.alloc] at hAlloc
+  unfold BumpPool.alloc at hAlloc
   split at hAlloc
   · contradiction
   · split at hAlloc
@@ -143,7 +144,10 @@ theorem slab_new_allocatedCount (bs bc : Nat) (h : bs > 0) :
 theorem slab_free_unallocated (pool : SlabPool) (idx : Nat)
     (h : ¬ pool.allocated.contains idx) :
     pool.free idx = none := by
-  simp [SlabPool.free, h]
+  unfold SlabPool.free
+  split
+  · next h' => exact absurd h' h
+  · rfl
 
 /-- Allocation from empty pool fails. -/
 theorem slab_alloc_empty (pool : SlabPool) (h : pool.freeList = []) :
@@ -154,25 +158,37 @@ theorem slab_alloc_empty (pool : SlabPool) (h : pool.freeList = []) :
 theorem slab_alloc_offset (pool : SlabPool) (blockIdx off : Nat) (pool' : SlabPool)
     (hAlloc : pool.alloc = some (blockIdx, off, pool')) :
     off = blockIdx * pool.blockSize := by
-  simp [SlabPool.alloc] at hAlloc
-  match pool.freeList, hAlloc with
-  | _ :: _, h => simp at h; exact h.2.1
+  unfold SlabPool.alloc at hAlloc
+  split at hAlloc
+  · contradiction
+  · next head rest =>
+    simp at hAlloc
+    obtain ⟨h1, h2, _⟩ := hAlloc
+    subst h1; exact h2.symm
 
 /-- Allocation preserves block size. -/
 theorem slab_alloc_blockSize (pool : SlabPool) (blockIdx off : Nat) (pool' : SlabPool)
     (hAlloc : pool.alloc = some (blockIdx, off, pool')) :
     pool'.blockSize = pool.blockSize := by
-  simp [SlabPool.alloc] at hAlloc
-  match pool.freeList, hAlloc with
-  | _ :: _, h => simp at h; exact h.2.2.1
+  unfold SlabPool.alloc at hAlloc
+  split at hAlloc
+  · contradiction
+  · next head rest =>
+    simp at hAlloc
+    obtain ⟨_, _, h3⟩ := hAlloc
+    subst h3; rfl
 
 /-- Allocation preserves block count. -/
 theorem slab_alloc_blockCount (pool : SlabPool) (blockIdx off : Nat) (pool' : SlabPool)
     (hAlloc : pool.alloc = some (blockIdx, off, pool')) :
     pool'.blockCount = pool.blockCount := by
-  simp [SlabPool.alloc] at hAlloc
-  match pool.freeList, hAlloc with
-  | _ :: _, h => simp at h; exact h.2.2.2.1
+  unfold SlabPool.alloc at hAlloc
+  split at hAlloc
+  · contradiction
+  · next head rest =>
+    simp at hAlloc
+    obtain ⟨_, _, h3⟩ := hAlloc
+    subst h3; rfl
 
 /-! ## Spec-Level Properties
 
