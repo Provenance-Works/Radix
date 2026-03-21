@@ -121,7 +121,7 @@ theorem bump_reset_capacity (pool : BumpPool) :
 
 /-- After reset, pool can allocate up to full capacity. -/
 theorem bump_reset_canAlloc (pool : BumpPool) (size : Nat)
-    (hSize : size > 0) (hFit : size ≤ pool.capacity) :
+    (_hSize : size > 0) (hFit : size ≤ pool.capacity) :
     pool.reset.canAlloc size = true := by
   simp [BumpPool.reset, BumpPool.canAlloc]
   omega

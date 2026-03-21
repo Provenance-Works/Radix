@@ -32,6 +32,8 @@ This is a **Layer 2 (Verified Implementation)** module.
 - NFR-002: Zero-cost abstractions
 -/
 
+set_option linter.dupNamespace false
+
 namespace Radix.Bitmap
 
 /-- Number of bits per word in the backing store. -/

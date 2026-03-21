@@ -73,7 +73,7 @@ namespace BumpPool
     Returns the offset of the allocation and the updated pool,
     or `none` if insufficient capacity. -/
 def alloc (pool : BumpPool) (size : Nat) : Option (Nat × BumpPool) :=
-  if h : size == 0 then none
+  if _h : size == 0 then none
   else if h2 : pool.cursor + size ≤ pool.capacity then
     let offset := pool.cursor
     some (offset,

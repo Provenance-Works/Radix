@@ -32,19 +32,20 @@ open Radix.Alignment.Spec
 /-! ## Helper for simplifying `if align == 0` with `h : align > 0` -/
 
 private theorem beq_zero_false_of_pos {n : Nat} (h : n > 0) : (n == 0) = false := by
-  simp [beq_iff_eq]; omega
+  simp
+  omega
 
 /-! ## isAligned Properties -/
 
 /-- Zero is aligned to any positive alignment. -/
 theorem isAligned_zero (align : Nat) (h : align > 0) :
     Spec.isAligned 0 align := by
-  simp [Spec.isAligned, h]
+  exact ⟨h, by simp⟩
 
 /-- Any multiple of `align` is aligned. -/
 theorem isAligned_mul (k align : Nat) (h : align > 0) :
     Spec.isAligned (k * align) align := by
-  simp [Spec.isAligned, h, Nat.mul_mod_right]
+  exact ⟨h, by rw [Nat.mul_comm]; exact Nat.mul_mod_right align k⟩
 
 /-- `align` itself is aligned to `align`. -/
 theorem isAligned_self (align : Nat) (h : align > 0) :
