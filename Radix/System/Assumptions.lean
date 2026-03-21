@@ -80,6 +80,11 @@ axiom trust_write_bounded
     (result : OSReadResult) :
     result.actual ≤ result.requestedCount
 
+/-- The opaque result of a Lean 4 runtime IO read operation.
+    Lean cannot construct values — the actual byte count is
+    determined by the OS at runtime. -/
+opaque IOReadActual (pre : FileState) (count : Nat) (hOpen : readPre pre) : Nat
+
 /-- The Lean 4 runtime's `IO.FS.Handle` operations faithfully
     delegate to the underlying OS file descriptor. In particular,
     `IO.FS.Handle.read` maps to POSIX `read(2)` and produces a
@@ -89,41 +94,21 @@ axiom trust_write_bounded
     (which erases operational semantics) and the POSIX contract
     (which bounds the result). It cannot be proven because Lean's
     `IO` type is opaque — we cannot inspect what `IO.FS.Handle.read`
-    actually does.
+    actually does.  The opaque `IOReadActual` prevents trivialization
+    by choosing `actual := 0`.
 
     Reference: Lean 4 runtime — `lean_io_prim_handle_read` in
     `runtime/io.cpp`. -/
 axiom trust_lean_io_faithful
     (pre : FileState) (count : Nat)
     (hOpen : readPre pre) :
-    ∃ (actual : Nat), actual ≤ count ∧
+    let actual := IOReadActual pre count hOpen
+    actual ≤ count ∧
       ∀ (info : OpenFileState), pre = FileState.open info →
         readPost pre
           (FileState.open { info with
             position := info.position + actual,
             bytesRead := info.bytesRead + actual })
           count actual
-
-/-- After a successful close, the file descriptor is no longer
-    valid for any I/O operation. The runtime must not reuse
-    the same handle object.
-
-    Reference: POSIX.1-2024, close(2):
-    "Upon successful completion, 0 shall be returned; [...]
-     the file descriptor no longer refers to any file." -/
-axiom trust_close_invalidates (pre : FileState) :
-    closePre pre → closePost pre .closed
-
-/-- POSIX guarantees that `lseek` on a regular file succeeds when
-    the resulting offset is non-negative. A successful seek is a
-    valid lifecycle step on an open file.
-
-    Reference: POSIX.1-2024, lseek(2):
-    "Upon successful completion, the resulting offset [...] shall
-     be returned." -/
-axiom trust_seek_succeeds
-    (pre : FileState) (mode : SeekMode) (offset : Int)
-    (hOpen : seekPre pre) (hNonNeg : offset ≥ 0) :
-    validStep pre (.seek mode offset) = true
 
 end Radix.System.Assumptions

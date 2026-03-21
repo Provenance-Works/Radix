@@ -230,13 +230,17 @@ theorem close_transitions_to_closed (info : OpenFileState) :
     closePre (.open info) → closePost (.open info) .closed := by
   intro _; rfl
 
+theorem seek_valid_when_open (info : OpenFileState) (mode : SeekMode) (offset : Int) :
+    seekPre (.open info) → validStep (.open info) (.seek mode offset) = true := by
+  intro _; simp [validStep, FileState.isOpen]
+
 theorem io_faithful_read (count : Nat) (info : OpenFileState) (hRead : info.mode.canRead = true) :
-    ∃ (actual : Nat), actual ≤ count ∧ readPost
+    let actual := Assumptions.IOReadActual (.open info) count (by simp [readPre, hRead])
+    actual ≤ count ∧ readPost
       (.open info)
       (.open { info with position := info.position + actual, bytesRead := info.bytesRead + actual })
       count actual := by
   have h := trust_lean_io_faithful (.open info) count (by simp [readPre, hRead])
-  obtain ⟨actual, hBound, hPost⟩ := h
-  exact ⟨actual, hBound, hPost info rfl⟩
+  exact ⟨h.1, h.2 info rfl⟩
 
 end Radix.System

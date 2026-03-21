@@ -58,12 +58,17 @@ opaque hwReadByte (mem : HWMemoryState) (addr : Nat) : UInt8
 
 /-! ## Platform Reset Axioms -/
 
+/-- The platform-specific reset vector address.  Opaque — Lean
+    cannot determine which concrete address a given platform
+    specifies as its reset entry point. -/
+opaque resetVector (p : Platform) : Nat
+
 /-- After a hardware reset, the processor begins execution at a
     well-defined entry point address determined by the platform.
     The reset vector is the first instruction fetched.
 
-    This axiom asserts the *existence* of a deterministic reset
-    address for each platform — a fact that depends on the silicon
+    This axiom asserts that the platform's reset vector is
+    naturally aligned — a fact that depends on the silicon
     implementation and cannot be derived from the Lean type system.
 
     Reference: ARM Architecture Reference Manual, Section D1.6.1:
@@ -74,7 +79,16 @@ opaque hwReadByte (mem : HWMemoryState) (addr : Nat) : UInt8
      set to an implementation-defined reset vector." -/
 axiom trust_reset_entry
     (p : Platform) :
-    ∃ (resetAddr : Nat), resetAddr % p.naturalAlign = 0
+    resetVector p % p.naturalAlign = 0
+
+/-- An opaque predicate asserting that `(baseAddr, size)` describes a
+    static allocation region (e.g. .data, .bss, .rodata) and that
+    `mem₁` and `mem₂` are snapshots from the same program execution
+    after startup initialization has completed.  Lean cannot inspect
+    or construct witnesses of this predicate — it exists to scope
+    the stability axiom to genuinely static regions. -/
+opaque isStaticRegionInSameExec
+    (mem₁ mem₂ : HWMemoryState) (baseAddr size : Nat) : Prop
 
 /-- Static memory allocations (.data, .bss, .rodata) retain their
     physical addresses across the entire program execution. After
@@ -87,11 +101,21 @@ axiom trust_reset_entry
     on the absence of address-space layout randomization and dynamic
     relocation — properties of the external execution environment.
 
+    The precondition `isStaticRegionInSameExec` restricts the claim
+    to genuinely static regions within a single program execution,
+    preventing trivialization.
+
     Reference: System V ABI, ELF Specification, Section 2-2:
     "For static bare-metal targets, LMA == VMA after initialization." -/
 axiom trust_static_allocation_stable
-    (mem₁ mem₂ : HWMemoryState) (baseAddr size : Nat) :
+    (mem₁ mem₂ : HWMemoryState) (baseAddr size : Nat)
+    (hStatic : isStaticRegionInSameExec mem₁ mem₂ baseAddr size) :
     (∀ i, i < size → hwReadByte mem₁ (baseAddr + i) = hwReadByte mem₂ (baseAddr + i))
+
+/-- An opaque witness that an MMIO write to a given address in a
+    given hardware state has a physical side effect beyond what Lean's
+    pure model can represent.  Lean cannot construct or decide this. -/
+opaque hwHasSideEffect (mem : HWMemoryState) (addr : Nat) : Prop
 
 /-- Memory-mapped I/O (MMIO) accesses are not optimized away,
     merged, or reordered by the hardware. Each load/store to an
@@ -112,7 +136,7 @@ axiom trust_static_allocation_stable
     "I/O regions are inherently strongly ordered." -/
 axiom trust_mmio_volatile
     (mem : HWMemoryState) (addr : Nat) :
-    ∃ (sideEffect : Prop), sideEffect
+    hwHasSideEffect mem addr
 
 /-- After BSS zeroing during startup, every byte in the BSS region
     reads as zero until the first explicit write. The hardware
@@ -150,8 +174,8 @@ axiom trust_bss_zeroed
     "The stack grows towards decreasing addresses." -/
 axiom trust_stack_grows_down
     (mem₁ mem₂ : HWMemoryState) (sp n : Nat) (data : Fin n → UInt8)
-    (hAlign : sp % 16 = 0) :
+    (hAlign : sp % 16 = 0)
+    (hSpace : n ≤ sp) :
     (∀ i : Fin n, hwReadByte mem₂ (sp - n + i.val) = data i)
-    ∧ sp - n + n = sp
 
 end Radix.BareMetal.Assumptions
