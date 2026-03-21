@@ -35,7 +35,8 @@ def demonstrateZeroCheck {α : Type} [inst : BoundedUInt α] (name : String) : I
 /-- Generic wrapping add demonstration. -/
 def demonstrateWrapping {α : Type} [inst : BoundedUInt α] (name : String) : IO Unit := do
   let m := inst.maxVal
-  let one := inst.wrappingSub m (inst.wrappingSub m (inst.wrappingAdd inst.minVal (inst.wrappingSub m (inst.wrappingSub m inst.minVal))))
+  -- Compute 1 generically: minVal - maxVal = 0 - (2^n - 1) = 1 (mod 2^n)
+  let one := inst.wrappingSub inst.minVal m
   let wrapped := inst.wrappingAdd m one
   IO.println s!"  {name}: maxVal + 1 (wrapping) = {inst.toNat wrapped}"
 
