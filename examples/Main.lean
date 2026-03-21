@@ -30,6 +30,7 @@ import examples.SystemIO
 import examples.BitmapDemo
 import examples.AlignmentDemo
 import examples.MemoryPoolDemo
+import examples.NumericDemo
 
 /-!
 # Radix Usage Examples (P4-03)
@@ -731,5 +732,6 @@ def main : IO Unit := do
   Examples.BitmapDemo.main
   Examples.AlignmentDemo.main
   Examples.MemoryPoolDemo.main
+  Examples.NumericDemo.main
 
   IO.println "All examples completed successfully!"

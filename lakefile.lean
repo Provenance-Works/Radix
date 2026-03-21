@@ -93,7 +93,8 @@ lean_lib ExamplesLib where
              `examples.SystemIO,
              `examples.BitmapDemo,
              `examples.AlignmentDemo,
-             `examples.MemoryPoolDemo]
+             `examples.MemoryPoolDemo,
+             `examples.NumericDemo]
 
 lean_exe examples where
   root := `examples.Main
