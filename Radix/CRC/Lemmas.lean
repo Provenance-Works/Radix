@@ -54,15 +54,13 @@ open Spec in
 /-- GF(2) addition is commutative. -/
 theorem gf2_add_comm (a b : GF2Poly) :
     GF2Poly.add a b = GF2Poly.add b a := by
-  simp [GF2Poly.add]
-  omega
+  simp [GF2Poly.add, Nat.xor_comm]
 
 open Spec in
 /-- GF(2) addition is associative. -/
 theorem gf2_add_assoc (a b c : GF2Poly) :
     GF2Poly.add (GF2Poly.add a b) c = GF2Poly.add a (GF2Poly.add b c) := by
-  simp [GF2Poly.add, GF2Poly.mk.injEq]
-  omega
+  simp [GF2Poly.add, Nat.xor_assoc]
 
 open Spec in
 /-- GF(2) addition with zero is identity. -/
@@ -75,7 +73,6 @@ open Spec in
 theorem gf2_add_self (a : GF2Poly) :
     GF2Poly.add a a = GF2Poly.zero := by
   simp [GF2Poly.add, GF2Poly.zero]
-  omega
 
 /-! ## Empty Data CRC
 
