@@ -64,11 +64,6 @@ def degree (p : GF2Poly) : Nat :=
   if p.coeffs == 0 then 0
   else Nat.log2 p.coeffs
 
-/-- Degree computed via Nat.log2 (simpler, used for proofs). -/
-def degreeSimple (p : GF2Poly) : Nat :=
-  if p.coeffs == 0 then 0
-  else Nat.log2 p.coeffs
-
 /-- Left shift: multiply by x^n. -/
 def shiftLeft (p : GF2Poly) (n : Nat) : GF2Poly := ⟨p.coeffs <<< n⟩
 
