@@ -91,8 +91,12 @@ axiom trust_cas_atomicity
     (hKind : e.kind = .rmw) :
     hwObservedAtomic s e
 
-/-- Sequential consistency (SeqCst) operations on all processors
+/-! Sequential consistency (SeqCst) operations on all processors
     participate in a single total order consistent with program order.
+
+    This total order is SEPARATE from happens-before: the C11 model
+    defines a distinct "S" order over SeqCst operations.  We model
+    it as an opaque relation whose totality is the axiom.
 
     Reference: Intel SDM Vol. 3A, Section 8.2.2:
     "Reads are not reordered with other reads. Writes are not
@@ -103,46 +107,27 @@ axiom trust_cas_atomicity
     "The global order of all Load-Acquire and Store-Release
      operations is consistent with the order in which they
      appear in each PE's program order." -/
+
+/-- An opaque total order over SeqCst events representing the
+    single global S-order of the C11 memory model.  Lean cannot
+    compute or inspect this relation. -/
+opaque seqCstOrder (a b : MemoryEvent) : Prop
+
 axiom trust_seqcst_total_order
     (a b : MemoryEvent)
     (hA : a.order = .seqCst)
     (hB : b.order = .seqCst)
     (hNeq : a.id ≠ b.id) :
-    happensBefore a b ∨ happensBefore b a
+    seqCstOrder a b ∨ seqCstOrder b a
 
-/-- Acquire-release pairs synchronize: if a release-store is
-    observed by an acquire-load reading the stored value, then
-    all writes preceding the release are visible after the acquire.
-
-    Reference: C11 Standard, Section 5.1.2.4, paragraph 2:
-    "An atomic operation A that performs a release operation on an
-     atomic object M synchronizes with an atomic operation B that
-     performs an acquire operation on M and takes its value from
-     any side effect in the release sequence headed by A." -/
-axiom trust_acquire_release_sync
-    (w r : MemoryEvent)
-    (hSync : synchronizesWith w r) :
-    happensBefore w r
-
-/-- Memory fences enforce ordering constraints on surrounding
-    memory operations according to their memory order annotation.
-    The hardware guarantees that a fence instruction produces an
-    observable ordering barrier in the concurrency state.
-
-    Reference: Intel SDM Vol. 3A, Section 8.2.5:
-    "The MFENCE instruction establishes a memory fence for both
-     loads and stores. [...] The processor ensures that every
-     load and store instruction that precedes the MFENCE
-     instruction [...] is globally visible before any load or
-     store instruction that follows the MFENCE instruction." -/
-axiom trust_fence_ordering
-    (s s' : HWConcurrencyState)
-    (e : MemoryEvent)
-    (hFence : e.kind = .fence)
-    (hExec : s' = hwExecute s [e])
+/-- SeqCst total order is consistent with happens-before:
+    if a happens-before b and both are SeqCst, then a is ordered
+    before b in the SeqCst total order. -/
+axiom trust_seqcst_consistent_with_hb
     (a b : MemoryEvent)
-    (hBefore : programOrder a e)
-    (hAfter : programOrder e b) :
-    happensBefore a b
+    (hA : a.order = .seqCst)
+    (hB : b.order = .seqCst)
+    (hHB : happensBefore a b) :
+    seqCstOrder a b
 
 end Radix.Concurrency.Assumptions

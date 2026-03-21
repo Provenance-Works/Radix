@@ -202,6 +202,25 @@ theorem programOrder_same_thread (a b : MemoryEvent)
     (h : programOrder a b) :
     a.id.thread = b.id.thread := h.1
 
+/-! ## Derived Ordering Theorems -/
+
+/-- Acquire-release synchronization implies happens-before.
+    This follows directly from the definition of `happensBefore`. -/
+theorem acquire_release_happensBefore
+    (w r : MemoryEvent)
+    (hSync : synchronizesWith w r) :
+    happensBefore w r :=
+  Or.inr hSync
+
+/-- A fence between two program-ordered events establishes
+    happens-before by transitivity of program order. -/
+theorem fence_ordering_happensBefore
+    (a e b : MemoryEvent)
+    (hBefore : programOrder a e)
+    (hAfter : programOrder e b) :
+    happensBefore a b :=
+  Or.inl (programOrder_trans a e b hBefore hAfter)
+
 /-! ## Single-Thread Linearizability -/
 
 /-- A trace consisting of events from a single thread is trivially
