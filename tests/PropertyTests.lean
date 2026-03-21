@@ -9,6 +9,12 @@ import Radix.Bytes
 import Radix.Memory
 import Radix.Binary
 import Radix.System
+import Radix.Alignment
+import Radix.RingBuffer
+import Radix.Bitmap
+import Radix.CRC
+import Radix.MemoryPool
+import Radix.Word.Numeric
 
 /-!
 # Radix Phase 4 — Property-Based Tests (P4-01)
@@ -1151,6 +1157,588 @@ private def testSystemIOProperties : IO Unit := do
   IO.FS.removeFile strPath
 
 /-! ================================================================ -/
+/-! ## Alignment Property Tests                                      -/
+/-! ================================================================ -/
+
+private def testAlignmentProperties : IO Unit := do
+  IO.println "  Alignment properties..."
+  let mut rng := PRNG.new 100
+
+  -- alignUp >= offset (for align > 0)
+  for _ in [:numIter] do
+    let (rng', ov) := rng.nextBounded 10000; rng := rng'
+    let (rng', av) := rng.nextBounded 64; rng := rng'
+    let offset := ov.toNat
+    let align := av.toNat + 1  -- ensure > 0
+    let up := Radix.Alignment.alignUp offset align
+    assert (up >= offset) s!"alignUp >= offset: {offset} align {align} got {up}"
+
+  -- alignDown <= offset (for align > 0)
+  for _ in [:numIter] do
+    let (rng', ov) := rng.nextBounded 10000; rng := rng'
+    let (rng', av) := rng.nextBounded 64; rng := rng'
+    let offset := ov.toNat
+    let align := av.toNat + 1
+    let down := Radix.Alignment.alignDown offset align
+    assert (down <= offset) s!"alignDown <= offset: {offset} align {align} got {down}"
+
+  -- alignDown <= alignUp (sandwich)
+  for _ in [:numIter] do
+    let (rng', ov) := rng.nextBounded 10000; rng := rng'
+    let (rng', av) := rng.nextBounded 64; rng := rng'
+    let offset := ov.toNat
+    let align := av.toNat + 1
+    let down := Radix.Alignment.alignDown offset align
+    let up := Radix.Alignment.alignUp offset align
+    assert (down <= up) s!"alignDown <= alignUp: {offset} align {align} down={down} up={up}"
+
+  -- isAligned (alignUp offset align) for align > 0
+  for _ in [:numIter] do
+    let (rng', ov) := rng.nextBounded 10000; rng := rng'
+    let (rng', av) := rng.nextBounded 64; rng := rng'
+    let offset := ov.toNat
+    let align := av.toNat + 1
+    let up := Radix.Alignment.alignUp offset align
+    assert (Radix.Alignment.isAligned up align)
+      s!"isAligned(alignUp): offset={offset} align={align} up={up}"
+
+  -- isAligned (alignDown offset align) for align > 0
+  for _ in [:numIter] do
+    let (rng', ov) := rng.nextBounded 10000; rng := rng'
+    let (rng', av) := rng.nextBounded 64; rng := rng'
+    let offset := ov.toNat
+    let align := av.toNat + 1
+    let down := Radix.Alignment.alignDown offset align
+    assert (Radix.Alignment.isAligned down align)
+      s!"isAligned(alignDown): offset={offset} align={align} down={down}"
+
+  -- offset + alignPadding is aligned
+  for _ in [:numIter] do
+    let (rng', ov) := rng.nextBounded 10000; rng := rng'
+    let (rng', av) := rng.nextBounded 64; rng := rng'
+    let offset := ov.toNat
+    let align := av.toNat + 1
+    let pad := Radix.Alignment.alignPadding offset align
+    assert (Radix.Alignment.isAligned (offset + pad) align)
+      s!"offset+padding aligned: offset={offset} align={align} pad={pad}"
+
+  -- alignUp == alignUpPow2 for power-of-two alignments
+  for _ in [:numIter] do
+    let (rng', ov) := rng.nextBounded 10000; rng := rng'
+    let (rng', ev) := rng.nextBounded 6; rng := rng'  -- exponent 0..5 → align 1..32
+    let offset := ov.toNat
+    let align := 1 <<< ev.toNat  -- power of two
+    let up := Radix.Alignment.alignUp offset align
+    let upPow2 := Radix.Alignment.alignUpPow2 offset align
+    assert (up == upPow2)
+      s!"alignUp == alignUpPow2: offset={offset} align={align} up={up} upPow2={upPow2}"
+
+  -- alignDown == alignDownPow2 for power-of-two alignments
+  for _ in [:numIter] do
+    let (rng', ov) := rng.nextBounded 10000; rng := rng'
+    let (rng', ev) := rng.nextBounded 6; rng := rng'
+    let offset := ov.toNat
+    let align := 1 <<< ev.toNat
+    let down := Radix.Alignment.alignDown offset align
+    let downPow2 := Radix.Alignment.alignDownPow2 offset align
+    assert (down == downPow2)
+      s!"alignDown == alignDownPow2: offset={offset} align={align} down={down} downPow2={downPow2}"
+
+  -- isPowerOfTwo correctness
+  for _ in [:numIter] do
+    let (rng', ev) := rng.nextBounded 16; rng := rng'
+    let n := 1 <<< ev.toNat
+    assert (Radix.Alignment.isPowerOfTwo n)
+      s!"isPowerOfTwo(2^{ev.toNat}) should be true"
+  -- Non-powers of two
+  assert (!Radix.Alignment.isPowerOfTwo 0) "isPowerOfTwo(0) should be false"
+  assert (!Radix.Alignment.isPowerOfTwo 3) "isPowerOfTwo(3) should be false"
+  assert (!Radix.Alignment.isPowerOfTwo 6) "isPowerOfTwo(6) should be false"
+  assert (!Radix.Alignment.isPowerOfTwo 10) "isPowerOfTwo(10) should be false"
+
+/-! ================================================================ -/
+/-! ## RingBuffer Property Tests                                     -/
+/-! ================================================================ -/
+
+private def testRingBufferProperties : IO Unit := do
+  IO.println "  RingBuffer properties..."
+  let mut rng := PRNG.new 200
+
+  -- push then pop recovers value (FIFO)
+  for _ in [:numIter] do
+    let (rng', v) := rng.nextUInt8; rng := rng'
+    let rb := Radix.RingBuffer.RingBuf.new 16
+    match rb.push ⟨v⟩ with
+    | some rb' =>
+      match rb'.pop with
+      | some (val, _) => assert (val.val == v) s!"RingBuffer push/pop roundtrip: {v}"
+      | none => assert false "RingBuffer pop from non-empty failed"
+    | none => assert false "RingBuffer push to empty failed"
+
+  -- push increments count, pop decrements count
+  for _ in [:numIter] do
+    let (rng', v) := rng.nextUInt8; rng := rng'
+    let rb := Radix.RingBuffer.RingBuf.new 16
+    let countBefore := rb.count
+    match rb.push ⟨v⟩ with
+    | some rb' =>
+      assert (rb'.count == countBefore + 1) s!"RingBuffer push increments count"
+      match rb'.pop with
+      | some (_, rb'') =>
+        assert (rb''.count == countBefore) s!"RingBuffer pop decrements count"
+      | none => assert false "RingBuffer pop after push failed"
+    | none => assert false "RingBuffer push failed"
+
+  -- empty buffer has count 0
+  for _ in [:numIter] do
+    let (rng', cv) := rng.nextBounded 64; rng := rng'
+    let cap := cv.toNat + 1
+    let rb := Radix.RingBuffer.RingBuf.new cap
+    assert (rb.count == 0) s!"RingBuffer new has count 0: cap={cap}"
+    assert (rb.isEmpty) s!"RingBuffer new isEmpty: cap={cap}"
+
+  -- full buffer rejects push
+  for _ in [:numIter] do
+    let (rng', cv) := rng.nextBounded 15; rng := rng'
+    let cap := cv.toNat + 1
+    let mut rb := Radix.RingBuffer.RingBuf.new cap
+    -- Fill it up
+    for _ in [:cap] do
+      let (rng', v) := rng.nextUInt8; rng := rng'
+      match rb.push ⟨v⟩ with
+      | some rb' => rb := rb'
+      | none => pure ()  -- shouldn't happen until full
+    assert (rb.isFull) s!"RingBuffer should be full: cap={cap}"
+    -- Try one more push
+    let (rng', v) := rng.nextUInt8; rng := rng'
+    match rb.push ⟨v⟩ with
+    | some _ => assert false s!"RingBuffer push to full should fail: cap={cap}"
+    | none => pure ()  -- expected
+
+  -- pushMany/popMany round-trip
+  for _ in [:numIter] do
+    let (rng', cv) := rng.nextBounded 30; rng := rng'
+    let cap := cv.toNat + 5
+    let rb := Radix.RingBuffer.RingBuf.new cap
+    -- Generate a list of values
+    let (rng', nv) := rng.nextBounded (cap.toUInt64); rng := rng'
+    let numVals := nv.toNat + 1
+    let mut vals : List Radix.UInt8 := []
+    for _ in [:numVals] do
+      let (rng', v) := rng.nextUInt8; rng := rng'
+      vals := vals ++ [⟨v⟩]
+    let (rb', pushed) := rb.pushMany vals
+    let (popped, _) := rb'.popMany pushed
+    -- Check FIFO order: first `pushed` elements match
+    let expected := vals.take pushed
+    assert (popped == expected)
+      s!"RingBuffer pushMany/popMany roundtrip: pushed={pushed}"
+
+  -- clear resets count to 0
+  for _ in [:numIter] do
+    let (rng', cv) := rng.nextBounded 30; rng := rng'
+    let cap := cv.toNat + 1
+    let mut rb := Radix.RingBuffer.RingBuf.new cap
+    -- Push some elements
+    let (rng', nv) := rng.nextBounded (cap.toUInt64); rng := rng'
+    let numVals := nv.toNat
+    for _ in [:numVals] do
+      let (rng', v) := rng.nextUInt8; rng := rng'
+      match rb.push ⟨v⟩ with
+      | some rb' => rb := rb'
+      | none => pure ()
+    let cleared := rb.clear
+    assert (cleared.count == 0) "RingBuffer clear resets count"
+    assert (cleared.isEmpty) "RingBuffer clear isEmpty"
+
+  -- capacity is preserved across push/pop
+  for _ in [:numIter] do
+    let (rng', cv) := rng.nextBounded 30; rng := rng'
+    let cap := cv.toNat + 1
+    let rb := Radix.RingBuffer.RingBuf.new cap
+    let origCap := rb.capacity
+    let (rng', v) := rng.nextUInt8; rng := rng'
+    match rb.push ⟨v⟩ with
+    | some rb' =>
+      assert (rb'.capacity == origCap) "RingBuffer capacity preserved after push"
+      match rb'.pop with
+      | some (_, rb'') =>
+        assert (rb''.capacity == origCap) "RingBuffer capacity preserved after pop"
+      | none => pure ()
+    | none => pure ()
+
+/-! ================================================================ -/
+/-! ## Bitmap Property Tests                                         -/
+/-! ================================================================ -/
+
+private def testBitmapProperties : IO Unit := do
+  IO.println "  Bitmap properties..."
+  let mut rng := PRNG.new 300
+
+  -- set then test returns true
+  for _ in [:numIter] do
+    let (rng', sv) := rng.nextBounded 256; rng := rng'
+    let size := sv.toNat + 1
+    let (rng', iv) := rng.nextBounded size.toUInt64; rng := rng'
+    let idx := iv.toNat
+    let bm := Radix.Bitmap.Bitmap.zeros size
+    let bm' := bm.set idx
+    assert (bm'.test idx) s!"Bitmap set then test: size={size} idx={idx}"
+
+  -- clear then test returns false
+  for _ in [:numIter] do
+    let (rng', sv) := rng.nextBounded 256; rng := rng'
+    let size := sv.toNat + 1
+    let (rng', iv) := rng.nextBounded size.toUInt64; rng := rng'
+    let idx := iv.toNat
+    let bm := Radix.Bitmap.Bitmap.ones size
+    let bm' := bm.clear idx
+    assert (!bm'.test idx) s!"Bitmap clear then test: size={size} idx={idx}"
+
+  -- toggle then toggle is identity
+  for _ in [:numIter] do
+    let (rng', sv) := rng.nextBounded 256; rng := rng'
+    let size := sv.toNat + 1
+    let (rng', iv) := rng.nextBounded size.toUInt64; rng := rng'
+    let idx := iv.toNat
+    let bm := Radix.Bitmap.Bitmap.zeros size
+    let bm' := bm.toggle idx |>.toggle idx
+    assert (bm'.test idx == bm.test idx)
+      s!"Bitmap toggle/toggle identity: size={size} idx={idx}"
+
+  -- zeros has popcount 0
+  for _ in [:numIter] do
+    let (rng', sv) := rng.nextBounded 256; rng := rng'
+    let size := sv.toNat + 1
+    let bm := Radix.Bitmap.Bitmap.zeros size
+    assert (bm.popcount == 0) s!"Bitmap zeros popcount: size={size}"
+
+  -- set increases popcount (or keeps same if already set)
+  for _ in [:numIter] do
+    let (rng', sv) := rng.nextBounded 256; rng := rng'
+    let size := sv.toNat + 1
+    let (rng', iv) := rng.nextBounded size.toUInt64; rng := rng'
+    let idx := iv.toNat
+    let bm := Radix.Bitmap.Bitmap.zeros size
+    let pcBefore := bm.popcount
+    let bm' := bm.set idx
+    let pcAfter := bm'.popcount
+    assert (pcAfter >= pcBefore)
+      s!"Bitmap set popcount non-decreasing: size={size} idx={idx}"
+
+  -- out-of-bounds test returns false
+  for _ in [:numIter] do
+    let (rng', sv) := rng.nextBounded 128; rng := rng'
+    let size := sv.toNat + 1
+    let bm := Radix.Bitmap.Bitmap.ones size
+    assert (!bm.test (size + 10))
+      s!"Bitmap out-of-bounds test returns false: size={size}"
+
+  -- union(a, a) == a (idempotent) — test via popcount equality
+  for _ in [:numIter] do
+    let (rng', sv) := rng.nextBounded 128; rng := rng'
+    let size := sv.toNat + 1
+    let mut bm := Radix.Bitmap.Bitmap.zeros size
+    -- Set some random bits
+    for _ in [:5] do
+      let (rng', iv) := rng.nextBounded size.toUInt64; rng := rng'
+      bm := bm.set iv.toNat
+    let u := Radix.Bitmap.Bitmap.union bm bm rfl
+    -- Check all bits match
+    let mut allMatch := true
+    for i in [:size] do
+      if u.test i != bm.test i then
+        allMatch := false
+    assert allMatch s!"Bitmap union(a,a) idempotent: size={size}"
+
+/-! ================================================================ -/
+/-! ## CRC Property Tests                                            -/
+/-! ================================================================ -/
+
+private def testCRCProperties : IO Unit := do
+  IO.println "  CRC properties..."
+  let mut rng := PRNG.new 400
+
+  -- CRC32.compute == CRC32.computeNaive
+  for _ in [:numIter] do
+    let (rng', lenV) := rng.nextBounded 64; rng := rng'
+    let len := lenV.toNat
+    let mut data := ByteArray.empty
+    for _ in [:len] do
+      let (rng', v) := rng.nextUInt8; rng := rng'
+      data := data.push v
+    let fast := Radix.CRC.CRC32.compute data
+    let naive := Radix.CRC.CRC32.computeNaive data
+    assert (fast == naive) s!"CRC32 table == naive: len={len}"
+
+  -- CRC16.compute == CRC16.computeNaive
+  for _ in [:numIter] do
+    let (rng', lenV) := rng.nextBounded 64; rng := rng'
+    let len := lenV.toNat
+    let mut data := ByteArray.empty
+    for _ in [:len] do
+      let (rng', v) := rng.nextUInt8; rng := rng'
+      data := data.push v
+    let fast := Radix.CRC.CRC16.compute data
+    let naive := Radix.CRC.CRC16.computeNaive data
+    assert (fast == naive) s!"CRC16 table == naive: len={len}"
+
+  -- CRC of empty data is deterministic
+  let emptyData := ByteArray.empty
+  let crc32a := Radix.CRC.CRC32.compute emptyData
+  let crc32b := Radix.CRC.CRC32.compute emptyData
+  assert (crc32a == crc32b) "CRC32 empty deterministic"
+  let crc16a := Radix.CRC.CRC16.compute emptyData
+  let crc16b := Radix.CRC.CRC16.compute emptyData
+  assert (crc16a == crc16b) "CRC16 empty deterministic"
+
+  -- Streaming API: init/update/finalize == compute (CRC32)
+  for _ in [:numIter] do
+    let (rng', lenV) := rng.nextBounded 64; rng := rng'
+    let len := lenV.toNat
+    let mut data := ByteArray.empty
+    for _ in [:len] do
+      let (rng', v) := rng.nextUInt8; rng := rng'
+      data := data.push v
+    let oneshot := Radix.CRC.CRC32.compute data
+    let streaming := Radix.CRC.CRC32.finalize (Radix.CRC.CRC32.update Radix.CRC.CRC32.init data)
+    assert (oneshot == streaming) s!"CRC32 streaming == oneshot: len={len}"
+
+  -- Concatenation: streaming update across chunks (CRC32)
+  for _ in [:numIter] do
+    let (rng', lenV) := rng.nextBounded 64; rng := rng'
+    let totalLen := lenV.toNat + 2
+    let mut fullData := ByteArray.empty
+    for _ in [:totalLen] do
+      let (rng', v) := rng.nextUInt8; rng := rng'
+      fullData := fullData.push v
+    -- Split at a random point
+    let (rng', splitV) := rng.nextBounded totalLen.toUInt64; rng := rng'
+    let splitAt := splitV.toNat + 1
+    let chunk1 := ByteArray.mk (fullData.toList.take splitAt |>.toArray)
+    let chunk2 := ByteArray.mk (fullData.toList.drop splitAt |>.toArray)
+    let oneshot := Radix.CRC.CRC32.compute fullData
+    let state := Radix.CRC.CRC32.update Radix.CRC.CRC32.init chunk1
+    let state := Radix.CRC.CRC32.update state chunk2
+    let chunked := Radix.CRC.CRC32.finalize state
+    assert (oneshot == chunked) s!"CRC32 chunked == oneshot: totalLen={totalLen} splitAt={splitAt}"
+
+/-! ================================================================ -/
+/-! ## MemoryPool Property Tests                                     -/
+/-! ================================================================ -/
+
+private def testMemoryPoolProperties : IO Unit := do
+  IO.println "  MemoryPool properties..."
+  let mut rng := PRNG.new 500
+
+  -- Bump alloc returns offsets within capacity
+  for _ in [:numIter] do
+    let (rng', cv) := rng.nextBounded 256; rng := rng'
+    let cap := cv.toNat + 16
+    let (rng', sv) := rng.nextBounded (cap.toUInt64 / 2 + 1); rng := rng'
+    let size := sv.toNat + 1
+    let pool := Radix.MemoryPool.BumpPool.new cap
+    match pool.alloc size with
+    | some (offset, _) =>
+      assert (offset + size <= cap)
+        s!"BumpPool alloc within capacity: cap={cap} size={size} offset={offset}"
+    | none => pure ()  -- may fail if size > cap, which is fine
+
+  -- Bump alloc returns monotonically increasing offsets
+  for _ in [:numIter] do
+    let (rng', cv) := rng.nextBounded 128; rng := rng'
+    let cap := cv.toNat + 64
+    let mut pool := Radix.MemoryPool.BumpPool.new cap
+    let mut lastOffset : Nat := 0
+    let mut first := true
+    for _ in [:5] do
+      let (rng', sv) := rng.nextBounded 8; rng := rng'
+      let size := sv.toNat + 1
+      match pool.alloc size with
+      | some (offset, pool') =>
+        if !first then
+          assert (offset >= lastOffset)
+            s!"BumpPool monotonic offsets: last={lastOffset} curr={offset}"
+        lastOffset := offset
+        first := false
+        pool := pool'
+      | none => pure ()
+
+  -- Bump reset restores full capacity
+  for _ in [:numIter] do
+    let (rng', cv) := rng.nextBounded 256; rng := rng'
+    let cap := cv.toNat + 1
+    let mut pool := Radix.MemoryPool.BumpPool.new cap
+    -- Allocate something
+    let (rng', sv) := rng.nextBounded (cap.toUInt64); rng := rng'
+    let size := sv.toNat + 1
+    match pool.alloc size with
+    | some (_, pool') => pool := pool'
+    | none => pure ()
+    let resetPool := pool.reset
+    assert (resetPool.remaining == cap)
+      s!"BumpPool reset restores capacity: cap={cap}"
+    assert (resetPool.cursor == 0)
+      s!"BumpPool reset cursor to 0: cap={cap}"
+
+  -- Bump alloc zero fails
+  for _ in [:numIter] do
+    let (rng', cv) := rng.nextBounded 256; rng := rng'
+    let cap := cv.toNat + 1
+    let pool := Radix.MemoryPool.BumpPool.new cap
+    match pool.alloc 0 with
+    | some _ => assert false s!"BumpPool alloc 0 should fail: cap={cap}"
+    | none => pure ()  -- expected
+
+  -- Slab alloc then free succeeds
+  for _ in [:numIter] do
+    let (rng', bsv) := rng.nextBounded 16; rng := rng'
+    let blockSize := bsv.toNat + 1
+    let (rng', bcv) := rng.nextBounded 16; rng := rng'
+    let blockCount := bcv.toNat + 1
+    let pool := Radix.MemoryPool.SlabPool.new blockSize blockCount (by omega)
+    match pool.alloc with
+    | some (blockIdx, _, pool') =>
+      match pool'.free blockIdx with
+      | some _ => pure ()  -- success
+      | none => assert false s!"SlabPool free after alloc failed: bs={blockSize} bc={blockCount}"
+    | none => assert false s!"SlabPool alloc from fresh pool failed: bs={blockSize} bc={blockCount}"
+
+  -- Slab double-free fails
+  for _ in [:numIter] do
+    let (rng', bsv) := rng.nextBounded 16; rng := rng'
+    let blockSize := bsv.toNat + 1
+    let (rng', bcv) := rng.nextBounded 16; rng := rng'
+    let blockCount := bcv.toNat + 1
+    let pool := Radix.MemoryPool.SlabPool.new blockSize blockCount (by omega)
+    match pool.alloc with
+    | some (blockIdx, _, pool') =>
+      match pool'.free blockIdx with
+      | some pool'' =>
+        match pool''.free blockIdx with
+        | some _ => assert false s!"SlabPool double-free should fail: idx={blockIdx}"
+        | none => pure ()  -- expected
+      | none => assert false "SlabPool first free failed"
+    | none => assert false "SlabPool alloc failed"
+
+  -- Slab alloc from exhausted pool fails
+  for _ in [:numIter] do
+    let (rng', bsv) := rng.nextBounded 8; rng := rng'
+    let blockSize := bsv.toNat + 1
+    let (rng', bcv) := rng.nextBounded 8; rng := rng'
+    let blockCount := bcv.toNat + 1
+    let mut pool := Radix.MemoryPool.SlabPool.new blockSize blockCount (by omega)
+    -- Exhaust all blocks
+    for _ in [:blockCount] do
+      match pool.alloc with
+      | some (_, _, pool') => pool := pool'
+      | none => pure ()
+    -- One more alloc should fail
+    match pool.alloc with
+    | some _ => assert false s!"SlabPool alloc from exhausted should fail: bc={blockCount}"
+    | none => pure ()  -- expected
+
+/-! ================================================================ -/
+/-! ## Numeric Typeclass Property Tests                              -/
+/-! ================================================================ -/
+
+private def testNumericTypeclassProperties : IO Unit := do
+  IO.println "  Numeric typeclass properties..."
+  let mut rng := PRNG.new 600
+
+  -- BoundedUInt.toNat minVal == 0 (for all unsigned types)
+  assert (Radix.BoundedUInt.toNat (Radix.BoundedUInt.minVal (α := Radix.UInt8)) == 0)
+    "BoundedUInt UInt8 minVal == 0"
+  assert (Radix.BoundedUInt.toNat (Radix.BoundedUInt.minVal (α := Radix.UInt16)) == 0)
+    "BoundedUInt UInt16 minVal == 0"
+  assert (Radix.BoundedUInt.toNat (Radix.BoundedUInt.minVal (α := Radix.UInt32)) == 0)
+    "BoundedUInt UInt32 minVal == 0"
+  assert (Radix.BoundedUInt.toNat (Radix.BoundedUInt.minVal (α := Radix.UInt64)) == 0)
+    "BoundedUInt UInt64 minVal == 0"
+
+  -- BoundedUInt.toNat maxVal == 2^bitWidth - 1
+  assert (Radix.BoundedUInt.toNat (Radix.BoundedUInt.maxVal (α := Radix.UInt8)) == 255)
+    "BoundedUInt UInt8 maxVal == 255"
+  assert (Radix.BoundedUInt.toNat (Radix.BoundedUInt.maxVal (α := Radix.UInt16)) == 65535)
+    "BoundedUInt UInt16 maxVal == 65535"
+  assert (Radix.BoundedUInt.toNat (Radix.BoundedUInt.maxVal (α := Radix.UInt32)) == 4294967295)
+    "BoundedUInt UInt32 maxVal == 4294967295"
+  assert (Radix.BoundedUInt.toNat (Radix.BoundedUInt.maxVal (α := Radix.UInt64)) == 18446744073709551615)
+    "BoundedUInt UInt64 maxVal == 2^64-1"
+
+  -- wrappingAdd commutative (UInt8, generic via typeclass)
+  for _ in [:numIter] do
+    let (rng', av) := rng.nextUInt8; rng := rng'
+    let (rng', bv) := rng.nextUInt8; rng := rng'
+    let a : Radix.UInt8 := ⟨av⟩
+    let b : Radix.UInt8 := ⟨bv⟩
+    assert (Radix.BoundedUInt.wrappingAdd a b == Radix.BoundedUInt.wrappingAdd b a)
+      s!"BoundedUInt UInt8 wrappingAdd comm: {av} {bv}"
+
+  -- wrappingAdd commutative (UInt16, generic via typeclass)
+  for _ in [:numIter] do
+    let (rng', av) := rng.nextUInt16; rng := rng'
+    let (rng', bv) := rng.nextUInt16; rng := rng'
+    let a : Radix.UInt16 := ⟨av⟩
+    let b : Radix.UInt16 := ⟨bv⟩
+    assert (Radix.BoundedUInt.wrappingAdd a b == Radix.BoundedUInt.wrappingAdd b a)
+      s!"BoundedUInt UInt16 wrappingAdd comm: {av} {bv}"
+
+  -- wrappingAdd commutative (UInt32, generic via typeclass)
+  for _ in [:numIter] do
+    let (rng', av) := rng.nextUInt32; rng := rng'
+    let (rng', bv) := rng.nextUInt32; rng := rng'
+    let a : Radix.UInt32 := ⟨av⟩
+    let b : Radix.UInt32 := ⟨bv⟩
+    assert (Radix.BoundedUInt.wrappingAdd a b == Radix.BoundedUInt.wrappingAdd b a)
+      s!"BoundedUInt UInt32 wrappingAdd comm: {av} {bv}"
+
+  -- wrappingAdd commutative (UInt64, generic via typeclass)
+  for _ in [:numIter] do
+    let (rng', av) := rng.nextUInt64; rng := rng'
+    let (rng', bv) := rng.nextUInt64; rng := rng'
+    let a : Radix.UInt64 := ⟨av⟩
+    let b : Radix.UInt64 := ⟨bv⟩
+    assert (Radix.BoundedUInt.wrappingAdd a b == Radix.BoundedUInt.wrappingAdd b a)
+      s!"BoundedUInt UInt64 wrappingAdd comm: {av} {bv}"
+
+  -- Generic popcount consistency: BitwiseOps.popcount matches concrete popcount (UInt8)
+  for _ in [:numIter] do
+    let (rng', v) := rng.nextUInt8; rng := rng'
+    let x : Radix.UInt8 := ⟨v⟩
+    let generic := Radix.BitwiseOps.popcount x
+    let concrete := Radix.UInt8.popcount x
+    assert (generic == concrete)
+      s!"BitwiseOps popcount UInt8 consistency: {v}"
+
+  -- Generic popcount consistency (UInt16)
+  for _ in [:numIter] do
+    let (rng', v) := rng.nextUInt16; rng := rng'
+    let x : Radix.UInt16 := ⟨v⟩
+    let generic := Radix.BitwiseOps.popcount x
+    let concrete := Radix.UInt16.popcount x
+    assert (generic == concrete)
+      s!"BitwiseOps popcount UInt16 consistency: {v}"
+
+  -- Generic popcount consistency (UInt32)
+  for _ in [:numIter] do
+    let (rng', v) := rng.nextUInt32; rng := rng'
+    let x : Radix.UInt32 := ⟨v⟩
+    let generic := Radix.BitwiseOps.popcount x
+    let concrete := Radix.UInt32.popcount x
+    assert (generic == concrete)
+      s!"BitwiseOps popcount UInt32 consistency: {v}"
+
+  -- Generic popcount consistency (UInt64)
+  for _ in [:numIter] do
+    let (rng', v) := rng.nextUInt64; rng := rng'
+    let x : Radix.UInt64 := ⟨v⟩
+    let generic := Radix.BitwiseOps.popcount x
+    let concrete := Radix.UInt64.popcount x
+    assert (generic == concrete)
+      s!"BitwiseOps popcount UInt64 consistency: {v}"
+
+/-! ================================================================ -/
 /-! ## Main Entry Point                                              -/
 /-! ================================================================ -/
 
@@ -1194,6 +1782,30 @@ def main : IO Unit := do
 
   IO.println "System I/O:"
   testSystemIOProperties
+  IO.println ""
+
+  IO.println "Alignment:"
+  testAlignmentProperties
+  IO.println ""
+
+  IO.println "Ring buffer:"
+  testRingBufferProperties
+  IO.println ""
+
+  IO.println "Bitmap:"
+  testBitmapProperties
+  IO.println ""
+
+  IO.println "CRC:"
+  testCRCProperties
+  IO.println ""
+
+  IO.println "Memory pool:"
+  testMemoryPoolProperties
+  IO.println ""
+
+  IO.println "Numeric typeclasses:"
+  testNumericTypeclassProperties
   IO.println ""
 
   IO.println "All Radix Phase 4 Property Tests passed!"
