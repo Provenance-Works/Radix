@@ -63,7 +63,14 @@ lean_lib ComprehensiveTestLib where
              `tests.ComprehensiveTests.BareMetal.Startup,
              `tests.ComprehensiveTests.BareMetal.GCFree,
              `tests.ComprehensiveTests.BareMetal.Linker,
-             `tests.ComprehensiveTests.BareMetal.Properties]
+             `tests.ComprehensiveTests.BareMetal.Properties,
+             -- v0.2.0 Modules
+             `tests.ComprehensiveTests.Word.Numeric,
+             `tests.ComprehensiveTests.Alignment,
+             `tests.ComprehensiveTests.RingBuffer,
+             `tests.ComprehensiveTests.Bitmap,
+             `tests.ComprehensiveTests.CRC,
+             `tests.ComprehensiveTests.MemoryPool]
 
 lean_exe comptest where
   root := `tests.ComprehensiveTests
