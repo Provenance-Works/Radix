@@ -220,11 +220,11 @@ theorem readOnly_write_step_invalid (n : Nat) :
 
 /-! ## Axiom-Based Proofs -/
 
-theorem read_bounded_by_request (count : Nat) (result : Assumptions.OSReadResult) :
-    result.actual ≤ count := trust_read_bounded count result
+theorem read_bounded_by_request (result : Assumptions.OSReadResult) :
+    result.actual ≤ result.requestedCount := trust_read_bounded result
 
-theorem write_bounded_by_request (count : Nat) (result : Assumptions.OSReadResult) :
-    result.actual ≤ count := trust_write_bounded count result
+theorem write_bounded_by_request (result : Assumptions.OSReadResult) :
+    result.actual ≤ result.requestedCount := trust_write_bounded result
 
 theorem close_transitions_to_closed (info : OpenFileState) :
     closePre (.open info) → closePost (.open info) .closed := by
