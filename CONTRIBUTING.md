@@ -170,16 +170,28 @@ test(memory): add property tests for buffer read/write round-trip
 docs(bytes): add byte order conversion examples
 ```
 
+### Branching Strategy
+
+Radix uses **Trunk-Based Development with Release Branches** ([ADR-004](docs/en/design/adr.md#adr-004-trunk-based-development-with-release-branches)):
+
+- **`main`** is the trunk. All development flows through PRs to `main`.
+- **Release branches** (`release/vX.Y`) are cut for stabilization and patch support.
+- **Toolchain branches** (`toolchain/lean-X.Y.Z`) isolate Lean 4 / Mathlib upgrades.
+- Bug fixes are implemented on `main` first, then cherry-picked to release branches.
+- There is no `develop` branch.
+
 ### Branch Naming
 
 ```
-feat/<short-description>      # New features
-fix/<short-description>       # Bug fixes
-proof/<short-description>     # New/improved proofs
-docs/<short-description>      # Documentation
-refactor/<short-description>  # Refactoring
-test/<short-description>      # Tests
-ci/<short-description>        # CI/CD changes
+feat/<short-description>           # New features
+fix/<short-description>            # Bug fixes
+proof/<short-description>          # New/improved proofs
+docs/<short-description>           # Documentation
+refactor/<short-description>       # Refactoring
+test/<short-description>           # Tests
+ci/<short-description>             # CI/CD changes
+toolchain/lean-<version>           # Lean 4 toolchain bumps
+release/v<major>.<minor>           # Release stabilization (maintainers only)
 ```
 
 ### Proof Guidelines

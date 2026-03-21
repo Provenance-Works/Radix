@@ -56,17 +56,20 @@ def runSystemErrorTests : IO Nat := do
   assert (Radix.System.SysError.endOfFile == Radix.System.SysError.endOfFile) "endOfFile BEq"
 
   -- ## FileState spec
+  -- Default open state with read-write access for testing
+  let openState := Radix.System.Spec.FileState.open
+    { position := 0, mode := .readWrite, bytesRead := 0, bytesWritten := 0 }
   -- readPre requires open state
-  assert (Decidable.decide (Radix.System.Spec.readPre .open) == true) "readPre open"
+  assert (Decidable.decide (Radix.System.Spec.readPre openState) == true) "readPre open"
   assert (Decidable.decide (Radix.System.Spec.readPre .closed) == false) "readPre closed"
 
-  assert (Decidable.decide (Radix.System.Spec.writePre .open) == true) "writePre open"
+  assert (Decidable.decide (Radix.System.Spec.writePre openState) == true) "writePre open"
   assert (Decidable.decide (Radix.System.Spec.writePre .closed) == false) "writePre closed"
 
-  assert (Decidable.decide (Radix.System.Spec.seekPre .open) == true) "seekPre open"
+  assert (Decidable.decide (Radix.System.Spec.seekPre openState) == true) "seekPre open"
   assert (Decidable.decide (Radix.System.Spec.seekPre .closed) == false) "seekPre closed"
 
-  assert (Decidable.decide (Radix.System.Spec.closePre .open) == true) "closePre open"
+  assert (Decidable.decide (Radix.System.Spec.closePre openState) == true) "closePre open"
   assert (Decidable.decide (Radix.System.Spec.closePre .closed) == false) "closePre closed"
 
   -- ## SeekMode constructors
@@ -75,25 +78,25 @@ def runSystemErrorTests : IO Nat := do
 
   -- ## LifecycleStep validation
   -- Open is valid from closed (initial) state? Actually lifecycle starts from open
-  assert (Radix.System.Spec.validStep .open (.read 100) == true) "validStep open read"
-  assert (Radix.System.Spec.validStep .open (.write 100) == true) "validStep open write"
-  assert (Radix.System.Spec.validStep .open (.seek .set 0) == true) "validStep open seek"
-  assert (Radix.System.Spec.validStep .open .close == true) "validStep open close"
+  assert (Radix.System.Spec.validStep openState (.read 100) == true) "validStep open read"
+  assert (Radix.System.Spec.validStep openState (.write 100) == true) "validStep open write"
+  assert (Radix.System.Spec.validStep openState (.seek .set 0) == true) "validStep open seek"
+  assert (Radix.System.Spec.validStep openState .close == true) "validStep open close"
   assert (Radix.System.Spec.validStep .closed (.read 100) == false) "validStep closed read"
   assert (Radix.System.Spec.validStep .closed (.write 100) == false) "validStep closed write"
   assert (Radix.System.Spec.validStep .closed .close == false) "validStep closed close"
 
   -- ## nextState transitions
-  assert (Radix.System.Spec.nextState .open (.read 100) == .open) "nextState read stays open"
-  assert (Radix.System.Spec.nextState .open (.write 100) == .open) "nextState write stays open"
-  assert (Radix.System.Spec.nextState .open .close == .closed) "nextState close"
+  assert ((Radix.System.Spec.nextState openState (.read 100)).isOpen == true) "nextState read stays open"
+  assert ((Radix.System.Spec.nextState openState (.write 100)).isOpen == true) "nextState write stays open"
+  assert (Radix.System.Spec.nextState openState .close == .closed) "nextState close"
 
   -- ## validLifecycle
-  assert (Radix.System.Spec.validLifecycle .open [] == true) "empty lifecycle valid"
-  assert (Radix.System.Spec.validLifecycle .open [.read 100, .write 50, .close] == true)
+  assert (Radix.System.Spec.validLifecycle openState [] == true) "empty lifecycle valid"
+  assert (Radix.System.Spec.validLifecycle openState [.read 100, .write 50, .close] == true)
     "read-write-close lifecycle"
   assert (Radix.System.Spec.validLifecycle .closed [.read 100] == false) "closed read invalid"
-  assert (Radix.System.Spec.validLifecycle .open [.close, .read 100] == false)
+  assert (Radix.System.Spec.validLifecycle openState [.close, .read 100] == false)
     "read after close invalid"
 
   -- ## FileInfo
