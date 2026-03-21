@@ -106,46 +106,43 @@ end BitmapState
 /-- Set then test at the same index returns `true`. -/
 theorem set_test_eq (bm : BitmapState) (idx : Nat) (h : idx < bm.size) :
     (bm.set idx).test idx = true := by
-  simp [BitmapState.set, BitmapState.test, h]
+  unfold BitmapState.test BitmapState.set
+  simp [h, beq_iff_eq]
 
 /-- Clear then test at the same index returns `false`. -/
 theorem clear_test_eq (bm : BitmapState) (idx : Nat) (h : idx < bm.size) :
     (bm.clear idx).test idx = false := by
-  simp [BitmapState.clear, BitmapState.test, h]
+  unfold BitmapState.test BitmapState.clear
+  simp [h, beq_iff_eq]
 
 /-- Set at index `i` does not affect test at index `j ≠ i`. -/
 theorem set_test_ne (bm : BitmapState) (i j : Nat) (hi : i < bm.size) (hne : i ≠ j) :
     (bm.set i).test j = bm.test j := by
-  simp [BitmapState.set, BitmapState.test, hi]
-  split
-  · rename_i hj
-    simp [hne, Nat.ne_of_gt (by omega : j > i) |>.symm]
-    split
-    · rename_i hjlt
-      simp [show i ≠ j from hne]
-    · rfl
-  · rename_i hj
-    simp at hj
-    simp [show ¬(j < bm.size) from hj]
+  unfold BitmapState.test BitmapState.set
+  simp [hi]
+  congr 1
+  simp [show j ≠ i from Ne.symm hne]
 
 /-- Clear at index `i` does not affect test at index `j ≠ i`. -/
 theorem clear_test_ne (bm : BitmapState) (i j : Nat) (hi : i < bm.size) (hne : i ≠ j) :
     (bm.clear i).test j = bm.test j := by
-  simp [BitmapState.clear, BitmapState.test, hi]
-  split
-  · rename_i hj
-    simp [show i ≠ j from hne]
-  · rfl
+  unfold BitmapState.test BitmapState.clear
+  simp [hi]
+  congr 1
+  simp [show j ≠ i from Ne.symm hne]
 
 /-- Toggle is self-inverse. -/
 theorem toggle_toggle (bm : BitmapState) (idx : Nat) (h : idx < bm.size) :
     (bm.toggle idx).toggle idx = bm := by
-  simp [BitmapState.toggle, h]
-  ext i
-  · rfl
-  · simp
+  unfold BitmapState.toggle
+  simp [h]
+  cases bm with
+  | mk sz getBit =>
+    congr 1
+    funext i
+    simp
     split
-    · rename_i heq; subst heq; simp
+    · simp [Bool.not_not]
     · rfl
 
 /-- Zeros bitmap has popcount 0. -/

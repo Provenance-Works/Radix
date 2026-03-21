@@ -42,7 +42,8 @@ theorem zeros_numBits (n : Nat) :
 /-- Freshly created `ones` bitmap has the correct number of bits. -/
 theorem ones_numBits (n : Nat) :
     (Bitmap.ones n).numBits = n := by
-  rfl
+  simp [Bitmap.ones]
+  split <;> rfl
 
 /-- Zeros bitmap has correct word count. -/
 theorem zeros_word_count (n : Nat) :
@@ -52,7 +53,9 @@ theorem zeros_word_count (n : Nat) :
 /-- Ones bitmap has correct word count. -/
 theorem ones_word_count (n : Nat) :
     (Bitmap.ones n).words.size = wordsNeeded n := by
-  exact (Bitmap.ones n).hSize
+  have h1 := (Bitmap.ones n).hSize
+  rw [ones_numBits] at h1
+  exact h1
 
 /-! ## Structural Invariant Preservation -/
 

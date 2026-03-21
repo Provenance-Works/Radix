@@ -61,7 +61,7 @@ namespace Bitmap
   let nWords := wordsNeeded n
   { numBits := n
     words := Array.replicate nWords ⟨0⟩
-    hSize := Array.size_replicate nWords ⟨0⟩ }
+    hSize := Array.size_replicate }
 
 /-- Create a bitmap of `n` bits, all initialized to 1.
     Bits beyond `numBits` in the last word are masked off. -/
@@ -75,15 +75,19 @@ def ones (n : Nat) : Bitmap :=
     let mask : Radix.UInt64 := ⟨(1 <<< remainder.toUInt64) - 1⟩
     let lastIdx := nWords - 1
     have hIdx : lastIdx < arr.size := by
-      simp [Array.size_replicate]; omega
-    let arr' := arr.set lastIdx (⟨(arr.get ⟨lastIdx, hIdx⟩).val &&& mask.val⟩)
+      have : arr.size = nWords := Array.size_replicate
+      omega
+    let arr' := arr.set lastIdx (⟨arr[lastIdx].val &&& mask.val⟩)
     { numBits := n
       words := arr'
-      hSize := by simp [Array.size_set, Array.size_replicate] }
+      hSize := by
+        have h1 : arr'.size = arr.size := Array.size_set hIdx
+        have h2 : arr.size = nWords := Array.size_replicate
+        omega }
   else
     { numBits := n
       words := arr
-      hSize := Array.size_replicate nWords allOnes }
+      hSize := Array.size_replicate }
 
 /-! ## Index Helpers -/
 
@@ -105,9 +109,9 @@ def ones (n : Nat) : Bitmap :=
     let wi := wordIndex idx
     let bo := bitOffset idx
     have hWi : wi < bm.words.size := by
-      rw [bm.hSize]; unfold wordsNeeded
-      omega
-    let word := bm.words.get ⟨wi, hWi⟩
+      show wordIndex idx < bm.words.size
+      rw [bm.hSize]; unfold wordsNeeded wordIndex bitsPerWord; omega
+    let word := bm.words[wi]
     (word.val >>> bo.toUInt64) &&& 1 != 0
   else false
 
@@ -117,11 +121,12 @@ def ones (n : Nat) : Bitmap :=
     let wi := wordIndex idx
     let bo := bitOffset idx
     have hWi : wi < bm.words.size := by
-      rw [bm.hSize]; unfold wordsNeeded; omega
-    let word := bm.words.get ⟨wi, hWi⟩
+      show wordIndex idx < bm.words.size
+      rw [bm.hSize]; unfold wordsNeeded wordIndex bitsPerWord; omega
+    let word := bm.words[wi]
     let newWord : Radix.UInt64 := ⟨word.val ||| (bitMask bo).val⟩
     { bm with
-      words := bm.words.set ⟨wi, hWi⟩ newWord
+      words := bm.words.set wi newWord
       hSize := by simp [Array.size_set, bm.hSize] }
   else bm
 
@@ -131,11 +136,12 @@ def ones (n : Nat) : Bitmap :=
     let wi := wordIndex idx
     let bo := bitOffset idx
     have hWi : wi < bm.words.size := by
-      rw [bm.hSize]; unfold wordsNeeded; omega
-    let word := bm.words.get ⟨wi, hWi⟩
+      show wordIndex idx < bm.words.size
+      rw [bm.hSize]; unfold wordsNeeded wordIndex bitsPerWord; omega
+    let word := bm.words[wi]
     let newWord : Radix.UInt64 := ⟨word.val &&& ~~~(bitMask bo).val⟩
     { bm with
-      words := bm.words.set ⟨wi, hWi⟩ newWord
+      words := bm.words.set wi newWord
       hSize := by simp [Array.size_set, bm.hSize] }
   else bm
 
@@ -145,11 +151,12 @@ def ones (n : Nat) : Bitmap :=
     let wi := wordIndex idx
     let bo := bitOffset idx
     have hWi : wi < bm.words.size := by
-      rw [bm.hSize]; unfold wordsNeeded; omega
-    let word := bm.words.get ⟨wi, hWi⟩
+      show wordIndex idx < bm.words.size
+      rw [bm.hSize]; unfold wordsNeeded wordIndex bitsPerWord; omega
+    let word := bm.words[wi]
     let newWord : Radix.UInt64 := ⟨word.val ^^^ (bitMask bo).val⟩
     { bm with
-      words := bm.words.set ⟨wi, hWi⟩ newWord
+      words := bm.words.set wi newWord
       hSize := by simp [Array.size_set, bm.hSize] }
   else bm
 
@@ -161,7 +168,7 @@ def popcount (bm : Bitmap) : Nat :=
 where
   go (arr : Array Radix.UInt64) (idx : Nat) (acc : Nat) : Nat :=
     if h : idx < arr.size then
-      let word := arr.get ⟨idx, h⟩
+      let word := arr[idx]
       -- Use UInt64 popcount from Bit.Scan and extract as Nat
       let wordPop := (Radix.UInt64.popcount word).val.toNat
       go arr (idx + 1) (acc + wordPop)
@@ -174,7 +181,7 @@ def findFirstSet (bm : Bitmap) : Option Nat :=
 where
   go (arr : Array Radix.UInt64) (wordIdx : Nat) : Option Nat :=
     if h : wordIdx < arr.size then
-      let word := arr.get ⟨wordIdx, h⟩
+      let word := arr[wordIdx]
       if word.val != 0 then
         -- Count trailing zeros to find the lowest set bit within this word
         let bitPos := (Radix.UInt64.ctz word).val.toNat
@@ -190,7 +197,7 @@ def findFirstClear (bm : Bitmap) : Option Nat :=
 where
   go (arr : Array Radix.UInt64) (wordIdx : Nat) : Option Nat :=
     if h : wordIdx < arr.size then
-      let word := arr.get ⟨wordIdx, h⟩
+      let word := arr[wordIdx]
       let inverted := ~~~word.val
       if inverted != 0 then
         let bitPos := (Radix.UInt64.ctz ⟨inverted⟩).val.toNat
@@ -205,60 +212,21 @@ where
 /-- Bitwise union (OR) of two bitmaps of the same size. -/
 def union (a b : Bitmap) (hSize : a.numBits = b.numBits) : Bitmap :=
   { numBits := a.numBits
-    words := zipWith a.words b.words (fun x y => ⟨x.val ||| y.val⟩)
-    hSize := by simp [zipWith, Array.size_zipWith, a.hSize, b.hSize, hSize] }
-where
-  zipWith (xs ys : Array Radix.UInt64) (f : Radix.UInt64 → Radix.UInt64 → Radix.UInt64) :
-      Array Radix.UInt64 :=
-    let n := min xs.size ys.size
-    go xs ys f n 0 #[]
-  go (xs ys : Array Radix.UInt64) (f : Radix.UInt64 → Radix.UInt64 → Radix.UInt64)
-      (n idx : Nat) (acc : Array Radix.UInt64) : Array Radix.UInt64 :=
-    if h : idx < n then
-      have hx : idx < xs.size := by omega
-      have hy : idx < ys.size := by omega
-      go xs ys f n (idx + 1) (acc.push (f (xs.get ⟨idx, hx⟩) (ys.get ⟨idx, hy⟩)))
-    else acc
-  termination_by n - idx
+    words := Array.zipWith (fun x y => ⟨x.val ||| y.val⟩) a.words b.words
+    hSize := by simp [Array.size_zipWith, a.hSize, b.hSize, hSize] }
 
 /-- Bitwise intersection (AND) of two bitmaps of the same size. -/
 def intersection (a b : Bitmap) (hSize : a.numBits = b.numBits) : Bitmap :=
   { numBits := a.numBits
-    words := zipWith a.words b.words (fun x y => ⟨x.val &&& y.val⟩)
-    hSize := by simp [zipWith, Array.size_zipWith, a.hSize, b.hSize, hSize] }
-where
-  zipWith (xs ys : Array Radix.UInt64) (f : Radix.UInt64 → Radix.UInt64 → Radix.UInt64) :
-      Array Radix.UInt64 :=
-    let n := min xs.size ys.size
-    go xs ys f n 0 #[]
-  go (xs ys : Array Radix.UInt64) (f : Radix.UInt64 → Radix.UInt64 → Radix.UInt64)
-      (n idx : Nat) (acc : Array Radix.UInt64) : Array Radix.UInt64 :=
-    if h : idx < n then
-      have hx : idx < xs.size := by omega
-      have hy : idx < ys.size := by omega
-      go xs ys f n (idx + 1) (acc.push (f (xs.get ⟨idx, hx⟩) (ys.get ⟨idx, hy⟩)))
-    else acc
-  termination_by n - idx
+    words := Array.zipWith (fun x y => ⟨x.val &&& y.val⟩) a.words b.words
+    hSize := by simp [Array.size_zipWith, a.hSize, b.hSize, hSize] }
 
 /-- Bitwise difference (AND NOT) of two bitmaps of the same size.
     Result has bits set in `a` but not in `b`. -/
 def difference (a b : Bitmap) (hSize : a.numBits = b.numBits) : Bitmap :=
   { numBits := a.numBits
-    words := zipWith a.words b.words (fun x y => ⟨x.val &&& ~~~y.val⟩)
-    hSize := by simp [zipWith, Array.size_zipWith, a.hSize, b.hSize, hSize] }
-where
-  zipWith (xs ys : Array Radix.UInt64) (f : Radix.UInt64 → Radix.UInt64 → Radix.UInt64) :
-      Array Radix.UInt64 :=
-    let n := min xs.size ys.size
-    go xs ys f n 0 #[]
-  go (xs ys : Array Radix.UInt64) (f : Radix.UInt64 → Radix.UInt64 → Radix.UInt64)
-      (n idx : Nat) (acc : Array Radix.UInt64) : Array Radix.UInt64 :=
-    if h : idx < n then
-      have hx : idx < xs.size := by omega
-      have hy : idx < ys.size := by omega
-      go xs ys f n (idx + 1) (acc.push (f (xs.get ⟨idx, hx⟩) (ys.get ⟨idx, hy⟩)))
-    else acc
-  termination_by n - idx
+    words := Array.zipWith (fun x y => ⟨x.val &&& ~~~y.val⟩) a.words b.words
+    hSize := by simp [Array.size_zipWith, a.hSize, b.hSize, hSize] }
 
 /-- Bitwise complement (NOT) of a bitmap.
     Bits beyond `numBits` in the last word are masked off. -/
@@ -271,15 +239,21 @@ def complement (bm : Bitmap) : Bitmap :=
     let mask : Radix.UInt64 := ⟨(1 <<< remainder.toUInt64) - 1⟩
     let lastIdx := nWords - 1
     have hIdx : lastIdx < inverted.size := by
-      simp [Array.size_map, bm.hSize]; omega
-    let inverted' := inverted.set lastIdx (⟨(inverted.get ⟨lastIdx, hIdx⟩).val &&& mask.val⟩)
+      have : inverted.size = bm.words.size := Array.size_map
+      rw [this, bm.hSize]; omega
+    let inverted' := inverted.set lastIdx (⟨inverted[lastIdx].val &&& mask.val⟩)
     { numBits := bm.numBits
       words := inverted'
-      hSize := by simp [Array.size_set, Array.size_map, bm.hSize] }
+      hSize := by
+        have h1 : inverted'.size = inverted.size := Array.size_set hIdx
+        have h2 : inverted.size = bm.words.size := Array.size_map
+        rw [h1, h2]; exact bm.hSize }
   else
     { numBits := bm.numBits
       words := inverted
-      hSize := by simp [Array.size_map, bm.hSize] }
+      hSize := by
+        have : inverted.size = bm.words.size := Array.size_map
+        rw [this]; exact bm.hSize }
 
 /-! ## Query Operations -/
 
@@ -294,31 +268,31 @@ def isFull (bm : Bitmap) : Bool :=
 
 /-- Check if two bitmaps of the same size are disjoint (no common set bits). -/
 def isDisjoint (a b : Bitmap) (hSize : a.numBits = b.numBits) : Bool :=
-  go a.words b.words 0
+  go 0
 where
-  go (xs ys : Array Radix.UInt64) (idx : Nat) : Bool :=
-    if h : idx < xs.size then
-      have hy : idx < ys.size := by
+  go (idx : Nat) : Bool :=
+    if h : idx < a.words.size then
+      have hy : idx < b.words.size := by
         have := a.hSize; have := b.hSize; rw [hSize] at *; omega
-      if (xs.get ⟨idx, h⟩).val &&& (ys.get ⟨idx, hy⟩).val != 0 then false
-      else go xs ys (idx + 1)
+      if a.words[idx].val &&& b.words[idx].val != 0 then false
+      else go (idx + 1)
     else true
-  termination_by xs.size - idx
+  termination_by a.words.size - idx
 
 /-- Check if `a` is a subset of `b` (every bit set in `a` is also set in `b`). -/
 def isSubsetOf (a b : Bitmap) (hSize : a.numBits = b.numBits) : Bool :=
-  go a.words b.words 0
+  go 0
 where
-  go (xs ys : Array Radix.UInt64) (idx : Nat) : Bool :=
-    if h : idx < xs.size then
-      have hy : idx < ys.size := by
+  go (idx : Nat) : Bool :=
+    if h : idx < a.words.size then
+      have hy : idx < b.words.size := by
         have := a.hSize; have := b.hSize; rw [hSize] at *; omega
-      let xw := (xs.get ⟨idx, h⟩).val
-      let yw := (ys.get ⟨idx, hy⟩).val
+      let xw := a.words[idx].val
+      let yw := b.words[idx].val
       if xw &&& ~~~yw != 0 then false
-      else go xs ys (idx + 1)
+      else go (idx + 1)
     else true
-  termination_by xs.size - idx
+  termination_by a.words.size - idx
 
 /-! ## Conversion -/
 
