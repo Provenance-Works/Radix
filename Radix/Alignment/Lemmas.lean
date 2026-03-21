@@ -29,6 +29,11 @@ namespace Radix.Alignment
 
 open Radix.Alignment.Spec
 
+/-! ## Helper for simplifying `if align == 0` with `h : align > 0` -/
+
+private theorem beq_zero_false_of_pos {n : Nat} (h : n > 0) : (n == 0) = false := by
+  simp [beq_iff_eq]; omega
+
 /-! ## isAligned Properties -/
 
 /-- Zero is aligned to any positive alignment. -/
@@ -53,33 +58,33 @@ theorem isAligned_add_align (offset align : Nat)
     (h : Spec.isAligned offset align) :
     Spec.isAligned (offset + align) align := by
   obtain ⟨hpos, hmod⟩ := h
-  constructor
-  · exact hpos
-  · omega
+  refine ⟨hpos, ?_⟩
+  rw [Nat.add_mod_right]
+  exact hmod
 
 /-! ## alignDown Properties -/
 
 /-- `alignDown` result is ≤ the input. -/
 theorem alignDown_le (offset align : Nat) (h : align > 0) :
     Spec.alignDown offset align ≤ offset := by
-  simp [Spec.alignDown, h, Nat.beq_eq_false_of_ne (Nat.not_eq_zero_of_lt h)]
+  unfold Spec.alignDown
+  simp [beq_zero_false_of_pos h]
   exact Nat.div_mul_le_self offset align
 
 /-- `alignDown` produces an aligned result. -/
 theorem alignDown_isAligned (offset align : Nat) (h : align > 0) :
     Spec.isAligned (Spec.alignDown offset align) align := by
-  simp [Spec.alignDown, Nat.beq_eq_false_of_ne (Nat.not_eq_zero_of_lt h)]
-  constructor
-  · exact h
-  · simp [Spec.isAligned]
-    exact Nat.mul_mod_right (offset / align) align
+  unfold Spec.alignDown
+  simp [beq_zero_false_of_pos h]
+  exact ⟨h, by rw [Nat.mul_comm]; exact Nat.mul_mod_right align (offset / align)⟩
 
 /-- `alignDown` of an already-aligned offset is identity. -/
 theorem alignDown_of_isAligned (offset align : Nat)
     (h : Spec.isAligned offset align) :
     Spec.alignDown offset align = offset := by
   obtain ⟨hpos, hmod⟩ := h
-  simp [Spec.alignDown, Nat.beq_eq_false_of_ne (Nat.not_eq_zero_of_lt hpos)]
+  unfold Spec.alignDown
+  simp [beq_zero_false_of_pos hpos]
   exact Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero hmod)
 
 /-! ## alignUp Properties -/
@@ -87,55 +92,37 @@ theorem alignDown_of_isAligned (offset align : Nat)
 /-- `alignUp` result is ≥ the input. -/
 theorem alignUp_ge (offset align : Nat) (h : align > 0) :
     offset ≤ Spec.alignUp offset align := by
-  simp [Spec.alignUp, Nat.beq_eq_false_of_ne (Nat.not_eq_zero_of_lt h)]
-  calc offset ≤ (offset + align - 1) / align * align := by
-        have : offset ≤ offset + align - 1 := by omega
-        calc offset
-            = offset / align * align + offset % align := (Nat.div_add_mod offset align).symm
-          _ ≤ (offset + align - 1) / align * align := by
-              have hdiv : offset / align ≤ (offset + align - 1) / align := by
-                apply Nat.div_le_div_right; omega
-              have := Nat.mul_le_mul_right align hdiv
-              omega
-    _ = _ := by ring
+  unfold Spec.alignUp
+  simp [beq_zero_false_of_pos h]
+  have h1 := Nat.mod_lt (offset + align - 1) h
+  have h2 := Nat.div_add_mod (offset + align - 1) align
+  have h3 : align * ((offset + align - 1) / align) =
+      (offset + align - 1) / align * align := Nat.mul_comm _ _
+  omega
 
 /-- `alignUp` of an already-aligned offset is identity. -/
 theorem alignUp_of_isAligned (offset align : Nat)
     (h : Spec.isAligned offset align) :
     Spec.alignUp offset align = offset := by
   obtain ⟨hpos, hmod⟩ := h
-  simp [Spec.alignUp, Nat.beq_eq_false_of_ne (Nat.not_eq_zero_of_lt hpos)]
+  unfold Spec.alignUp
+  simp [beq_zero_false_of_pos hpos]
+  -- Goal: (offset + align - 1) / align * align = offset
   have hdvd := Nat.dvd_of_mod_eq_zero hmod
   obtain ⟨k, hk⟩ := hdvd
-  subst hk
-  simp [Nat.mul_div_cancel_left _ hpos]
-  ring_nf
-  have : k * align + align - 1 = k * align + (align - 1) := by omega
-  rw [this]
-  rw [Nat.add_div_right_eq_of_lt (by omega)]
-  ring
-
-where
-  Nat.add_div_right_eq_of_lt {a b : Nat} (h : 0 < b) :
-      (a * b + (b - 1)) / b = a := by
-    have : a * b + (b - 1) < (a + 1) * b := by
-      rw [Nat.add_mul]; omega
-    have hle : a ≤ (a * b + (b - 1)) / b := by
-      apply Nat.le_div_iff_mul_le h |>.mpr
-      omega
-    have hlt : (a * b + (b - 1)) / b < a + 1 := by
-      apply Nat.div_lt_iff_lt_mul h |>.mpr
-      exact this
-    omega
+  -- hk : offset = align * k
+  rw [hk]
+  rw [show align * k + align - 1 = (align - 1) + align * k from by omega]
+  rw [Nat.add_mul_div_left _ _ hpos]
+  have h1 : (align - 1) / align = 0 := Nat.div_eq_of_lt (by omega)
+  rw [h1, Nat.zero_add, Nat.mul_comm]
 
 /-- `alignUp` produces an aligned result. -/
 theorem alignUp_isAligned (offset align : Nat) (h : align > 0) :
     Spec.isAligned (Spec.alignUp offset align) align := by
-  simp [Spec.alignUp, Nat.beq_eq_false_of_ne (Nat.not_eq_zero_of_lt h)]
-  constructor
-  · exact h
-  · simp [Spec.isAligned]
-    exact Nat.mul_mod_right _ align
+  unfold Spec.alignUp
+  simp [beq_zero_false_of_pos h]
+  exact ⟨h, by rw [Nat.mul_comm]; exact Nat.mul_mod_right align _⟩
 
 /-! ## alignDown ≤ offset ≤ alignUp -/
 
@@ -150,7 +137,8 @@ theorem alignDown_le_alignUp (offset align : Nat) (h : align > 0) :
 /-- Padding is always less than alignment. -/
 theorem alignPadding_lt (offset align : Nat) (h : align > 0) :
     Spec.alignPadding offset align < align := by
-  simp [Spec.alignPadding, Nat.beq_eq_false_of_ne (Nat.not_eq_zero_of_lt h)]
+  unfold Spec.alignPadding
+  simp [beq_zero_false_of_pos h]
   exact Nat.mod_lt _ h
 
 /-- Padding for an already-aligned offset is zero. -/
@@ -158,33 +146,52 @@ theorem alignPadding_of_isAligned (offset align : Nat)
     (h : Spec.isAligned offset align) :
     Spec.alignPadding offset align = 0 := by
   obtain ⟨hpos, hmod⟩ := h
-  simp [Spec.alignPadding, Nat.beq_eq_false_of_ne (Nat.not_eq_zero_of_lt hpos), hmod]
+  unfold Spec.alignPadding
+  simp [beq_zero_false_of_pos hpos, hmod]
 
 /-- `offset + padding` is aligned. -/
 theorem offset_add_padding_isAligned (offset align : Nat) (h : align > 0) :
     Spec.isAligned (offset + Spec.alignPadding offset align) align := by
-  simp [Spec.alignPadding, Nat.beq_eq_false_of_ne (Nat.not_eq_zero_of_lt h)]
-  constructor
-  · exact h
-  · simp [Spec.isAligned]
-    omega
+  unfold Spec.alignPadding
+  simp [beq_zero_false_of_pos h]
+  refine ⟨h, ?_⟩
+  -- Goal: (offset + (align - offset % align) % align) % align = 0
+  have hm := Nat.mod_lt offset h
+  by_cases hc : offset % align = 0
+  · -- padding is (align - 0) % align = align % align = 0
+    simp [hc, Nat.mod_self]
+  · -- padding is (align - offset % align) which is < align
+    have hm_pos : 0 < offset % align := Nat.pos_of_ne_zero hc
+    have hsub_lt : align - offset % align < align := by omega
+    rw [Nat.mod_eq_of_lt hsub_lt]
+    -- Goal: (offset + (align - offset % align)) % align = 0
+    -- offset = (offset / align) * align + offset % align
+    -- offset + (align - offset % align) = (offset / align) * align + align
+    --                                    = (offset / align + 1) * align
+    have hdecomp := Nat.div_add_mod offset align
+    have h1 : align * (offset / align) = offset / align * align := Nat.mul_comm _ _
+    have hsum : offset + (align - offset % align) = offset / align * align + align := by omega
+    rw [hsum, Nat.add_mod_right, Nat.mul_comm]
+    exact Nat.mul_mod_right align _
 
 /-! ## Ops vs Spec Equivalence -/
 
 /-- `Ops.isAligned` agrees with `Spec.isAligned` for `align > 0`. -/
 theorem ops_isAligned_iff_spec (offset align : Nat) (h : align > 0) :
     Alignment.isAligned offset align = true ↔ Spec.isAligned offset align := by
-  simp [Alignment.isAligned, Spec.isAligned, h]
-  omega
+  unfold Alignment.isAligned Spec.isAligned
+  simp [h]
 
 /-- `Ops.alignUp` equals `Spec.alignUp`. -/
 theorem ops_alignUp_eq_spec (offset align : Nat) :
     Alignment.alignUp offset align = Spec.alignUp offset align := by
-  simp [Alignment.alignUp, Spec.alignUp]
+  unfold Alignment.alignUp Spec.alignUp
+  rfl
 
 /-- `Ops.alignDown` equals `Spec.alignDown`. -/
 theorem ops_alignDown_eq_spec (offset align : Nat) :
     Alignment.alignDown offset align = Spec.alignDown offset align := by
-  simp [Alignment.alignDown, Spec.alignDown]
+  unfold Alignment.alignDown Spec.alignDown
+  rfl
 
 end Radix.Alignment

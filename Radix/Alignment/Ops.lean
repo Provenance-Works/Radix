@@ -58,14 +58,19 @@ When `align` is a power of two, alignment operations can use bit masks
 instead of division. These are the preferred implementations at runtime. -/
 
 /-- Fast `alignUp` for power-of-two alignment via bit mask.
-    Requires: `align` is a power of two. -/
+    Requires: `align` is a power of two and > 0. -/
 @[inline] def alignUpPow2 (offset align : Nat) : Nat :=
-  (offset + align - 1) &&& (0 - align)
+  -- For Nat, (0 - align) underflows, so use the mask (align - 1) instead:
+  -- Clear low bits of (offset + align - 1) by subtracting the remainder.
+  let mask := align - 1
+  let rounded := offset + mask
+  rounded - (rounded &&& mask)
 
 /-- Fast `alignDown` for power-of-two alignment via bit mask.
-    Requires: `align` is a power of two. -/
+    Requires: `align` is a power of two and > 0. -/
 @[inline] def alignDownPow2 (offset align : Nat) : Nat :=
-  offset &&& (0 - align)
+  -- Clear low bits by subtracting the remainder.
+  offset - (offset &&& (align - 1))
 
 /-- Fast `isAligned` check for power-of-two alignment.
     Requires: `align` is a power of two. -/
