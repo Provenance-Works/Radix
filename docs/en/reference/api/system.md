@@ -132,4 +132,4 @@ All axioms are `Prop`-typed, prefixed with `trust_`, and cite POSIX.1-2024:
 ## Related Documents
 
 - [Errors](../errors.md) — Error variant details
-- [Architecture: TCB](../../en/architecture/README.md#trusted-computing-base-tcb) — TCB analysis
+- [Architecture: TCB](../../architecture/README.md#trusted-computing-base-tcb) — TCB analysis

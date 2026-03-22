@@ -57,7 +57,7 @@ graph TD
 
 | モジュール | Layer 3（仕様） | Layer 2（実装） | Layer 1（ブリッジ） |
 |--------|---------------|----------------|-----------------|
-| Word | `Word.Spec` | `Word.UInt`, `Word.Int`, `Word.Arith`, `Word.Conv`, `Word.Size` | — |
+| Word | `Word.Spec`, `Word.Lemmas.*` | `Word.UInt`, `Word.Int`, `Word.Arith`, `Word.Conv`, `Word.Size`, `Word.Numeric` | — |
 | Bit | `Bit.Spec` | `Bit.Ops`, `Bit.Scan`, `Bit.Field` | — |
 | Bytes | `Bytes.Spec` | `Bytes.Order`, `Bytes.Slice` | — |
 | Memory | `Memory.Spec` | `Memory.Model`, `Memory.Ptr`, `Memory.Layout` | — |
@@ -65,8 +65,13 @@ graph TD
 | System | `System.Spec` | `System.Error`, `System.FD` | `System.IO`, `System.Assumptions` |
 | Concurrency | `Concurrency.Spec` | `Concurrency.Ordering`, `Concurrency.Atomic` | `Concurrency.Assumptions` |
 | BareMetal | `BareMetal.Spec` | `BareMetal.GCFree`, `BareMetal.Linker`, `BareMetal.Startup` | `BareMetal.Assumptions` |
+| Alignment | `Alignment.Spec`, `Alignment.Lemmas` | `Alignment.Ops` | — |
+| RingBuffer | `RingBuffer.Spec`, `RingBuffer.Lemmas` | `RingBuffer.Impl` | — |
+| Bitmap | `Bitmap.Spec`, `Bitmap.Lemmas` | `Bitmap.Ops` | — |
+| CRC | `CRC.Spec`, `CRC.Lemmas` | `CRC.Ops` | — |
+| MemoryPool | `MemoryPool.Spec`, `MemoryPool.Lemmas` | `MemoryPool.Model` | — |
 
-> **注記:** Word から Binary は**純粋**モジュール（Layer 2-3 のみ）です。System、Concurrency、BareMetal は Layer 1 コンポーネントを持ちます。
+> **注記:** v0.2.0 では 10 モジュールが完全に純粋です。Word、Bit、Bytes、Memory、Binary、Alignment、RingBuffer、Bitmap、CRC、MemoryPool は Layer 2-3 のみで完結し、Layer 1 の信頼境界をまたぐのは System、Concurrency、BareMetal だけです。
 
 ## モジュール依存関係グラフ
 
@@ -75,12 +80,22 @@ graph TD
     Bit["Bit<br/>(ビット演算)"] --> Word["Word<br/>(固定幅整数)"]
     Bytes["Bytes<br/>(バイトオーダー)"] --> Word
     Bytes --> Bit
+    Numeric["Word.Numeric<br/>(数値型クラス)"] --> Word
+    Numeric --> Bit
     Memory["Memory<br/>(抽象メモリ)"] --> Word
     Memory --> Bytes
     Binary["Binary<br/>(フォーマットDSL)"] --> Word
     Binary --> Memory
     Binary --> Bit
     Binary --> Bytes
+    Alignment["Alignment<br/>(アライメント)"] --> Word
+    RingBuffer["RingBuffer<br/>(リングキュー)"] --> Memory
+    Bitmap["Bitmap<br/>(高密度ビット集合)"] --> Word
+    Bitmap --> Bit
+    CRC["CRC<br/>(チェックサム)"] --> Word
+    CRC --> Bit
+    MemoryPool["MemoryPool<br/>(アロケータモデル)"] --> Memory
+    MemoryPool --> Word
     System["System<br/>(OSインターフェース)"] --> Word
     System --> Bytes
     System --> Memory
@@ -91,12 +106,18 @@ graph TD
     style Bytes fill:#2196F3,color:white
     style Memory fill:#2196F3,color:white
     style Binary fill:#2196F3,color:white
+    style Numeric fill:#66BB6A,color:white
+    style Alignment fill:#66BB6A,color:white
+    style RingBuffer fill:#2196F3,color:white
+    style Bitmap fill:#2196F3,color:white
+    style CRC fill:#2196F3,color:white
+    style MemoryPool fill:#2196F3,color:white
     style System fill:#FF9800,color:white
     style Concurrency fill:#9C27B0,color:white
     style BareMetal fill:#9C27B0,color:white
 ```
 
-依存関係は `Word` から上方向に流れます。各上位モジュールは下位モジュール上に構築されます。
+依存関係の核は引き続き `Word` ですが、v0.2.0 ではその上に `Alignment`、`RingBuffer`、`Bitmap`、`CRC`、`MemoryPool`、`Word.Numeric` が積み上がり、基礎整数・ビット演算を再利用する形に広がりました。
 
 ## 信頼計算基盤（TCB）
 

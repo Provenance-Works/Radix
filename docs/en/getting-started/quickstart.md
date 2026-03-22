@@ -95,7 +95,60 @@ let buf := Memory.Buffer.zeros 64
 -- Tier 2: checked read/write (returns Option on out-of-bounds)
 ```
 
-## 9. System I/O
+## 9. Alignment
+
+```lean
+open Radix.Alignment
+
+#eval alignUp 1000 16        -- 1008
+#eval alignDown 1023 16      -- 1008
+#eval isAligned 1024 64      -- true
+#eval alignPadding 1000 16   -- 8
+```
+
+## 10. Ring Buffer and Bitmap
+
+```lean
+open Radix.RingBuffer
+open Radix.Bitmap
+
+let rb := RingBuf.new 4
+let some rb := rb.push ⟨10⟩ | unreachable!
+let some rb := rb.push ⟨20⟩ | unreachable!
+#eval rb.peek.map UInt8.toNat        -- some 10
+
+let bm := Bitmap.zeros 64 |>.set 0 |>.set 7
+#eval bm.test 7                      -- true
+#eval bm.popcount                    -- 2
+```
+
+## 11. CRC and Memory Pools
+
+```lean
+open Radix.CRC
+open Radix.MemoryPool
+
+#eval CRC32.compute "123456789".toUTF8  -- 0xCBF43926
+
+let pool := BumpPool.new 1024
+#eval pool.remaining                          -- 1024
+#eval (pool.alloc 64).map (fun (off, p) => (off, p.remaining))
+```
+
+## 12. Numeric Typeclasses
+
+```lean
+import Radix
+import Radix.Word.Numeric
+
+open Radix
+
+#eval isZero (α := UInt8) UInt8.minVal -- true
+#eval isMax (α := UInt16) UInt16.maxVal -- true
+#eval BitwiseOps.popcount (⟨0xFF⟩ : UInt8).toNat -- 8
+```
+
+## 13. System I/O
 
 ```lean
 -- File I/O with automatic resource management

@@ -197,6 +197,66 @@ classDiagram
     }
 ```
 
+## v0.2.0 Data Structures
+
+```mermaid
+classDiagram
+    class RingBuf {
+        +buf : Memory.Buffer
+        +capacity : Nat
+        +head : Nat
+        +tail : Nat
+        +count : Nat
+    }
+    class Bitmap {
+        +numBits : Nat
+        +words : Array UInt64
+        +hSize : words.size = wordsNeeded numBits
+    }
+    class BumpPool {
+        +buf : Memory.Buffer
+        +capacity : Nat
+        +cursor : Nat
+    }
+    class SlabPool {
+        +buf : Memory.Buffer
+        +blockSize : Nat
+        +blockCount : Nat
+        +freeList : List Nat
+        +allocated : List Nat
+    }
+    class CRCParams {
+        +width : Nat
+        +poly : Nat
+        +init : Nat
+        +xorOut : Nat
+        +reflectIn : Bool
+        +reflectOut : Bool
+    }
+    class HasAlignment {
+        <<typeclass>>
+        +alignment : Nat
+    }
+    class BoundedUInt {
+        <<typeclass>>
+        +minVal : α
+        +maxVal : α
+        +toNat(x) Nat
+    }
+    class BoundedInt {
+        <<typeclass>>
+        +minVal : α
+        +maxVal : α
+        +toInt(x) Int
+    }
+    RingBuf --> Buffer : uses
+    Bitmap --> UInt64 : stores words in
+    BumpPool --> Buffer : uses
+    SlabPool --> Buffer : uses
+```
+
+These structures are the main v0.2.0 additions: queue state in `RingBuf`, dense bit storage in `Bitmap`, arena and slab allocation state in `BumpPool` and `SlabPool`, CRC parameterization in `CRCParams`, and width-generic abstractions via `HasAlignment`, `BoundedUInt`, and `BoundedInt`.
+
 ## Relationship: Radix Types ↔ BitVec
 
 Every Radix integer type has a proven equivalence with `BitVec n`:

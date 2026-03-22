@@ -89,4 +89,4 @@ Proven for all 10 types:
 ## Related Documents
 
 - [Word](word.md) — Integer types these operations apply to
-- [Architecture: Components](../../en/architecture/components.md#bit) — Module overview
+- [Architecture: Components](../../architecture/components.md) — Module overview

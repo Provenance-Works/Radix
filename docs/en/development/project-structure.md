@@ -64,7 +64,7 @@ graph TD
         Spec["*.Spec.lean<br/>*.Lemmas.lean<br/>Word.Lemmas/*"]
     end
     subgraph "Layer 2: Implementation"
-        Impl["*.UInt.lean, *.Int.lean<br/>*.Ops.lean, *.Scan.lean, *.Field.lean<br/>*.Order.lean, *.Slice.lean<br/>*.Model.lean, *.Ptr.lean, *.Layout.lean<br/>*.Format.lean, *.Parser.lean, *.Serial.lean<br/>*.Error.lean, *.FD.lean<br/>*.Ordering.lean, *.Atomic.lean<br/>*.GCFree.lean, *.Linker.lean, *.Startup.lean"]
+        Impl["*.UInt.lean, *.Int.lean, *.Numeric.lean<br/>*.Ops.lean, *.Scan.lean, *.Field.lean, *.Impl.lean<br/>*.Order.lean, *.Slice.lean<br/>*.Model.lean, *.Ptr.lean, *.Layout.lean<br/>*.Format.lean, *.Parser.lean, *.Serial.lean<br/>*.Error.lean, *.FD.lean<br/>*.Ordering.lean, *.Atomic.lean<br/>*.GCFree.lean, *.Linker.lean, *.Startup.lean"]
     end
     subgraph "Layer 1: System Bridge"
         Bridge["System/IO.lean<br/>System/Assumptions.lean<br/>Concurrency/Assumptions.lean<br/>BareMetal/Assumptions.lean"]

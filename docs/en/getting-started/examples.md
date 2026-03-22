@@ -2,7 +2,7 @@
 
 > **Audience**: Users, Developers
 
-All examples below are from the project's `examples/Main.lean` file and are verified by execution-time assertions.
+All examples below are grounded in the project's `examples/Main.lean` runner and the focused example modules under `examples/`. In v0.2.0 the examples split into three groups: 13 built-in walkthrough sections, 11 focused application-style demos, and 4 new feature demos for Bitmap, Alignment, MemoryPool, and Numeric typeclasses.
 
 ## Word Arithmetic
 
@@ -174,6 +174,81 @@ System.FD.withFile "test.bin" .write fun fd => do
 let _ ← System.IO.writeFileBytes "out.bin" data
 let bytes ← System.IO.readFileBytes "out.bin"
 let exists ← System.IO.sysFileExists "out.bin"
+```
+
+## Alignment Utilities
+
+```lean
+open Radix.Alignment
+
+#eval alignUp 1000 16         -- 1008
+#eval alignDown 1023 16       -- 1008
+#eval isPowerOfTwo 64         -- true
+#eval alignUpPow2 12345 256   -- 12544
+#eval alignmentOf UInt64      -- 8
+```
+
+## Bitmap / Bitset
+
+```lean
+open Radix.Bitmap
+
+let bm := Bitmap.zeros 128 |>.set 0 |>.set 7 |>.set 42
+#eval bm.popcount             -- 3
+#eval bm.test 42              -- true
+#eval bm.findFirstSet         -- some 0
+
+let full := Bitmap.ones 8 |>.clear 5
+#eval full.findFirstClear     -- some 5
+```
+
+## Ring Buffer
+
+```lean
+open Radix.RingBuffer
+
+let rb := RingBuf.new 8
+let some rb := rb.push ⟨10⟩ | unreachable!
+let some rb := rb.push ⟨20⟩ | unreachable!
+let some (front, rb) := rb.pop | unreachable!
+
+#eval front.toNat             -- 10
+#eval rb.peek.map UInt8.toNat -- some 20
+```
+
+## CRC-32 / CRC-16
+
+```lean
+open Radix.CRC
+
+#eval CRC32.compute "123456789".toUTF8   -- 0xCBF43926
+
+let crc := CRC32.init
+let crc := CRC32.update crc "1234".toUTF8
+let crc := CRC32.update crc "56789".toUTF8
+#eval CRC32.finalize crc                  -- same result as compute
+```
+
+## Memory Pools
+
+```lean
+open Radix.MemoryPool
+
+let pool := BumpPool.new 1024
+#eval pool.remaining
+#eval (pool.alloc 64).map (fun (off, p) => (off, p.remaining))
+```
+
+## Numeric Typeclasses
+
+```lean
+import Radix.Word.Numeric
+
+open Radix
+
+#eval isZero (α := UInt8) UInt8.minVal
+#eval isMax (α := UInt16) UInt16.maxVal
+#eval BitwiseOps.popcount (⟨0xDEADBEEF⟩ : UInt32).toNat
 ```
 
 ## See Also

@@ -4,25 +4,28 @@
 
 ## コンポーネント概要
 
-Radixは13個のモジュールで構成され、それぞれがシステムプログラミングのプリミティブを提供します。全モジュールが3層アーキテクチャ（仕様 → 実装 → ブリッジ）に従います。
-
-下の依存関係図は元の基盤モジュール群に焦点を当てています。v0.2.0 では Alignment、RingBuffer、Bitmap、CRC、MemoryPool が追加されました。
+Radixは13個のモジュールで構成され、それぞれがシステムプログラミングのプリミティブを提供します。全モジュールが3層アーキテクチャ（仕様 → 実装 → ブリッジ）に従い、v0.2.0 では既存基盤の上に数値型クラス、アライメント、リングバッファ、ビットマップ、CRC、メモリプールが追加されました。
 
 ```mermaid
 graph TD
-    subgraph "純粋モジュール（Layer 2-3 のみ）"
-        Word["Word<br/>固定幅整数<br/>10型、5算術モード"]
-        Bit["Bit<br/>ビット演算<br/>AND/OR/XOR/NOT、シフト、回転、走査"]
-        Bytes["Bytes<br/>バイトオーダー<br/>エンディアン、bswap、ByteSlice"]
+    subgraph "コア純粋モジュール"
+        Word["Word<br/>10整数型<br/>5算術モード + Numeric"]
+        Bit["Bit<br/>ビット演算<br/>走査 + フィールド"]
+        Bytes["Bytes<br/>バイトオーダー<br/>ByteSlice"]
         Memory["Memory<br/>抽象メモリ<br/>Buffer、Ptr、Layout"]
         Binary["Binary<br/>フォーマットDSL<br/>パーサー、シリアライザー、LEB128"]
     end
-    subgraph "副作用モジュール（Layer 1-3）"
-        System["System<br/>OSインターフェース<br/>ファイルI/O、Error、FD"]
+    subgraph "v0.2.0 純粋モジュール"
+        Alignment["Alignment<br/>アライメント計算<br/>2の冪高速パス"]
+        RingBuffer["RingBuffer<br/>固定容量FIFO<br/>Bufferベース"]
+        Bitmap["Bitmap<br/>高密度ビット集合<br/>ワード単位演算"]
+        CRC["CRC<br/>CRC-32 / CRC-16<br/>ストリーミング API"]
+        MemoryPool["MemoryPool<br/>bump + slab アロケータ<br/>純粋モデル"]
     end
-    subgraph "モデルモジュール（Layer 1-3）"
+    subgraph "ブリッジ / モデルモジュール"
+        System["System<br/>OSインターフェース<br/>ファイルI/O、Error、FD"]
         Concurrency["Concurrency<br/>アトミック操作モデル<br/>C11メモリオーダリング"]
-        BareMetal["BareMetal<br/>OS無しサポート<br/>リンカー、スタートアップ、GCFree"]
+        BareMetal["BareMetal<br/>プラットフォームモデル<br/>リンカー、スタートアップ、GCFree"]
     end
     Bit --> Word
     Bytes --> Word
@@ -33,14 +36,29 @@ graph TD
     Binary --> Memory
     Binary --> Bit
     Binary --> Bytes
+    Alignment --> Word
+    RingBuffer --> Memory
+    Bitmap --> Word
+    Bitmap --> Bit
+    CRC --> Word
+    CRC --> Bit
+    MemoryPool --> Memory
+    MemoryPool --> Word
     System --> Word
     System --> Bytes
     System --> Memory
+    Concurrency -.-> Word
+    BareMetal -.-> Memory
     style Word fill:#4CAF50,color:white
     style Bit fill:#66BB6A,color:white
     style Bytes fill:#42A5F5,color:white
     style Memory fill:#29B6F6,color:white
     style Binary fill:#26C6DA,color:white
+    style Alignment fill:#66BB6A,color:white
+    style RingBuffer fill:#29B6F6,color:white
+    style Bitmap fill:#26C6DA,color:white
+    style CRC fill:#26C6DA,color:white
+    style MemoryPool fill:#29B6F6,color:white
     style System fill:#FFA726,color:white
     style Concurrency fill:#AB47BC,color:white
     style BareMetal fill:#8D6E63,color:white
