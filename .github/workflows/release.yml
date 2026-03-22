@@ -78,8 +78,9 @@ jobs:
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           VERSION="${TAG#v}"
-          if ! grep -q "$VERSION\|Unreleased" CHANGELOG.md; then
-            echo "::warning::No CHANGELOG entry found for version $VERSION"
+          if ! grep -Eq "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "::error::Missing CHANGELOG entry for version $VERSION"
+            exit 1
           fi
 
   # ===========================================================================
@@ -143,6 +144,107 @@ jobs:
         run: |
           lake build examples
           lake exe examples
+
+        - name: "Build & Run: Lean benchmarks"
+        run: |
+          lake build bench
+          lake exe bench | tee bench-lean.txt
+
+        - name: "Build & Run: C baseline benchmarks"
+        run: |
+            COMPILER=""
+            for candidate in /usr/bin/gcc gcc cc clang; do
+              if command -v "$candidate" &> /dev/null; then
+                if printf 'int main(void){return 0;}\n' | "$candidate" -x c - -o /tmp/radix-cc-check >/dev/null 2>&1; then
+                  COMPILER="$candidate"
+                  break
+                fi
+              fi
+            done
+            if [ -z "$COMPILER" ]; then
+              echo "::error::A working C compiler is required for release benchmark comparison"
+          exit 1
+          fi
+            rm -f /tmp/radix-cc-check
+            "$COMPILER" -O2 -march=native -fno-builtin -o benchmarks/baseline benchmarks/baseline.c
+            echo "C baseline compiler: $COMPILER"
+          ./benchmarks/baseline | tee bench-c.txt
+
+        - name: "Verify: RingBuffer and CRC benchmark comparison"
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          REQUIRED = {
+            "Ring Buffer": ["push", "pop", "pushForce"],
+            "CRC-32": ["compute-1KB", "streaming-4x256B", "byte-at-a-time-64B"],
+          }
+
+          def parse(path, section_aliases):
+            results = {}
+            current = None
+            for raw in Path(path).read_text().splitlines():
+              line = raw.strip()
+              if not line:
+                continue
+              if line.endswith(":") and "ns/op" not in line and "accumulator" not in line:
+                current = section_aliases.get(line[:-1])
+                continue
+                match = re.match(r"([A-Za-z0-9-]+): ([0-9]+(?:\.[0-9]+)?) ns/op", line)
+              if match and current is not None:
+                  results[(current, match.group(1))] = float(match.group(2))
+            return results
+
+          lean_results = parse(
+            "bench-lean.txt",
+            {"Ring Buffer (v0.2.0)": "Ring Buffer", "CRC-32 (v0.2.0)": "CRC-32"},
+          )
+          c_results = parse(
+            "bench-c.txt",
+            {"Ring Buffer": "Ring Buffer", "CRC-32": "CRC-32"},
+          )
+
+          errors = []
+          rows = []
+          for section, ops in REQUIRED.items():
+            for op in ops:
+              lean_ns = lean_results.get((section, op))
+              c_ns = c_results.get((section, op))
+              if lean_ns is None or c_ns is None:
+                errors.append(f"Missing benchmark result for {section} / {op}")
+                continue
+                if lean_ns <= 0 or c_ns <= 0:
+                errors.append(
+                  f"Non-positive ns/op for {section} / {op}: lean={lean_ns}, c={c_ns}"
+                )
+                continue
+              rows.append((section, op, lean_ns, c_ns, lean_ns / c_ns))
+
+          if errors:
+            for err in errors:
+              print(f"::error::{err}")
+            sys.exit(1)
+
+          summary = [
+            "### Benchmark Comparison",
+            "",
+            "| Section | Operation | Lean ns/op | C baseline ns/op | Ratio |",
+            "|---------|-----------|------------|------------------|-------|",
+          ]
+          for section, op, lean_ns, c_ns, ratio in rows:
+              summary.append(f"| {section} | {op} | {lean_ns:.3f} | {c_ns:.3f} | {ratio:.2f}x |")
+
+          summary_text = "\n".join(summary)
+          print(summary_text)
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+            with open(summary_path, "a", encoding="utf-8") as handle:
+              handle.write(summary_text)
+              handle.write("\n")
+          PYEOF
 
       - name: "Verify: No sorry in proofs"
         run: |
