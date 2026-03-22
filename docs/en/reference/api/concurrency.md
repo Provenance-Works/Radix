@@ -76,4 +76,4 @@ def validOrderForAccess (kind : AccessKind) (order : MemoryOrder) : Bool
 ## Related Documents
 
 - [BareMetal](baremetal.md) — Bare metal support (no OS)
-- [Architecture: Components](../../en/architecture/components.md#concurrency) — Module overview
+- [Architecture: Components](../../architecture/components.md) — Module overview

@@ -39,22 +39,44 @@ namespace Radix.Concurrency.Assumptions
 
 open Radix.Concurrency.Spec
 
+/-! ## Opaque Hardware Types -/
+
+/-- An opaque snapshot of the hardware memory subsystem state.
+    Lean cannot construct, inspect, or pattern-match on values of
+    this type.  It exists so that axioms about concurrency behaviour
+    are genuinely unprovable within the type system. -/
+opaque HWConcurrencyState : Type
+
+axiom hwConcurrencyState_nonempty : Nonempty HWConcurrencyState
+instance : Nonempty HWConcurrencyState := hwConcurrencyState_nonempty
+
+/-- The result of executing an atomic instruction on real hardware.
+    The output trace of memory events is opaque — we cannot inspect
+    it, so axioms that quantify over it remain unprovable. -/
+noncomputable opaque hwExecute (s : HWConcurrencyState) (events : List MemoryEvent) :
+    HWConcurrencyState
+
+/-- Whether a hardware execution produced a globally-consistent
+    observation for a given event.  Opaque — Lean cannot compute it. -/
+opaque hwObservedAtomic (s : HWConcurrencyState) (e : MemoryEvent) : Prop
+
 /-! ## Hardware Atomicity Axioms -/
 
 /-- Hardware guarantees that aligned word-sized loads and stores are
     atomic: a concurrent observer never sees a partially-updated value.
 
+    The atomicity assertion is about the *hardware execution state*,
+    not about ordering-validity (which is a Lean-decidable function).
+
     Reference: Intel SDM Vol. 3A, Section 8.1.1:
     "The Intel-64 memory ordering model guarantees that, for each
      of the following memory-access instructions, the constituent
-     memory operation appears to execute as a single memory access
-     regardless of memory type: Instructions that read or write
-     a single byte. [...] Instructions that read or write a word
-     (2 bytes) whose address is aligned on a 2-byte boundary." -/
+     memory operation appears to execute as a single memory access." -/
 axiom trust_atomic_word_access
+    (s : HWConcurrencyState)
     (e : MemoryEvent)
     (hKind : e.kind = .load ∨ e.kind = .store) :
-    True  -- The event is indivisible (no torn reads/writes)
+    hwObservedAtomic s e
 
 /-- Hardware guarantees that compare-and-swap (CMPXCHG / CASA / LR;SC)
     is atomic: the read-modify-write sequence appears indivisible
@@ -64,12 +86,17 @@ axiom trust_atomic_word_access
     "This instruction can be used with a LOCK prefix to allow the
      instruction to be executed atomically." -/
 axiom trust_cas_atomicity
+    (s : HWConcurrencyState)
     (e : MemoryEvent)
     (hKind : e.kind = .rmw) :
-    True  -- The RMW is indivisible
+    hwObservedAtomic s e
 
-/-- Sequential consistency (SeqCst) operations on all processors
+/-! Sequential consistency (SeqCst) operations on all processors
     participate in a single total order consistent with program order.
+
+    This total order is SEPARATE from happens-before: the C11 model
+    defines a distinct "S" order over SeqCst operations.  We model
+    it as an opaque relation whose totality is the axiom.
 
     Reference: Intel SDM Vol. 3A, Section 8.2.2:
     "Reads are not reordered with other reads. Writes are not
@@ -80,39 +107,27 @@ axiom trust_cas_atomicity
     "The global order of all Load-Acquire and Store-Release
      operations is consistent with the order in which they
      appear in each PE's program order." -/
+
+/-- An opaque total order over SeqCst events representing the
+    single global S-order of the C11 memory model.  Lean cannot
+    compute or inspect this relation. -/
+opaque seqCstOrder (a b : MemoryEvent) : Prop
+
 axiom trust_seqcst_total_order
     (a b : MemoryEvent)
     (hA : a.order = .seqCst)
     (hB : b.order = .seqCst)
     (hNeq : a.id ≠ b.id) :
-    True  -- Exists a total order containing both a and b
+    seqCstOrder a b ∨ seqCstOrder b a
 
-/-- Acquire-release pairs synchronize: if a release-store is
-    observed by an acquire-load reading the stored value, then
-    all writes preceding the release are visible after the acquire.
-
-    Reference: C11 Standard, Section 5.1.2.4, paragraph 2:
-    "An atomic operation A that performs a release operation on an
-     atomic object M synchronizes with an atomic operation B that
-     performs an acquire operation on M and takes its value from
-     any side effect in the release sequence headed by A." -/
-axiom trust_acquire_release_sync
-    (w r : MemoryEvent)
-    (hSync : synchronizesWith w r) :
-    True  -- All writes before w are visible after r
-
-/-- Memory fences enforce ordering constraints on surrounding
-    memory operations according to their memory order annotation.
-
-    Reference: Intel SDM Vol. 3A, Section 8.2.5:
-    "The MFENCE instruction establishes a memory fence for both
-     loads and stores. [...] The processor ensures that every
-     load and store instruction that precedes the MFENCE
-     instruction [...] is globally visible before any load or
-     store instruction that follows the MFENCE instruction." -/
-axiom trust_fence_ordering
-    (e : MemoryEvent)
-    (hFence : e.kind = .fence) :
-    True  -- Fence enforces ordering per its MemoryOrder
+/-- SeqCst total order is consistent with happens-before:
+    if a happens-before b and both are SeqCst, then a is ordered
+    before b in the SeqCst total order. -/
+axiom trust_seqcst_consistent_with_hb
+    (a b : MemoryEvent)
+    (hA : a.order = .seqCst)
+    (hB : b.order = .seqCst)
+    (hHB : happensBefore a b) :
+    seqCstOrder a b
 
 end Radix.Concurrency.Assumptions

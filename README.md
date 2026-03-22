@@ -7,11 +7,11 @@
 [![CI](https://github.com/provenance-works/radix/actions/workflows/ci.yml/badge.svg)](https://github.com/provenance-works/radix/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Lean](https://img.shields.io/badge/Lean-4.29.0--rc4-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PHRleHQgeD0iMCIgeT0iMjAiIGZvbnQtc2l6ZT0iMjAiPkw8L3RleHQ+PC9zdmc+)](https://lean-lang.org/)
-[![v0.1.0](https://img.shields.io/badge/version-0.1.0-green.svg)](CHANGELOG.md)
-[![Theorems](https://img.shields.io/badge/theorems-702%2B-brightgreen.svg)](#verification-status)
+[![v0.2.0](https://img.shields.io/badge/version-0.2.0-green.svg)](CHANGELOG.md)
+[![Theorems](https://img.shields.io/badge/theorems-1062%2B-brightgreen.svg)](#verification-status)
 [![sorry-free](https://img.shields.io/badge/sorry-free-%E2%9C%93-brightgreen.svg)](#verification-status)
 
-*702+ verified theorems. Zero `sorry`. Zero-cost abstractions.*
+*1062+ verified theorems. Zero `sorry`. Zero-cost abstractions.*
 
 [Documentation](docs/en/README.md) · [Quick Start](#quick-start) · [Examples](examples/) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
@@ -37,14 +37,19 @@ Radix eliminates this trade-off:
 
 | Module | Description | Theorems |
 |--------|-------------|----------|
-| **Word** | 10 integer types (U/Int 8–64, UWord, IWord), 4 arithmetic modes | 330+ |
-| **Bit** | Boolean algebra, shifts, rotates, scanning, bit fields | 140+ |
-| **Bytes** | Endianness, bswap, ByteSlice | 40+ |
-| **Memory** | Buffer, Ptr, LayoutDesc, region disjointness | 18 |
+| **Word** | 10 integer types (U/Int 8–64, UWord, IWord), 4 arithmetic modes, numeric typeclasses | 350 |
+| **Bit** | Boolean algebra, shifts, rotates, scanning, bit fields | 278 |
+| **Bytes** | Endianness, bswap, ByteSlice | 60 |
+| **Memory** | Buffer, Ptr, LayoutDesc, region disjointness | 52 |
 | **Binary** | Format DSL, parser, serializer, LEB128 | 92 |
-| **System** | File I/O state machine, SysError, FD, withFile bracket | — |
-| **Concurrency** | C11 memory ordering, AtomicCell, CAS, happens-before | 46 |
-| **BareMetal** | Platform model, memory map, linker scripts, startup, GC-free | 34 |
+| **System** | File I/O state machine, SysError, FD, withFile bracket | 41 |
+| **Concurrency** | C11 memory ordering specification model, AtomicCell, CAS, happens-before | 32 |
+| **BareMetal** | Platform specification model, memory map, linker scripts, startup, GC-free | 36 |
+| **Alignment** | alignUp/Down, isAligned, power-of-two fast paths, HasAlignment typeclass | 18 |
+| **RingBuffer** | Fixed-capacity circular queue, push/pop/peek, FIFO ordering proofs | 24 |
+| **Bitmap** | Dense bit-array (UInt64-backed), set operations, popcount, find-first | 33 |
+| **CRC** | Table-driven CRC-32/CRC-16, GF(2) polynomial spec, streaming API | 10 |
+| **MemoryPool** | Bump allocator, slab allocator, no-double-free/capacity-tracking proofs | 36 |
 
 ### Architecture
 
@@ -55,7 +60,8 @@ Radix eliminates this trade-off:
 ├─────────────────────────────────────────────────┤
 │  Radix — Verified Low-Level Primitives          │
 │  Word │ Bit │ Bytes │ Memory │ Binary │ System  │
-│  Concurrency │ BareMetal                        │
+│  Concurrency │ BareMetal │ Alignment │ Bitmap   │
+│  RingBuffer │ CRC │ MemoryPool                  │
 ├─────────────────────────────────────────────────┤
 │  Mathlib (BitVec, algebra, number theory)       │
 ├─────────────────────────────────────────────────┤
@@ -85,7 +91,7 @@ Add Radix to your `lakefile.lean`:
 
 ```lean
 require radix from git
-  "https://github.com/provenance-works/radix" @ "v0.1.0"
+  "https://github.com/provenance-works/radix" @ "v0.2.0"
 ```
 
 Then fetch dependencies:
@@ -140,13 +146,13 @@ def packetFormat : Radix.Binary.Format :=
 -- Serialize structured data back to bytes
 ```
 
-See [examples/](examples/) for 11 complete, runnable examples covering all modules.
+See [examples/](examples/) for 15 complete, runnable examples covering all modules.
 
 ## Verification Status
 
 | Metric | Status |
 |--------|--------|
-| Total theorems | 702+ |
+| Total theorems | 1062+ |
 | `sorry` statements | **0** |
 | Proof-to-code ratio | ~0.9:1 |
 | Trusted computing base | Lean 4 kernel + Mathlib + named `trust_*` axioms |
@@ -159,7 +165,7 @@ All proofs are machine-checked by the Lean 4 kernel. The `trust_*` axioms are li
 # Build the library
 lake build
 
-# Run unit tests (all 8 modules)
+# Run unit tests (all 13 modules)
 lake exe test
 
 # Run property-based tests (500 iterations, LCG PRNG)
@@ -179,14 +185,13 @@ lake exe bench
 - **[Architecture](docs/en/architecture/)** — Three-layer design, module dependencies, data flow
 - **[API Reference](docs/en/reference/api/)** — Per-module API documentation
 - **[Design Decisions](docs/en/design/adr.md)** — Architecture Decision Records
-- **[Examples](examples/)** — 11 runnable examples
+- **[Examples](examples/)** — 15 runnable examples
 
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap.
 
-- **v0.1.0** (current) — 702+ theorems, 8 modules, three-layer architecture
-- **v0.2.0** "Bedrock" — Ring buffers, bitmaps, CRC, numeric typeclasses, memory pools
+- **v0.2.0** (current) "Bedrock" — 1062+ theorems, 13 modules, ring buffers, bitmaps, CRC, numeric typeclasses, memory pools, alignment
 - **v0.3.0** "Composable" — UTF-8, error correction, DMA, region algebra, timers
 
 ## Contributing

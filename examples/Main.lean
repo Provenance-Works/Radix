@@ -27,6 +27,10 @@ import examples.Varint
 import examples.FirmwareImage
 import examples.LockFree
 import examples.SystemIO
+import examples.BitmapDemo
+import examples.AlignmentDemo
+import examples.MemoryPoolDemo
+import examples.NumericDemo
 
 /-!
 # Radix Usage Examples (P4-03)
@@ -558,8 +562,8 @@ private def exampleConcurrency : IO Unit :=
   IO.println s!"    SeqCst strength:  {MemoryOrder.seqCst.strength}"
 
   -- Ordering classification
-  IO.println "  SeqCst has acquire: {hasAcquireSemantics .seqCst}"
-  IO.println "  SeqCst has release: {hasReleaseSemantics .seqCst}"
+  IO.println s!"  SeqCst has acquire: {hasAcquireSemantics .seqCst}"
+  IO.println s!"  SeqCst has release: {hasReleaseSemantics .seqCst}"
 
   -- Atomic cell: load, store, CAS
   IO.println "  Atomic Operations:"
@@ -718,5 +722,16 @@ def main : IO Unit := do
   Examples.FirmwareImage.run
   Examples.LockFree.run
   Examples.SystemIO.run
+
+  IO.println ""
+  IO.println "=============================="
+  IO.println "v0.2.0 Feature Examples"
+  IO.println "=============================="
+  IO.println ""
+
+  Examples.BitmapDemo.main
+  Examples.AlignmentDemo.main
+  Examples.MemoryPoolDemo.main
+  Examples.NumericDemo.main
 
   IO.println "All examples completed successfully!"

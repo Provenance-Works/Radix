@@ -55,6 +55,14 @@ import tests.ComprehensiveTests.BareMetal.GCFree
 import tests.ComprehensiveTests.BareMetal.Linker
 import tests.ComprehensiveTests.BareMetal.Properties
 
+-- v0.2.0 Modules
+import tests.ComprehensiveTests.Word.Numeric
+import tests.ComprehensiveTests.Alignment
+import tests.ComprehensiveTests.RingBuffer
+import tests.ComprehensiveTests.Bitmap
+import tests.ComprehensiveTests.CRC
+import tests.ComprehensiveTests.MemoryPool
+
 /-- Run all test modules and print summary. -/
 def main : IO Unit := do
   IO.println "╔══════════════════════════════════════════════════════╗"
@@ -133,6 +141,16 @@ def main : IO Unit := do
   let n ← runBareMetalGCFreeTests;     totalAsserts := totalAsserts + n; results := results.push ("BareMetal/GCFree", n)
   let n ← runBareMetalLinkerTests;     totalAsserts := totalAsserts + n; results := results.push ("BareMetal/Linker", n)
   let n ← runBareMetalPropertyTests;   totalAsserts := totalAsserts + n; results := results.push ("BareMetal/Properties", n)
+  IO.println ""
+
+  -- === v0.2.0 Modules ===
+  IO.println "  ── v0.2.0 Bedrock Modules ──"
+  let n ← runNumericTests;      totalAsserts := totalAsserts + n; results := results.push ("Word/Numeric", n)
+  let n ← runAlignmentTests;    totalAsserts := totalAsserts + n; results := results.push ("Alignment", n)
+  let n ← runRingBufferTests;   totalAsserts := totalAsserts + n; results := results.push ("RingBuffer", n)
+  let n ← runBitmapTests;       totalAsserts := totalAsserts + n; results := results.push ("Bitmap", n)
+  let n ← runCRCTests;          totalAsserts := totalAsserts + n; results := results.push ("CRC", n)
+  let n ← runMemoryPoolTests;   totalAsserts := totalAsserts + n; results := results.push ("MemoryPool", n)
   IO.println ""
 
   -- === Summary ===

@@ -197,6 +197,66 @@ classDiagram
     }
 ```
 
+## v0.2.0 のデータ構造
+
+```mermaid
+classDiagram
+    class RingBuf {
+        +buf : Memory.Buffer
+        +capacity : Nat
+        +head : Nat
+        +tail : Nat
+        +count : Nat
+    }
+    class Bitmap {
+        +numBits : Nat
+        +words : Array UInt64
+        +hSize : words.size = wordsNeeded numBits
+    }
+    class BumpPool {
+        +buf : Memory.Buffer
+        +capacity : Nat
+        +cursor : Nat
+    }
+    class SlabPool {
+        +buf : Memory.Buffer
+        +blockSize : Nat
+        +blockCount : Nat
+        +freeList : List Nat
+        +allocated : List Nat
+    }
+    class CRCParams {
+        +width : Nat
+        +poly : Nat
+        +init : Nat
+        +xorOut : Nat
+        +reflectIn : Bool
+        +reflectOut : Bool
+    }
+    class HasAlignment {
+        <<typeclass>>
+        +alignment : Nat
+    }
+    class BoundedUInt {
+        <<typeclass>>
+        +minVal : α
+        +maxVal : α
+        +toNat(x) Nat
+    }
+    class BoundedInt {
+        <<typeclass>>
+        +minVal : α
+        +maxVal : α
+        +toInt(x) Int
+    }
+    RingBuf --> Buffer : uses
+    Bitmap --> UInt64 : stores words in
+    BumpPool --> Buffer : uses
+    SlabPool --> Buffer : uses
+```
+
+これらは v0.2.0 の主要追加型です。`RingBuf` は FIFO キュー状態、`Bitmap` は高密度ビット格納、`BumpPool` と `SlabPool` はアロケータ状態、`CRCParams` は CRC アルゴリズムの設定、`HasAlignment`・`BoundedUInt`・`BoundedInt` は幅非依存 API の型クラスを表します。
+
 ## 関連ドキュメント
 
 - [アーキテクチャ概要](README.md) — システム設計のコンテキスト

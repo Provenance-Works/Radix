@@ -7,6 +7,8 @@ import Radix.Bit.Field
 import Radix.Bytes
 import Radix.Bytes.Order
 import Radix.Binary.Leb128
+import Radix.RingBuffer
+import Radix.CRC
 
 /-!
 # Radix Phase 4 — Microbenchmarks (P4-02)
@@ -19,8 +21,9 @@ Microbenchmarks for individual operations per NFR-002.2.
    the next iteration's input.
 2. **Input-dependent operands**: Pre-generated pseudo-random arrays
    indexed per iteration.
-3. **Validation step**: Final accumulator is printed. If 0 for
-   a non-trivial workload, the benchmark is invalid.
+3. **Validation step**: Final accumulator is printed. The sink must
+  remain data-dependent across the full loop body. A zero accumulator
+  alone is not proof of invalidity for annihilating operations.
 
 ## Measurement
 
@@ -64,12 +67,37 @@ private def genRandomArray (n : Nat) (seed : UInt64) : Array UInt64 := Id.run do
     arr := arr.push v
   return arr
 
+/-- Generate `count` random byte blocks of fixed size. -/
+private def genRandomBlocks (blockSize count : Nat) (seed : UInt64) : Array ByteArray := Id.run do
+  let mut rng := PRNG.new seed
+  let mut blocks := Array.mkEmpty count
+  for _ in [:count] do
+    let mut block : ByteArray := .empty
+    for _ in [:blockSize] do
+      let (rng', v) := rng.next
+      rng := rng'
+      block := block.push v.toUInt8
+    blocks := blocks.push block
+  return blocks
+
 /-- Prevent DCE by printing the accumulator (noinline-equivalent). -/
 @[noinline] private def sink (label : String) (value : UInt64) : IO Unit :=
   IO.println s!"  {label}: accumulator = {value}"
 
 @[noinline] private def sinkU32 (label : String) (value : UInt32) : IO Unit :=
   IO.println s!"  {label}: accumulator = {value}"
+
+private def formatFixed3 (n : Nat) : String :=
+  let raw := toString n
+  if raw.length >= 3 then raw
+  else String.ofList (List.replicate (3 - raw.length) '0') ++ raw
+
+/-- Format a runtime as ns/op with millinanosecond precision. -/
+private def formatNsPerOp (elapsedNs iterations : Nat) : String :=
+  let scaled := elapsedNs * 1000 / iterations
+  let whole := scaled / 1000
+  let frac := scaled % 1000
+  s!"{whole}.{formatFixed3 frac}"
 
 /-- Run a benchmark: time N iterations, print ns/op. -/
 private def bench (label : String) (action : IO UInt64) : IO Unit := do
@@ -87,7 +115,7 @@ private def bench (label : String) (action : IO UInt64) : IO Unit := do
   -- Sort and take median
   let sorted := times.qsort (· < ·)
   let median := sorted[2]!
-  let nsPerOp := median / numIter
+  let nsPerOp := formatNsPerOp median numIter
   IO.println s!"  {label}: {nsPerOp} ns/op (median of 5, {numIter} iters)"
 
 /-! ================================================================ -/
@@ -383,6 +411,120 @@ private def benchBitFields : IO Unit := do
     return acc
 
 /-! ================================================================ -/
+/-! ## Ring Buffer Benchmarks                                        -/
+/-! ================================================================ -/
+
+private def ringBufferBenchCapacity : Nat := 1024
+
+private def benchRingBuffer : IO Unit := do
+  IO.println "Ring Buffer (v0.2.0):"
+  let data := genRandomArray numIter 10
+
+  -- Match the C baseline: fixed 1024-byte ring, reset when full.
+  bench "push" do
+    let mut rb := Radix.RingBuffer.RingBuf.new ringBufferBenchCapacity
+    let mut acc : UInt64 := 0
+    for v in data do
+      let byte : Radix.UInt8 := ⟨v.toUInt8⟩
+      if rb.count >= rb.capacity then
+        rb := rb.clear
+      match rb.push byte with
+      | some rb' =>
+        rb := rb'
+        acc := acc + byte.val.toUInt64 + rb'.tail.toUInt64 + rb'.count.toUInt64
+      | none => acc := acc + 0
+    return acc
+
+  -- Pop throughput: push all, then pop all
+  bench "pop" do
+    let mut rb := Radix.RingBuffer.RingBuf.new ringBufferBenchCapacity
+    -- Fill buffer
+    for i in [:ringBufferBenchCapacity] do
+      let byte : Radix.UInt8 := ⟨(data[i % data.size]!).toUInt8⟩
+      match rb.push byte with
+      | some rb' => rb := rb'
+      | none => pure ()
+    -- Pop all repeatedly
+    let mut acc : UInt64 := 0
+    for _ in [:numIter] do
+      match rb.pop with
+      | some (val, rb') =>
+        acc := acc + val.val.toUInt64
+        rb := rb'
+      | none =>
+        -- Refill
+        rb := Radix.RingBuffer.RingBuf.new ringBufferBenchCapacity
+        for j in [:ringBufferBenchCapacity] do
+          let byte : Radix.UInt8 := ⟨(data[j % data.size]!).toUInt8⟩
+          match rb.push byte with
+          | some rb' => rb := rb'
+          | none => pure ()
+    return acc
+
+  -- Push+Pop interleaved (realistic usage pattern)
+  bench "pushForce" do
+    let mut rb := Radix.RingBuffer.RingBuf.new 256
+    let mut acc : UInt64 := 0
+    for v in data do
+      let byte : Radix.UInt8 := ⟨v.toUInt8⟩
+      let rb' := rb.pushForce byte
+      rb := rb'
+      acc := acc + byte.val.toUInt64 + rb'.head.toUInt64 + rb'.tail.toUInt64
+    return acc
+
+/-! ================================================================ -/
+/-! ## CRC-32 Benchmarks                                             -/
+/-! ================================================================ -/
+
+private def benchCRC32 : IO Unit := do
+  IO.println "CRC-32 (v0.2.0):"
+
+  let blockVariants := 1024
+  let blocks1k := genRandomBlocks 1024 blockVariants 42
+  let chunkSets : Array (ByteArray × ByteArray × ByteArray × ByteArray) :=
+    blocks1k.map fun block =>
+      ( block.extract 0 256
+      , block.extract 256 512
+      , block.extract 512 768
+      , block.extract 768 1024 )
+  let blocks64 := blocks1k.map (fun block => block.extract 0 64)
+
+  -- CRC-32 of 1 KB block (table-driven)
+  bench "compute-1KB" do
+    let mut acc : UInt64 := 0
+    for i in [:numIter] do
+      let block := blocks1k[i &&& (blockVariants - 1)]!
+      let crc := Radix.CRC.CRC32.compute block
+      acc := acc + crc.val.toUInt64 + 1
+    return acc
+
+  -- CRC-32 streaming (init/update/finalize) with 256-byte chunks
+  bench "streaming-4x256B" do
+    let mut acc : UInt64 := 0
+    for i in [:numIter] do
+      let (chunk0, chunk1, chunk2, chunk3) := chunkSets[i &&& (blockVariants - 1)]!
+      let crc := Radix.CRC.CRC32.init
+      let crc := Radix.CRC.CRC32.update crc chunk0
+      let crc := Radix.CRC.CRC32.update crc chunk1
+      let crc := Radix.CRC.CRC32.update crc chunk2
+      let crc := Radix.CRC.CRC32.update crc chunk3
+      let result := Radix.CRC.CRC32.finalize crc
+      acc := acc + result.val.toUInt64 + 1
+    return acc
+
+  -- CRC-32 single-byte updates (worst case)
+  bench "byte-at-a-time-64B" do
+    let mut acc : UInt64 := 0
+    for i in [:numIter] do
+      let block64 := blocks64[i &&& (blockVariants - 1)]!
+      let mut crc := Radix.CRC.CRC32.init
+      for i in [:block64.size] do
+        crc := Radix.CRC.CRC32.updateByte crc block64[i]!
+      let result := Radix.CRC.CRC32.finalize crc
+      acc := acc + result.val.toUInt64 + 1
+    return acc
+
+/-! ================================================================ -/
 /-! ## Main                                                          -/
 /-! ================================================================ -/
 
@@ -408,9 +550,14 @@ def main : IO Unit := do
   benchBitFields
   IO.println ""
 
+  benchRingBuffer
+  IO.println ""
+  benchCRC32
+  IO.println ""
+
   IO.println "Benchmarks complete."
   IO.println ""
   IO.println "NOTE: For valid results, verify that:"
-  IO.println "  1. All accumulator values are non-zero"
-  IO.println "  2. build/ir/ output contains expected operations"
+  IO.println "  1. Sink values stay data-dependent across the measured loop"
+  IO.println "  2. Repeated constant-input workloads are avoided in hot paths"
   IO.println "  3. Results are compared against C baseline (-O2 -fno-builtin)"

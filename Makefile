@@ -6,7 +6,7 @@
 # =============================================================================
 
 .DEFAULT_GOAL := help
-.PHONY: help build test proptest examples bench lint clean check setup fmt sorry-check
+.PHONY: help build build-baseline build-ffi test proptest examples bench lint clean check setup fmt sorry-check
 
 # ---------------------------------------------------------------------------
 # Help
@@ -36,8 +36,26 @@ setup: ## Install dependencies and fetch Mathlib cache
 build: ## Build the entire library
 	lake build
 
-build-ffi: ## Build only the FFI C library
-	lake build radixffi
+build-baseline: ## Build the C benchmark baseline
+	@compiler=""; \
+	for candidate in /usr/bin/gcc gcc cc clang; do \
+		if command -v "$$candidate" >/dev/null 2>&1; then \
+			if printf 'int main(void){return 0;}\n' | "$$candidate" -x c - -o /tmp/radix-cc-check >/dev/null 2>&1; then \
+				compiler="$$candidate"; \
+				break; \
+			fi; \
+		fi; \
+	done; \
+	if [ -n "$$compiler" ]; then \
+		rm -f /tmp/radix-cc-check; \
+		"$$compiler" -O2 -fno-builtin -o benchmarks/baseline benchmarks/baseline.c; \
+		echo "Built C baseline with $$compiler"; \
+	else \
+		echo "Skipping baseline build: no working C compiler found"; \
+	fi
+
+build-ffi: build-baseline ## Deprecated alias for the C benchmark baseline
+	@echo "build-ffi is deprecated; use build-baseline"
 
 # ---------------------------------------------------------------------------
 # Test
@@ -58,8 +76,13 @@ test-all: test proptest ## Run all tests (unit + property-based)
 examples: ## Run all examples
 	lake exe examples
 
-bench: ## Run benchmarks with C baseline
+bench: build-baseline ## Run Lean benchmarks and the C baseline when available
 	lake exe bench
+	@if [ -x benchmarks/baseline ]; then \
+		./benchmarks/baseline; \
+	else \
+		echo "Skipping C baseline run: benchmarks/baseline not available"; \
+	fi
 
 # ---------------------------------------------------------------------------
 # Quality

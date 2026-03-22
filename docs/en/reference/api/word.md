@@ -167,4 +167,4 @@ All 10 types have proven:
 ## Related Documents
 
 - [Bit](bit.md) — Bitwise operations on these types
-- [Architecture: Components](../../en/architecture/components.md#word) — Module overview
+- [Architecture: Components](../../architecture/components.md) — Module overview

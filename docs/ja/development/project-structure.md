@@ -8,89 +8,31 @@
 radix/
 ├── lakefile.lean              # Lake ビルド設定
 ├── lean-toolchain             # Lean 4 バージョンピン（v4.29.0-rc4）
-├── Radix.lean                 # ルートインポート（全8モジュールをインポート）
+├── Radix.lean                 # ルートインポート（全13モジュールをインポート）
 ├── CHANGELOG.md               # バージョン履歴
-├── TODO.md                    # 実装トラッキング
 ├── test_helpers.lean          # アドホック証明実験
 │
-├── Radix/                     # ソースモジュール（8モジュール）
+├── Radix/                     # ソースモジュール（13モジュール）
+│   ├── Alignment.lean         # Alignment モジュールアグリゲータ
+│   ├── Bitmap.lean            # Bitmap モジュールアグリゲータ
+│   ├── CRC.lean               # CRC モジュールアグリゲータ
+│   ├── MemoryPool.lean        # MemoryPool モジュールアグリゲータ
+│   ├── RingBuffer.lean        # RingBuffer モジュールアグリゲータ
 │   ├── Word.lean              # Word モジュールアグリゲータ
-│   ├── Word/
-│   │   ├── Spec.lean          # Layer 3: BitVecベース算術仕様
-│   │   ├── UInt.lean          # Layer 2: UInt8/16/32/64 ラッパー
-│   │   ├── Int.lean           # Layer 2: Int8/16/32/64（2の補数）
-│   │   ├── Size.lean          # Layer 2: UWord/IWord（プラットフォーム幅）
-│   │   ├── Arith.lean         # Layer 2: 5算術モード × 10型
-│   │   ├── Conv.lean          # Layer 2: ビット幅/符号変換、signExtend
-│   │   └── Lemmas/
-│   │       ├── Ring.lean      # Layer 3: 環の証明（交換、結合、分配）
-│   │       ├── Overflow.lean  # Layer 3: オーバーフロー検出の証明
-│   │       ├── BitVec.lean    # Layer 3: BitVec等価ラウンドトリップ
-│   │       └── Conv.lean      # Layer 3: 変換正しさの証明
-│   │
 │   ├── Bit.lean               # Bit モジュールアグリゲータ
-│   ├── Bit/
-│   │   ├── Spec.lean          # Layer 3: ビット演算仕様
-│   │   ├── Ops.lean           # Layer 2: AND/OR/XOR/NOT、シフト、回転
-│   │   ├── Scan.lean          # Layer 2: clz、ctz、popcount、bitReverse
-│   │   ├── Field.lean         # Layer 2: testBit、setBit、extractBits 等
-│   │   └── Lemmas.lean        # Layer 3: ブール代数、フィールドラウンドトリップ
-│   │
 │   ├── Bytes.lean             # Bytes モジュールアグリゲータ
-│   ├── Bytes/
-│   │   ├── Spec.lean          # Layer 3: エンディアン、bswap仕様
-│   │   ├── Order.lean         # Layer 2: bswap、BE/LE変換
-│   │   ├── Slice.lean         # Layer 2: ByteSlice（境界チェック付きビュー）
-│   │   └── Lemmas.lean        # Layer 3: 退化、ラウンドトリップ証明
-│   │
 │   ├── Memory.lean            # Memory モジュールアグリゲータ
-│   ├── Memory/
-│   │   ├── Spec.lean          # Layer 3: 領域、アライメント、バッファ仕様
-│   │   ├── Model.lean         # Layer 2: Buffer（ByteArrayベース）
-│   │   ├── Ptr.lean           # Layer 2: Ptr n（バイト幅ポインタ）
-│   │   ├── Layout.lean        # Layer 2: FieldDesc、LayoutDesc
-│   │   └── Lemmas.lean        # Layer 3: サイズ保存、分離性
-│   │
 │   ├── Binary.lean            # Binary モジュールアグリゲータ
-│   ├── Binary/
-│   │   ├── Spec.lean          # Layer 3: FormatSpec、妥当性条件
-│   │   ├── Format.lean        # Layer 2: Format帰納型（DSL）
-│   │   ├── Parser.lean        # Layer 2: フォーマット駆動パーサー
-│   │   ├── Serial.lean        # Layer 2: フォーマット駆動シリアライザー
-│   │   ├── Leb128.lean        # Layer 2: LEB128エンコード/デコード
-│   │   ├── Leb128/
-│   │   │   ├── Spec.lean      # Layer 3: LEB128数学的仕様
-│   │   │   └── Lemmas.lean    # Layer 3: ラウンドトリップ、サイズ上限証明
-│   │   └── Lemmas.lean        # Layer 3: フォーマット証明
-│   │
 │   ├── System.lean            # System モジュールアグリゲータ
-│   ├── System/
-│   │   ├── Spec.lean          # Layer 3: FileState状態機械、事前/事後条件
-│   │   ├── Error.lean         # Layer 2: SysError型、fromIOErrorマッピング
-│   │   ├── FD.lean            # Layer 2: FD、Ownership、OpenMode、withFile
-│   │   ├── IO.lean            # Layer 1: sysRead/Write/Seek、ファイル操作
-│   │   └── Assumptions.lean   # Layer 1: trust_* POSIX公理
-│   │
 │   ├── Concurrency.lean       # Concurrency モジュールアグリゲータ
-│   ├── Concurrency/
-│   │   ├── Spec.lean          # Layer 3: MemoryOrder、イベント、データ競合
-│   │   ├── Ordering.lean      # Layer 2: オーダリング強度、結合
-│   │   ├── Atomic.lean        # Layer 2: AtomicCell、load/store/CAS
-│   │   ├── Lemmas.lean        # Layer 3: 線形化可能性、DRF証明
-│   │   └── Assumptions.lean   # Layer 1: trust_* ハードウェア原子性公理
-│   │
 │   ├── BareMetal.lean         # BareMetal モジュールアグリゲータ
-│   └── BareMetal/
-│       ├── Spec.lean          # Layer 3: プラットフォーム、領域、ブート不変条件
-│       ├── GCFree.lean        # Layer 2: ライフタイム、禁止パターン、制約
-│       ├── Linker.lean        # Layer 2: ELFセクション、シンボル、リンカースクリプト
-│       ├── Startup.lean       # Layer 2: スタートアップアクション、バリデーション
-│       ├── Lemmas.lean        # Layer 3: 領域、アライメント、スタートアップ証明
-│       └── Assumptions.lean   # Layer 1: trust_* ハードウェア公理
+│   └── <Module>/              # モジュールごとの Spec / Impl / Lemmas / Assumptions
 │
 ├── tests/
-│   ├── Main.lean              # ユニットテスト（全8モジュール）
-│   └── PropertyTests.lean     # プロパティベーステスト（500イテレーション、LCG PRNG）
+│   ├── Main.lean              # 実行テスト（全13モジュール）
+│   ├── PropertyTests.lean     # プロパティベーステスト（500イテレーション、LCG PRNG）
+│   ├── ComprehensiveTests.lean # アサーション集計付きの完全回帰テスト
+│   └── ComprehensiveTests/    # モジュール別の包括テスト
 │
 ├── benchmarks/
 │   ├── Main.lean              # マイクロベンチマーク（10^6イテレーション、ns/op）
@@ -99,14 +41,8 @@ radix/
 │       └── template.md        # 結果報告テンプレート
 │
 ├── examples/
-│   └── Main.lean              # 11セクションの実行可能使用例
-│
-├── spec/                      # 正式仕様（設計ドキュメント）
-│   ├── README.md
-│   ├── adr/                   # アーキテクチャ決定記録
-│   ├── design/                # 設計ドキュメント
-│   ├── requirements/          # 要件仕様
-│   └── research/              # 検証済みシステムの調査
+│   ├── Main.lean              # examples 実行ファイルのエントリポイント
+│   └── *.lean                 # 15個の実行可能使用例
 │
 └── docs/                      # ユーザー向けドキュメント
     ├── en/                    # 英語ドキュメント
@@ -121,7 +57,7 @@ graph TD
         Spec["*.Spec.lean<br/>*.Lemmas.lean<br/>Word.Lemmas/*"]
     end
     subgraph "Layer 2: 実装"
-        Impl["*.UInt.lean, *.Int.lean<br/>*.Ops.lean, *.Scan.lean, *.Field.lean<br/>*.Order.lean, *.Slice.lean<br/>*.Model.lean, *.Ptr.lean, *.Layout.lean<br/>*.Format.lean, *.Parser.lean, *.Serial.lean<br/>*.Error.lean, *.FD.lean<br/>*.Ordering.lean, *.Atomic.lean<br/>*.GCFree.lean, *.Linker.lean, *.Startup.lean"]
+        Impl["*.UInt.lean, *.Int.lean, *.Numeric.lean<br/>*.Ops.lean, *.Scan.lean, *.Field.lean, *.Impl.lean<br/>*.Order.lean, *.Slice.lean<br/>*.Model.lean, *.Ptr.lean, *.Layout.lean<br/>*.Format.lean, *.Parser.lean, *.Serial.lean<br/>*.Error.lean, *.FD.lean<br/>*.Ordering.lean, *.Atomic.lean<br/>*.GCFree.lean, *.Linker.lean, *.Startup.lean"]
     end
     subgraph "Layer 1: システムブリッジ"
         Bridge["System/IO.lean<br/>System/Assumptions.lean<br/>Concurrency/Assumptions.lean<br/>BareMetal/Assumptions.lean"]
@@ -139,8 +75,8 @@ graph TD
 |------|---------|
 | `lakefile.lean` | ビルド設定、依存関係、ターゲット |
 | `lean-toolchain` | ピン留めされたLean 4バージョン |
-| `Radix.lean` | ルートインポート — 全8モジュールアグリゲータをインポート |
-| `TODO.md` | フェーズベースの進捗トラッキング |
+| `Radix.lean` | ルートインポート — 全13モジュールアグリゲータをインポート |
+| `tests/ComprehensiveTests.lean` | アサーション集計付きの完全回帰エントリポイント |
 | `CHANGELOG.md` | バージョン履歴 |
 
 ## 命名慣習
@@ -153,21 +89,9 @@ graph TD
 | `*.IO.lean` | Layer 1 システムブリッジ（Lean 4 IO APIをラップ） |
 | その他の `*.lean` | Layer 2 実装 |
 
-## ファイルサイズ概要
+## リポジトリ指標
 
-| モジュール | 実装行数 | 証明行数 | 合計 |
-|--------|-----------|-------------|-------|
-| Word | ~3,250 | ~4,600 | ~7,850 |
-| Bit | ~1,400 | ~2,000 | ~3,400 |
-| Wasm拡張 | ~220 | ~310 | ~530 |
-| Bytes | ~950 | ~1,200 | ~2,150 |
-| Memory | ~2,100 | ~2,500 | ~4,600 |
-| Binary | ~2,200 | ~2,500 | ~4,700 |
-| System | ~1,250 | ~400 | ~1,650 |
-| テスト/ベンチ/例 | ~3,500 | — | ~3,500 |
-| **合計** | **~14,930** | **~13,510** | **~28,440** |
-
-> **注記:** 証明-実装比約0.9:1は検証済みシステムとして典型的。比較可能なプロジェクト: HACL* ~110K行、seL4 ~200K行、Mathlib ~1.5M行。
+正確な行数や証明総数はリリースごとに変動します。現行の CI 出力、`lake build`、包括テストの集計結果を正式な指標として扱ってください。
 
 ## 関連ドキュメント
 

@@ -120,6 +120,65 @@ flowchart TD
     Q4 -->|No| Wrapping["wrappingAdd(x, y)<br/>mod 2^n でラップ"]
 ```
 
+## リングバッファの push/pop フロー
+
+```mermaid
+sequenceDiagram
+    participant App as アプリケーション
+    participant RB as RingBuffer.Impl
+    participant Mem as Memory.Buffer
+    participant Spec as RingBuffer.Spec
+
+    App->>RB: push(rb, byte)
+    alt count < capacity
+        RB->>Mem: writeU8 tail byte
+        Mem-->>RB: 更新済みバッファ
+        RB->>RB: tail := wrapSuccFast tail capacity
+        RB->>RB: count := count + 1
+        RB-->>App: some 更新済み RingBuf
+    else full
+        RB-->>App: none
+    end
+
+    App->>RB: pop(rb)
+    alt count > 0
+        RB->>Mem: readU8 head
+        Mem-->>RB: byte
+        RB->>RB: head := wrapSuccFast head capacity
+        RB->>RB: count := count - 1
+        RB-->>App: some (byte, 更新済み RingBuf)
+    else empty
+        RB-->>App: none
+    end
+
+    Note over Spec,RB: FIFO 順序と容量不変条件は証明で維持される
+```
+
+## CRC ストリーミングフロー
+
+```mermaid
+sequenceDiagram
+    participant App as アプリケーション
+    participant Ops as CRC.Ops
+    participant Table as ルックアップテーブル
+    participant Spec as CRC.Spec
+
+    App->>Ops: init
+    Ops-->>App: 実行中 CRC レジスタ
+    App->>Ops: update(crc, chunk1)
+    Ops->>Table: 各バイトに updateByte
+    Table-->>Ops: 事前計算済み剰余エントリ
+    Ops-->>App: crc1
+    App->>Ops: update(crc1, chunk2)
+    Ops->>Table: 各バイトに updateByte
+    Table-->>Ops: 事前計算済み剰余エントリ
+    Ops-->>App: crc2
+    App->>Ops: finalize(crc2)
+    Ops-->>App: 最終 CRC-32 / CRC-16
+
+    Note over Spec,Ops: update(init, a ++ b) = update(update(init, a), b) が補題で保証される
+```
+
 ## 関連ドキュメント
 
 - [アーキテクチャ概要](README.md) — 3層モデル

@@ -63,7 +63,19 @@ termination_by n
      ((n >>> 21).toUInt8 ||| 0x80)).push (n >>> 28).toUInt8
 
 @[inline] private def encodeU32_fast (x : Radix.UInt32) : ByteArray :=
-  encodeU32_go x.val (ByteArray.emptyWithCapacity 5)
+  let n := x.val
+  if n < 0x80 then
+    ByteArray.mk #[n.toUInt8]
+  else if n < 0x4000 then
+    ByteArray.mk #[(n.toUInt8 ||| 0x80), (n >>> 7).toUInt8]
+  else if n < 0x200000 then
+    ByteArray.mk #[(n.toUInt8 ||| 0x80), ((n >>> 7).toUInt8 ||| 0x80), (n >>> 14).toUInt8]
+  else if n < 0x10000000 then
+    ByteArray.mk #[(n.toUInt8 ||| 0x80), ((n >>> 7).toUInt8 ||| 0x80), ((n >>> 14).toUInt8 ||| 0x80),
+      (n >>> 21).toUInt8]
+  else
+    ByteArray.mk #[(n.toUInt8 ||| 0x80), ((n >>> 7).toUInt8 ||| 0x80), ((n >>> 14).toUInt8 ||| 0x80),
+      ((n >>> 21).toUInt8 ||| 0x80), (n >>> 28).toUInt8]
 
 /-- Encode a `UInt32` as unsigned LEB128. Result is 1-5 bytes. -/
 @[implemented_by encodeU32_fast]
@@ -168,41 +180,60 @@ def encodeU64Append (x : Radix.UInt64) (buf : ByteArray) : ByteArray :=
     Each byte path is straight-line code with constant shift amounts. -/
 @[inline] private def decodeU32_fast (data : ByteArray) (offset : Nat) : Option (Radix.UInt32 × Nat) :=
   let sz := data.size
-  let p0 := offset
-  if h0 : p0 < sz then
-    let b0 := data[p0]
+  if h5 : offset + 5 ≤ sz then
+    let b0 := data.get offset (by omega)
+    let b1 := data.get (offset + 1) (by omega)
+    let b2 := data.get (offset + 2) (by omega)
+    let b3 := data.get (offset + 3) (by omega)
+    let b4 := data.get (offset + 4) (by omega)
     let r0 : _root_.UInt32 := b0.toUInt32 &&& 0x7F
     if b0 &&& 0x80 == 0 then some (⟨r0⟩, 1)
     else
-    let p1 := p0 + 1
-    if h1 : p1 < sz then
-      let b1 := data[p1]
       let r1 := r0 ||| ((b1.toUInt32 &&& 0x7F) <<< 7)
       if b1 &&& 0x80 == 0 then some (⟨r1⟩, 2)
       else
-      let p2 := p1 + 1
-      if h2 : p2 < sz then
-        let b2 := data[p2]
         let r2 := r1 ||| ((b2.toUInt32 &&& 0x7F) <<< 14)
         if b2 &&& 0x80 == 0 then some (⟨r2⟩, 3)
         else
-        let p3 := p2 + 1
-        if h3 : p3 < sz then
-          let b3 := data[p3]
           let r3 := r2 ||| ((b3.toUInt32 &&& 0x7F) <<< 21)
           if b3 &&& 0x80 == 0 then some (⟨r3⟩, 4)
+          else if b4 > 0x0F then none
+          else some (⟨r3 ||| (b4.toUInt32 <<< 28)⟩, 5)
+  else
+    let p0 := offset
+    if h0 : p0 < sz then
+      let b0 := data[p0]
+      let r0 : _root_.UInt32 := b0.toUInt32 &&& 0x7F
+      if b0 &&& 0x80 == 0 then some (⟨r0⟩, 1)
+      else
+      let p1 := p0 + 1
+      if h1 : p1 < sz then
+        let b1 := data[p1]
+        let r1 := r0 ||| ((b1.toUInt32 &&& 0x7F) <<< 7)
+        if b1 &&& 0x80 == 0 then some (⟨r1⟩, 2)
+        else
+        let p2 := p1 + 1
+        if h2 : p2 < sz then
+          let b2 := data[p2]
+          let r2 := r1 ||| ((b2.toUInt32 &&& 0x7F) <<< 14)
+          if b2 &&& 0x80 == 0 then some (⟨r2⟩, 3)
           else
-          let p4 := p3 + 1
-          if h4 : p4 < sz then
-            let b4 := data[p4]
-            -- Byte 4: only low 4 bits valid, no continuation allowed
-            if b4 > 0x0F then none
-            else some (⟨r3 ||| (b4.toUInt32 <<< 28)⟩, 5)
+          let p3 := p2 + 1
+          if h3 : p3 < sz then
+            let b3 := data[p3]
+            let r3 := r2 ||| ((b3.toUInt32 &&& 0x7F) <<< 21)
+            if b3 &&& 0x80 == 0 then some (⟨r3⟩, 4)
+            else
+            let p4 := p3 + 1
+            if h4 : p4 < sz then
+              let b4 := data[p4]
+              if b4 > 0x0F then none
+              else some (⟨r3 ||| (b4.toUInt32 <<< 28)⟩, 5)
+            else none
           else none
         else none
       else none
     else none
-  else none
 
 @[implemented_by decodeU32_fast]
 def decodeU32 (data : ByteArray) (offset : Nat) : Option (Radix.UInt32 × Nat) :=

@@ -2,7 +2,7 @@
 
 > **対象読者**: ユーザー、開発者
 
-以下の例はすべてプロジェクトの `examples/Main.lean` ファイルから抽出されており、実行時アサーションで検証されています。
+以下の例は `examples/Main.lean` のランナーと `examples/` 配下の個別デモに基づいています。v0.2.0 では、13 個の組み込みウォークスルー、11 個のアプリケーション寄りデモ、そして Bitmap・Alignment・MemoryPool・Numeric 型クラス向けの 4 個の新機能デモに整理されました。
 
 ## Word 算術
 
@@ -174,6 +174,81 @@ System.FD.withFile "test.bin" .write fun fd => do
 let _ ← System.IO.writeFileBytes "out.bin" data
 let bytes ← System.IO.readFileBytes "out.bin"
 let exists ← System.IO.sysFileExists "out.bin"
+```
+
+## アライメントユーティリティ
+
+```lean
+open Radix.Alignment
+
+#eval alignUp 1000 16         -- 1008
+#eval alignDown 1023 16       -- 1008
+#eval isPowerOfTwo 64         -- true
+#eval alignUpPow2 12345 256   -- 12544
+#eval alignmentOf UInt64      -- 8
+```
+
+## Bitmap / Bitset
+
+```lean
+open Radix.Bitmap
+
+let bm := Bitmap.zeros 128 |>.set 0 |>.set 7 |>.set 42
+#eval bm.popcount             -- 3
+#eval bm.test 42              -- true
+#eval bm.findFirstSet         -- some 0
+
+let full := Bitmap.ones 8 |>.clear 5
+#eval full.findFirstClear     -- some 5
+```
+
+## リングバッファ
+
+```lean
+open Radix.RingBuffer
+
+let rb := RingBuf.new 8
+let some rb := rb.push ⟨10⟩ | unreachable!
+let some rb := rb.push ⟨20⟩ | unreachable!
+let some (front, rb) := rb.pop | unreachable!
+
+#eval front.toNat             -- 10
+#eval rb.peek.map UInt8.toNat -- some 20
+```
+
+## CRC-32 / CRC-16
+
+```lean
+open Radix.CRC
+
+#eval CRC32.compute "123456789".toUTF8   -- 0xCBF43926
+
+let crc := CRC32.init
+let crc := CRC32.update crc "1234".toUTF8
+let crc := CRC32.update crc "56789".toUTF8
+#eval CRC32.finalize crc                  -- compute と同じ結果
+```
+
+## メモリプール
+
+```lean
+open Radix.MemoryPool
+
+let pool := BumpPool.new 1024
+#eval pool.remaining
+#eval (pool.alloc 64).map (fun (off, p) => (off, p.remaining))
+```
+
+## Numeric 型クラス
+
+```lean
+import Radix.Word.Numeric
+
+open Radix
+
+#eval isZero (α := UInt8) UInt8.minVal
+#eval isMax (α := UInt16) UInt16.maxVal
+#eval BitwiseOps.popcount (⟨0xDEADBEEF⟩ : UInt32).toNat
 ```
 
 ## 関連ドキュメント

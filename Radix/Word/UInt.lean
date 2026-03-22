@@ -204,4 +204,94 @@ instance : FixedWidth UInt64 where
   toBitVec := UInt64.toBitVec
   fromBitVec := UInt64.fromBitVec
 
+/-! ## Lawful Fixed-Width Unsigned Integers -/
+
+/-- Extension of `FixedWidth` with round-trip laws and wrapping arithmetic
+    laws. These laws allow writing generic proofs once instead of repeating
+    them for each concrete width (UInt8, UInt16, UInt32, UInt64).
+
+    Each law is an equation relating the concrete operation on `α` to the
+    corresponding `BitVec` operation, so that `BitVec`-level theorems
+    (commutativity, associativity, distributivity, etc.) lift automatically
+    to the concrete type. -/
+class LawfulFixedWidth (α : Type) extends FixedWidth α, Add α, Sub α, Mul α where
+  /-- `bitWidth > 0`: necessary for overflow predicates and modular arithmetic. -/
+  bitWidth_pos : bitWidth > 0
+  /-- `fromBitVec ∘ toBitVec = id` (embedding is a retraction). -/
+  fromBitVec_toBitVec : ∀ x : α, fromBitVec (toBitVec x) = x
+  /-- `toBitVec ∘ fromBitVec = id` (embedding is a section). -/
+  toBitVec_fromBitVec : ∀ bv : BitVec bitWidth, toBitVec (fromBitVec bv) = bv
+  /-- Addition commutes with `toBitVec`. -/
+  toBitVec_add : ∀ x y : α, toBitVec (x + y) = toBitVec x + toBitVec y
+  /-- Subtraction commutes with `toBitVec`. -/
+  toBitVec_sub : ∀ x y : α, toBitVec (x - y) = toBitVec x - toBitVec y
+  /-- Multiplication commutes with `toBitVec`. -/
+  toBitVec_mul : ∀ x y : α, toBitVec (x * y) = toBitVec x * toBitVec y
+
+/-- `toBitVec` is injective for any `LawfulFixedWidth` type:
+    if two values have the same bit-vector representation, they are equal.
+    This is the key lemma that lets us lift `BitVec`-level equalities
+    to the concrete type. -/
+theorem LawfulFixedWidth.toBitVec_injective {α : Type} [inst : LawfulFixedWidth α]
+    {x y : α} (h : inst.toBitVec x = inst.toBitVec y) : x = y := by
+  have hx := inst.fromBitVec_toBitVec x
+  have hy := inst.fromBitVec_toBitVec y
+  rw [← hx, h, hy]
+
+instance : LawfulFixedWidth UInt8 where
+  bitWidth_pos := by decide
+  fromBitVec_toBitVec x := by cases x; simp [FixedWidth.fromBitVec, FixedWidth.toBitVec, UInt8.fromBitVec, UInt8.toBitVec]
+  toBitVec_fromBitVec bv := by simp [FixedWidth.fromBitVec, FixedWidth.toBitVec, UInt8.fromBitVec, UInt8.toBitVec]
+  toBitVec_add x y := by cases x; cases y; rfl
+  toBitVec_sub x y := by cases x; cases y; rfl
+  toBitVec_mul x y := by cases x; cases y; rfl
+
+instance : LawfulFixedWidth UInt16 where
+  bitWidth_pos := by decide
+  fromBitVec_toBitVec x := by cases x; simp [FixedWidth.fromBitVec, FixedWidth.toBitVec, UInt16.fromBitVec, UInt16.toBitVec]
+  toBitVec_fromBitVec bv := by simp [FixedWidth.fromBitVec, FixedWidth.toBitVec, UInt16.fromBitVec, UInt16.toBitVec]
+  toBitVec_add x y := by cases x; cases y; rfl
+  toBitVec_sub x y := by cases x; cases y; rfl
+  toBitVec_mul x y := by cases x; cases y; rfl
+
+instance : LawfulFixedWidth UInt32 where
+  bitWidth_pos := by decide
+  fromBitVec_toBitVec x := by cases x; simp [FixedWidth.fromBitVec, FixedWidth.toBitVec, UInt32.fromBitVec, UInt32.toBitVec]
+  toBitVec_fromBitVec bv := by simp [FixedWidth.fromBitVec, FixedWidth.toBitVec, UInt32.fromBitVec, UInt32.toBitVec]
+  toBitVec_add x y := by cases x; cases y; rfl
+  toBitVec_sub x y := by cases x; cases y; rfl
+  toBitVec_mul x y := by cases x; cases y; rfl
+
+instance : LawfulFixedWidth UInt64 where
+  bitWidth_pos := by decide
+  fromBitVec_toBitVec x := by cases x; simp [FixedWidth.fromBitVec, FixedWidth.toBitVec, UInt64.fromBitVec, UInt64.toBitVec]
+  toBitVec_fromBitVec bv := by simp [FixedWidth.fromBitVec, FixedWidth.toBitVec, UInt64.fromBitVec, UInt64.toBitVec]
+  toBitVec_add x y := by cases x; cases y; rfl
+  toBitVec_sub x y := by cases x; cases y; rfl
+  toBitVec_mul x y := by cases x; cases y; rfl
+
+/-! ## Lawful Bitwise Operations -/
+
+/-- Extension of `LawfulFixedWidth` with bitwise operations and laws.
+    Each law states that the concrete bitwise operation on `α` corresponds
+    to the `BitVec`-level operation, allowing generic proofs of Boolean
+    algebra properties (commutativity, associativity, De Morgan, etc.). -/
+class LawfulBitwise (α : Type) extends LawfulFixedWidth α where
+  /-- Bitwise AND. -/
+  band : α → α → α
+  /-- Bitwise OR. -/
+  bor  : α → α → α
+  /-- Bitwise XOR. -/
+  bxor : α → α → α
+  /-- Bitwise NOT (complement). -/
+  bnot : α → α
+  /-- AND commutes with `toBitVec`. -/
+  toBitVec_band : ∀ x y : α, toBitVec (band x y) = toBitVec x &&& toBitVec y
+  /-- OR commutes with `toBitVec`. -/
+  toBitVec_bor  : ∀ x y : α, toBitVec (bor x y)  = toBitVec x ||| toBitVec y
+  /-- XOR commutes with `toBitVec`. -/
+  toBitVec_bxor : ∀ x y : α, toBitVec (bxor x y) = toBitVec x ^^^ toBitVec y
+  /-- NOT commutes with `toBitVec`. -/
+  toBitVec_bnot : ∀ x : α,   toBitVec (bnot x)   = ~~~(toBitVec x)
+
 end Radix

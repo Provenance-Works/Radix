@@ -11,6 +11,12 @@ import Radix.Binary
 import Radix.System
 import Radix.Concurrency
 import Radix.BareMetal
+import tests.ComprehensiveTests.Word.Numeric
+import tests.ComprehensiveTests.Alignment
+import tests.ComprehensiveTests.RingBuffer
+import tests.ComprehensiveTests.Bitmap
+import tests.ComprehensiveTests.CRC
+import tests.ComprehensiveTests.MemoryPool
 
 /-! # Radix Execution Tests -/
 
@@ -1005,6 +1011,7 @@ private def testBareMetal : IO Unit :=
   assert (Lifetime.static.isBounded) "static bounded"
   assert (Lifetime.stack.isBounded) "stack bounded"
   assert (Lifetime.compileTime.isBounded) "compileTime bounded"
+  assert (!Lifetime.heap.isBounded) "heap not bounded"
 
   -- Stack frames
   let frame : StackFrame := { name := "main", localBytes := 64, savedRegs := 16, padding := 0 }
@@ -1105,6 +1112,15 @@ def main : IO Unit := do
   testSystemError
   testNativeEndian
   IO.println "All Radix Phase 3 tests passed!"
+  IO.println ""
+  IO.println "Running Radix Phase 4 tests..."
+  let _ ← runNumericTests
+  let _ ← runAlignmentTests
+  let _ ← runRingBufferTests
+  let _ ← runBitmapTests
+  let _ ← runCRCTests
+  let _ ← runMemoryPoolTests
+  IO.println "All Radix Phase 4 tests passed!"
   IO.println ""
   IO.println "Running Radix Phase 5 tests..."
   testConcurrency

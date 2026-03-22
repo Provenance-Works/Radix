@@ -60,6 +60,7 @@ def runBareMetalPlatformTests : IO Nat := do
   assert (AllocStrategy.stack.isGCFree == true) "stack isGCFree"
   assert (AllocStrategy.arena.isGCFree == true) "arena isGCFree"
   assert (AllocStrategy.none.isGCFree == true) "none isGCFree"
+  assert (AllocStrategy.heap.isGCFree == false) "heap not isGCFree"
 
   -- ## AllocProfile
   let prof := AllocProfile.mk "testFn" .stack (some 256)

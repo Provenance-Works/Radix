@@ -13,5 +13,5 @@ Design philosophy, patterns, and architectural decisions behind Radix.
 ## See Also
 
 - [Architecture](../architecture/) — System design and diagrams
-- [Formal Specifications](../../spec/) — Requirements, constraints, and detailed design documents
+- [API Reference](../reference/) — Module reference and terminology
 - [日本語版](../../ja/design/) — Japanese version

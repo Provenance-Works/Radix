@@ -67,7 +67,7 @@ def runUInt64Tests : IO Nat := do
   assert (r1.toNat == 0 && ov1 == true) "ovfAdd MAX+1"
   let (r2, ov2) := Radix.UInt64.overflowingAdd ⟨100⟩ ⟨200⟩
   assert (r2.toNat == 300 && ov2 == false) "ovfAdd ok"
-  let (r3, ov3) := Radix.UInt64.overflowingSub ⟨10⟩ ⟨20⟩
+  let (_r3, ov3) := Radix.UInt64.overflowingSub ⟨10⟩ ⟨20⟩
   assert (ov3 == true) "ovfSub under flag"
   let (r4, ov4) := Radix.UInt64.overflowingMul ⟨4294967296⟩ ⟨4294967296⟩
   assert (r4.toNat == 0 && ov4 == true) "ovfMul 2^32*2^32"

@@ -120,6 +120,65 @@ flowchart TD
     Q4 -->|No| Wrapping["wrappingAdd(x, y)<br/>Wraps mod 2^n"]
 ```
 
+## Ring Buffer Push/Pop Flow
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant RB as RingBuffer.Impl
+    participant Mem as Memory.Buffer
+    participant Spec as RingBuffer.Spec
+
+    App->>RB: push(rb, byte)
+    alt count < capacity
+        RB->>Mem: writeU8 tail byte
+        Mem-->>RB: updated backing buffer
+        RB->>RB: tail := wrapSuccFast tail capacity
+        RB->>RB: count := count + 1
+        RB-->>App: some updated RingBuf
+    else full
+        RB-->>App: none
+    end
+
+    App->>RB: pop(rb)
+    alt count > 0
+        RB->>Mem: readU8 head
+        Mem-->>RB: byte
+        RB->>RB: head := wrapSuccFast head capacity
+        RB->>RB: count := count - 1
+        RB-->>App: some (byte, updated RingBuf)
+    else empty
+        RB-->>App: none
+    end
+
+    Note over Spec,RB: Proof obligations preserve FIFO ordering and capacity invariants
+```
+
+## CRC Streaming Flow
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Ops as CRC.Ops
+    participant Table as Lookup Table
+    participant Spec as CRC.Spec
+
+    App->>Ops: init
+    Ops-->>App: running CRC register
+    App->>Ops: update(crc, chunk1)
+    Ops->>Table: updateByte for each byte
+    Table-->>Ops: precomputed remainder entries
+    Ops-->>App: crc1
+    App->>Ops: update(crc1, chunk2)
+    Ops->>Table: updateByte for each byte
+    Table-->>Ops: precomputed remainder entries
+    Ops-->>App: crc2
+    App->>Ops: finalize(crc2)
+    Ops-->>App: final CRC-32 / CRC-16
+
+    Note over Spec,Ops: Lemmas prove update(init, a ++ b) = update(update(init, a), b)
+```
+
 ## Related Documents
 
 - [Architecture Overview](README.md) — Three-layer model

@@ -37,11 +37,11 @@ open Atomic
 
 /-! ## Memory Ordering Strength Properties -/
 
-theorem MemoryOrder.strength_relaxed : MemoryOrder.relaxed.strength = 0 := rfl
-theorem MemoryOrder.strength_acquire : MemoryOrder.acquire.strength = 1 := rfl
-theorem MemoryOrder.strength_release : MemoryOrder.release.strength = 1 := rfl
-theorem MemoryOrder.strength_acqRel  : MemoryOrder.acqRel.strength = 2 := rfl
-theorem MemoryOrder.strength_seqCst  : MemoryOrder.seqCst.strength = 3 := rfl
+@[simp] theorem MemoryOrder.strength_relaxed : MemoryOrder.relaxed.strength = 0 := rfl
+@[simp] theorem MemoryOrder.strength_acquire : MemoryOrder.acquire.strength = 1 := rfl
+@[simp] theorem MemoryOrder.strength_release : MemoryOrder.release.strength = 1 := rfl
+@[simp] theorem MemoryOrder.strength_acqRel  : MemoryOrder.acqRel.strength = 2 := rfl
+@[simp] theorem MemoryOrder.strength_seqCst  : MemoryOrder.seqCst.strength = 3 := rfl
 
 theorem MemoryOrder.seqCst_isAtLeast_all (o : MemoryOrder) :
     MemoryOrder.seqCst.isAtLeast o = true := by
@@ -53,12 +53,12 @@ theorem MemoryOrder.isAtLeast_self (o : MemoryOrder) :
 
 /-! ## Ordering Validity Properties -/
 
-theorem validLoadOrder_relaxed : validLoadOrder .relaxed = true := rfl
-theorem validLoadOrder_acquire : validLoadOrder .acquire = true := rfl
-theorem validLoadOrder_seqCst  : validLoadOrder .seqCst = true := rfl
-theorem validStoreOrder_relaxed : validStoreOrder .relaxed = true := rfl
-theorem validStoreOrder_release : validStoreOrder .release = true := rfl
-theorem validStoreOrder_seqCst  : validStoreOrder .seqCst = true := rfl
+@[simp] theorem validLoadOrder_relaxed : validLoadOrder .relaxed = true := rfl
+@[simp] theorem validLoadOrder_acquire : validLoadOrder .acquire = true := rfl
+@[simp] theorem validLoadOrder_seqCst  : validLoadOrder .seqCst = true := rfl
+@[simp] theorem validStoreOrder_relaxed : validStoreOrder .relaxed = true := rfl
+@[simp] theorem validStoreOrder_release : validStoreOrder .release = true := rfl
+@[simp] theorem validStoreOrder_seqCst  : validStoreOrder .seqCst = true := rfl
 theorem validRMWOrder_all (o : MemoryOrder) : validRMWOrder o = true := by
   cases o <;> rfl
 
@@ -79,16 +79,16 @@ theorem strengthen_comm_strength (a b : MemoryOrder) :
 
 /-! ## HasAcquire / HasRelease Classification -/
 
-theorem seqCst_hasAcquire : hasAcquireSemantics .seqCst = true := rfl
-theorem seqCst_hasRelease : hasReleaseSemantics .seqCst = true := rfl
-theorem acqRel_hasAcquire : hasAcquireSemantics .acqRel = true := rfl
-theorem acqRel_hasRelease : hasReleaseSemantics .acqRel = true := rfl
+@[simp] theorem seqCst_hasAcquire : hasAcquireSemantics .seqCst = true := rfl
+@[simp] theorem seqCst_hasRelease : hasReleaseSemantics .seqCst = true := rfl
+@[simp] theorem acqRel_hasAcquire : hasAcquireSemantics .acqRel = true := rfl
+@[simp] theorem acqRel_hasRelease : hasReleaseSemantics .acqRel = true := rfl
 
-theorem acquire_hasAcquire : hasAcquireSemantics .acquire = true := rfl
-theorem release_hasRelease : hasReleaseSemantics .release = true := rfl
+@[simp] theorem acquire_hasAcquire : hasAcquireSemantics .acquire = true := rfl
+@[simp] theorem release_hasRelease : hasReleaseSemantics .release = true := rfl
 
-theorem relaxed_no_acquire : hasAcquireSemantics .relaxed = false := rfl
-theorem relaxed_no_release : hasReleaseSemantics .relaxed = false := rfl
+@[simp] theorem relaxed_no_acquire : hasAcquireSemantics .relaxed = false := rfl
+@[simp] theorem relaxed_no_release : hasReleaseSemantics .relaxed = false := rfl
 
 /-! ## CAS Failure Ordering Properties -/
 
@@ -147,19 +147,19 @@ theorem atomicCAS_previous_is_current (cell : AtomicCell) (expected desired : Na
 
 /-! ## Fetch-and-Modify Properties -/
 
-theorem fetchAdd_returns_previous (cell : AtomicCell) (delta : Nat)
+@[simp] theorem fetchAdd_returns_previous (cell : AtomicCell) (delta : Nat)
     (order : MemoryOrder) :
     (fetchAdd cell delta order).1.previous = cell.val := rfl
 
-theorem fetchAdd_updates_value (cell : AtomicCell) (delta : Nat)
+@[simp] theorem fetchAdd_updates_value (cell : AtomicCell) (delta : Nat)
     (order : MemoryOrder) :
     (fetchAdd cell delta order).2.val = cell.val + delta := rfl
 
-theorem fetchSub_returns_previous (cell : AtomicCell) (delta : Nat)
+@[simp] theorem fetchSub_returns_previous (cell : AtomicCell) (delta : Nat)
     (order : MemoryOrder) :
     (fetchSub cell delta order).1.previous = cell.val := rfl
 
-theorem fetchSub_updates_value (cell : AtomicCell) (delta : Nat)
+@[simp] theorem fetchSub_updates_value (cell : AtomicCell) (delta : Nat)
     (order : MemoryOrder) :
     (fetchSub cell delta order).2.val = cell.val - delta := rfl
 
@@ -167,11 +167,11 @@ theorem fetchAdd_zero_identity (cell : AtomicCell) (order : MemoryOrder) :
     (fetchAdd cell 0 order).2 = cell := by
   simp [fetchAdd]
 
-theorem atomicExchange_returns_previous (cell : AtomicCell) (newVal : Nat)
+@[simp] theorem atomicExchange_returns_previous (cell : AtomicCell) (newVal : Nat)
     (order : MemoryOrder) :
     (atomicExchange cell newVal order).1.previous = cell.val := rfl
 
-theorem atomicExchange_sets_value (cell : AtomicCell) (newVal : Nat)
+@[simp] theorem atomicExchange_sets_value (cell : AtomicCell) (newVal : Nat)
     (order : MemoryOrder) :
     (atomicExchange cell newVal order).2.val = newVal := rfl
 
@@ -202,6 +202,25 @@ theorem programOrder_same_thread (a b : MemoryEvent)
     (h : programOrder a b) :
     a.id.thread = b.id.thread := h.1
 
+/-! ## Derived Ordering Theorems -/
+
+/-- Acquire-release synchronization implies happens-before.
+    This follows directly from the definition of `happensBefore`. -/
+theorem acquire_release_happensBefore
+    (w r : MemoryEvent)
+    (hSync : synchronizesWith w r) :
+    happensBefore w r :=
+  Or.inr hSync
+
+/-- A fence between two program-ordered events establishes
+    happens-before by transitivity of program order. -/
+theorem fence_ordering_happensBefore
+    (a e b : MemoryEvent)
+    (hBefore : programOrder a e)
+    (hAfter : programOrder e b) :
+    happensBefore a b :=
+  Or.inl (programOrder_trans a e b hBefore hAfter)
+
 /-! ## Single-Thread Linearizability -/
 
 /-- A trace consisting of events from a single thread is trivially
@@ -230,5 +249,82 @@ theorem Trace.singleton_isDataRaceFree (e : MemoryEvent) :
   subst ha; subst hb
   intro ⟨hConf, _, _, _⟩
   exact hConf.1 rfl
+
+/-! ## Conflicting / Data-Race Properties -/
+
+/-- Two loads never conflict (neither is a write). -/
+theorem loads_not_conflicting (a b : MemoryEvent)
+    (haLoad : a.kind = .load) (hbLoad : b.kind = .load) :
+    ¬conflicting a b := by
+  intro ⟨_, _, _, hWrite⟩
+  cases hWrite with
+  | inl h => simp [AccessKind.isWrite, haLoad] at h
+  | inr h => simp [AccessKind.isWrite, hbLoad] at h
+
+/-- Same-thread events never form a data race (data races require
+    different threads). -/
+theorem sameThread_no_dataRace (a b : MemoryEvent)
+    (hThread : a.id.thread = b.id.thread) :
+    ¬isDataRace a b := by
+  intro ⟨_, hDiffThread, _, _⟩
+  exact hDiffThread hThread
+
+/-- If two events are ordered by happens-before in either direction,
+    they do not form a data race. -/
+theorem ordered_no_dataRace (a b : MemoryEvent)
+    (hOrdered : happensBefore a b ∨ happensBefore b a) :
+    ¬isDataRace a b := by
+  intro ⟨_, _, hNotAB, hNotBA⟩
+  cases hOrdered with
+  | inl h => exact hNotAB h
+  | inr h => exact hNotBA h
+
+/-- A trace consisting only of read events is data-race free. -/
+theorem Trace.allLoads_isDataRaceFree (t : Trace)
+    (hAllLoads : ∀ e, e ∈ t.events → e.kind = .load) :
+    t.isDataRaceFree := by
+  intro a b ha hb hRace
+  have := loads_not_conflicting a b (hAllLoads a ha) (hAllLoads b hb)
+  exact this hRace.1
+
+/-! ## CAS Correctness -/
+
+/-- A CAS either succeeds and updates, or fails and preserves.
+    This is the fundamental CAS disjunction. -/
+theorem atomicCAS_dichotomy (cell : AtomicCell) (expected desired : Nat)
+    (succOrder failOrder : MemoryOrder) :
+    let r := atomicCAS cell expected desired succOrder failOrder
+    (r.1.success = true ∧ r.2.val = desired) ∨
+    (r.1.success = false ∧ r.2 = cell) := by
+  simp [atomicCAS]
+  split
+  · left; exact ⟨rfl, rfl⟩
+  · right; exact ⟨rfl, rfl⟩
+
+/-- Two consecutive fetchAdd operations compose additively. -/
+theorem fetchAdd_compose (cell : AtomicCell) (d1 d2 : Nat)
+    (o1 o2 : MemoryOrder) :
+    let (_, cell') := fetchAdd cell d1 o1
+    (fetchAdd cell' d2 o2).2.val = cell.val + d1 + d2 := by
+  simp [fetchAdd]
+
+/-- atomicExchange is equivalent to a CAS that always succeeds. -/
+theorem exchange_eq_successful_cas (cell : AtomicCell) (newVal : Nat)
+    (order : MemoryOrder) :
+    (atomicExchange cell newVal order).2.val =
+    (atomicCAS cell cell.val newVal order order).2.val := by
+  simp [atomicExchange, atomicCAS]
+
+/-! ## Well-Formedness -/
+
+/-- An empty trace is well-formed. -/
+theorem Trace.empty_isWellFormed :
+    (Trace.mk []).isWellFormed := by
+  simp [Trace.isWellFormed]
+
+/-- An empty trace is valid (well-formed with unique IDs). -/
+theorem Trace.empty_isValid :
+    (Trace.mk []).isValid := by
+  exact ⟨Trace.empty_isWellFormed, by simp [Trace.hasUniqueIds]⟩
 
 end Radix.Concurrency

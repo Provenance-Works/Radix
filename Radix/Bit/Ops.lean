@@ -44,7 +44,9 @@ namespace Radix
   let c := count.val &&& 7
   let shifted := x.val >>> c
   -- Sign extend: if MSB was set, fill high bits with 1s
-  if x.val &&& 128 != 0 then
+  -- Guard c == 0: (allOnes <<< bitWidth) wraps to allOnes on built-in types
+  if c == 0 then ⟨shifted⟩
+  else if x.val &&& 128 != 0 then
     ⟨shifted ||| (255 <<< (8 - c))⟩
   else ⟨shifted⟩
 
@@ -97,7 +99,9 @@ end UInt8
 @[inline] private def shrArith16_impl (x : UInt16) (count : UInt16) : UInt16 :=
   let c := count.val &&& 15
   let shifted := x.val >>> c
-  if x.val &&& 32768 != 0 then
+  -- Guard c == 0: (allOnes <<< bitWidth) wraps to allOnes on built-in types
+  if c == 0 then ⟨shifted⟩
+  else if x.val &&& 32768 != 0 then
     ⟨shifted ||| (65535 <<< (16 - c))⟩
   else ⟨shifted⟩
 
@@ -156,7 +160,9 @@ namespace UInt32
 @[inline] private def shrArith32_impl (x : UInt32) (count : UInt32) : UInt32 :=
   let c := count.val &&& 31
   let shifted := x.val >>> c
-  if x.val &&& 2147483648 != 0 then
+  -- Guard c == 0: (allOnes <<< bitWidth) wraps to allOnes on built-in types
+  if c == 0 then ⟨shifted⟩
+  else if x.val &&& 2147483648 != 0 then
     ⟨shifted ||| (4294967295 <<< (32 - c))⟩
   else ⟨shifted⟩
 
@@ -191,7 +197,9 @@ end UInt32
 @[inline] private def shrArith64_impl (x : UInt64) (count : UInt64) : UInt64 :=
   let c := count.val &&& 63
   let shifted := x.val >>> c
-  if x.val &&& 9223372036854775808 != 0 then
+  -- Guard c == 0: (allOnes <<< bitWidth) wraps to allOnes on built-in types
+  if c == 0 then ⟨shifted⟩
+  else if x.val &&& 9223372036854775808 != 0 then
     ⟨shifted ||| (18446744073709551615 <<< (64 - c))⟩
   else ⟨shifted⟩
 

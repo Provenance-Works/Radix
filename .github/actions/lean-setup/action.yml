@@ -8,6 +8,17 @@
 name: "Lean 4 Setup"
 description: "Install Lean toolchain and restore multi-layer caches"
 
+outputs:
+  legacy-cache-hit:
+    description: "Whether the legacy build cache had an exact hit"
+    value: ${{ steps.legacy-cache.outputs.cache-hit }}
+  dependency-cache-hit:
+    description: "Whether the dependency cache had an exact hit"
+    value: ${{ steps.dependency-cache.outputs.cache-hit }}
+  mathlib-cache-hit:
+    description: "Whether the Mathlib oleans cache had an exact hit"
+    value: ${{ steps.mathlib-cache-restore.outputs.cache-hit }}
+
 inputs:
   cache-key:
     description: "Primary cache key to restore"
@@ -15,6 +26,22 @@ inputs:
     default: ""
   cache-restore-keys:
     description: "Fallback restore keys (newline-separated)"
+    required: false
+    default: ""
+  dependency-cache-key:
+    description: "Primary dependency cache key to restore"
+    required: false
+    default: ""
+  dependency-cache-restore-keys:
+    description: "Fallback dependency cache keys (newline-separated)"
+    required: false
+    default: ""
+  mathlib-cache-key:
+    description: "Primary Mathlib oleans cache key to restore"
+    required: false
+    default: ""
+  mathlib-cache-restore-keys:
+    description: "Fallback Mathlib oleans cache keys (newline-separated)"
     required: false
     default: ""
   skip-cache:
@@ -47,8 +74,9 @@ runs:
         lean --version
         lake --version
 
-    - name: "Restore build cache"
+    - name: "Restore legacy build cache"
       if: inputs.skip-cache != 'true' && inputs.cache-key != ''
+      id: legacy-cache
       uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
         path: |
@@ -57,12 +85,37 @@ runs:
         key: ${{ inputs.cache-key }}
         restore-keys: ${{ inputs.cache-restore-keys }}
 
+    - name: "Restore dependency cache"
+      if: inputs.skip-cache != 'true' && inputs.dependency-cache-key != ''
+      id: dependency-cache
+      uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with:
+        path: |
+          .lake/packages
+          !.lake/packages/mathlib/.lake/build
+        key: ${{ inputs.dependency-cache-key }}
+        restore-keys: ${{ inputs.dependency-cache-restore-keys }}
+
+    - name: "Restore Mathlib oleans cache"
+      if: inputs.skip-cache != 'true' && inputs.mathlib-cache-key != ''
+      id: mathlib-cache-restore
+      uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with:
+        path: .lake/packages/mathlib/.lake/build
+        key: ${{ inputs.mathlib-cache-key }}
+        restore-keys: ${{ inputs.mathlib-cache-restore-keys }}
+
     - name: "Fetch dependencies"
       if: inputs.lake-update == 'true'
       shell: bash
-      run: lake update
+      run: |
+        if [ "${{ steps.legacy-cache.outputs.cache-hit }}" = "true" ] || [ "${{ steps.dependency-cache.outputs.cache-hit }}" = "true" ]; then
+          echo "Dependency cache hit — skipping lake update"
+        else
+          lake update
+        fi
 
     - name: "Fetch Mathlib oleans cache"
-      if: inputs.mathlib-cache == 'true'
+      if: inputs.mathlib-cache == 'true' && steps.mathlib-cache-restore.outputs.cache-hit != 'true'
       shell: bash
       run: lake exe cache get || echo "::warning::Mathlib cache get failed — will build from source"

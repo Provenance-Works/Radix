@@ -9,8 +9,9 @@ Radix employs a multi-layered testing strategy:
 | Layer | Type | What it verifies |
 |-------|------|-----------------|
 | **Formal proofs** | Lean 4 type system | Mathematical correctness (Lemmas modules) |
-| **Unit tests** | `tests/Main.lean` | Concrete input/output correctness for all types |
+| **Unit tests** | `tests/Main.lean` | Concrete input/output correctness for all 13 modules |
 | **Property tests** | `tests/PropertyTests.lean` | Algebraic properties hold over random inputs |
+| **Comprehensive tests** | `tests/ComprehensiveTests.lean` | Cross-module regression coverage and assertion counts |
 | **Examples** | `examples/Main.lean` | Usage examples execute with assertions |
 
 ```mermaid
@@ -19,13 +20,15 @@ graph TD
         Proofs["Formal Proofs<br/>(Lemmas modules)<br/>Verified by Lean 4 kernel"]
     end
     subgraph "Runtime (Execution Tests)"
-        Unit["Unit Tests<br/>(tests/Main.lean)<br/>All 8 modules × concrete values"]
+        Unit["Unit Tests<br/>(tests/Main.lean)<br/>All 13 modules × concrete values"]
         Prop["Property Tests<br/>(tests/PropertyTests.lean)<br/>500 iterations × random inputs"]
-        Ex["Examples<br/>(examples/Main.lean)<br/>11 sections with assertions"]
+        Comp["Comprehensive Tests<br/>(tests/ComprehensiveTests.lean)<br/>Full regression coverage"]
+        Ex["Examples<br/>(examples/Main.lean)<br/>Core walkthrough + 15 runnable example modules"]
     end
     Proofs --> Unit
     Unit --> Prop
-    Prop --> Ex
+      Prop --> Comp
+      Comp --> Ex
     style Proofs fill:#4CAF50,color:white
     style Unit fill:#2196F3,color:white
     style Prop fill:#FF9800,color:white
@@ -35,24 +38,27 @@ graph TD
 ## Running Tests
 
 ```bash
-# Unit tests — all 8 modules
+# Unit tests — all 13 modules
 lake exe test
 
 # Property-based tests — random + edge cases
 lake exe proptest
 
+# Comprehensive regression suite
+lake exe comptest
+
 # Examples — usage examples with assertions
 lake exe examples
 
 # All tests
-lake exe test && lake exe proptest && lake exe examples
+lake exe test && lake exe proptest && lake exe comptest && lake exe examples
 ```
 
 All commands should complete with zero failures.
 
 ## Unit Tests (`tests/Main.lean`)
 
-Covers all 8 modules with concrete test values:
+Covers all 13 modules with concrete test values:
 
 | Module | Coverage |
 |--------|----------|
@@ -64,6 +70,11 @@ Covers all 8 modules with concrete test values:
 | **System** | File write/read round-trip, metadata, exists check, string I/O, withFile bracket |
 | **Concurrency** | Ordering classification, validity, CAS, strengthen/combine, AtomicCell ops, traces |
 | **BareMetal** | Platform properties, regions, memory map, startup validation, GC-free, linker, alignment |
+| **Alignment** | `alignUp`, `alignDown`, `isAligned`, `alignPadding`, power-of-two fast paths |
+| **RingBuffer** | `push`, `pop`, `peek`, `pushForce`, wrap-around behavior, FIFO preservation |
+| **Bitmap** | `set`, `clear`, `test`, `toggle`, set operations, population count, search |
+| **CRC** | CRC-32/CRC-16 known vectors, streaming update/finalize consistency |
+| **MemoryPool** | Bump pool allocation/reset and slab pool allocation/free safety |
 
 ### Test Pattern
 

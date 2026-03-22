@@ -11,7 +11,7 @@ Welcome to the Radix documentation. This is the central navigation hub for all p
 | Look up an API | [API Reference](reference/api/) |
 | Configure the project | [Configuration Guide](guides/configuration.md) |
 | Set up for development | [Dev Setup](development/setup.md) |
-| Understand a design decision | [ADRs](../spec/adr/) |
+| Understand a design decision | [ADRs](design/adr.md) |
 
 ## Documentation Map
 
@@ -60,7 +60,7 @@ mindmap
 | Document | Audience | Description |
 |----------|----------|-------------|
 | [Overview](architecture/README.md) | All | Three-layer architecture and high-level system design |
-| [Components](architecture/components.md) | Devs | Internal component breakdown (8 modules) |
+| [Components](architecture/components.md) | Devs | Internal component breakdown (13 modules) |
 | [Data Model](architecture/data-model.md) | Devs | Core data structures and BitVec relationships |
 | [Data Flow](architecture/data-flow.md) | Devs | How data moves between layers and modules |
 | [Module Dependencies](architecture/module-dependency.md) | Devs | Module dependency graph |
@@ -97,5 +97,5 @@ mindmap
 ## See Also
 
 - [日本語ドキュメント](../ja/) — Japanese documentation
-- [Specification](../spec/) — Formal requirements and design documents
+- [Design Docs](design/) — Design principles, patterns, and ADRs
 - [CHANGELOG](../../CHANGELOG.md) — Version history

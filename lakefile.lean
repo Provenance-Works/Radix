@@ -63,7 +63,14 @@ lean_lib ComprehensiveTestLib where
              `tests.ComprehensiveTests.BareMetal.Startup,
              `tests.ComprehensiveTests.BareMetal.GCFree,
              `tests.ComprehensiveTests.BareMetal.Linker,
-             `tests.ComprehensiveTests.BareMetal.Properties]
+             `tests.ComprehensiveTests.BareMetal.Properties,
+             -- v0.2.0 Modules
+             `tests.ComprehensiveTests.Word.Numeric,
+             `tests.ComprehensiveTests.Alignment,
+             `tests.ComprehensiveTests.RingBuffer,
+             `tests.ComprehensiveTests.Bitmap,
+             `tests.ComprehensiveTests.CRC,
+             `tests.ComprehensiveTests.MemoryPool]
 
 lean_exe comptest where
   root := `tests.ComprehensiveTests
@@ -83,7 +90,11 @@ lean_lib ExamplesLib where
              `examples.Varint,
              `examples.FirmwareImage,
              `examples.LockFree,
-             `examples.SystemIO]
+             `examples.SystemIO,
+             `examples.BitmapDemo,
+             `examples.AlignmentDemo,
+             `examples.MemoryPoolDemo,
+             `examples.NumericDemo]
 
 lean_exe examples where
   root := `examples.Main

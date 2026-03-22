@@ -57,7 +57,7 @@ graph TD
 
 | Module | Layer 3 (Spec) | Layer 2 (Impl) | Layer 1 (Bridge) |
 |--------|---------------|----------------|-----------------|
-| Word | `Word.Spec` | `Word.UInt`, `Word.Int`, `Word.Arith`, `Word.Conv`, `Word.Size` | — |
+| Word | `Word.Spec`, `Word.Lemmas.*` | `Word.UInt`, `Word.Int`, `Word.Arith`, `Word.Conv`, `Word.Size`, `Word.Numeric` | — |
 | Bit | `Bit.Spec` | `Bit.Ops`, `Bit.Scan`, `Bit.Field` | — |
 | Bytes | `Bytes.Spec` | `Bytes.Order`, `Bytes.Slice` | — |
 | Memory | `Memory.Spec` | `Memory.Model`, `Memory.Ptr`, `Memory.Layout` | — |
@@ -65,8 +65,13 @@ graph TD
 | System | `System.Spec` | `System.Error`, `System.FD` | `System.IO`, `System.Assumptions` |
 | Concurrency | `Concurrency.Spec` | `Concurrency.Ordering`, `Concurrency.Atomic` | `Concurrency.Assumptions` |
 | BareMetal | `BareMetal.Spec` | `BareMetal.GCFree`, `BareMetal.Linker`, `BareMetal.Startup` | `BareMetal.Assumptions` |
+| Alignment | `Alignment.Spec`, `Alignment.Lemmas` | `Alignment.Ops` | — |
+| RingBuffer | `RingBuffer.Spec`, `RingBuffer.Lemmas` | `RingBuffer.Impl` | — |
+| Bitmap | `Bitmap.Spec`, `Bitmap.Lemmas` | `Bitmap.Ops` | — |
+| CRC | `CRC.Spec`, `CRC.Lemmas` | `CRC.Ops` | — |
+| MemoryPool | `MemoryPool.Spec`, `MemoryPool.Lemmas` | `MemoryPool.Model` | — |
 
-> **Note:** Word through Binary are **pure** modules (Layers 2–3 only). System, Concurrency, and BareMetal have Layer 1 components.
+> **Note:** Ten modules are fully pure in v0.2.0: Word, Bit, Bytes, Memory, Binary, Alignment, RingBuffer, Bitmap, CRC, and MemoryPool. Only System, Concurrency, and BareMetal cross the Layer 1 trusted boundary.
 
 ## Module Dependency Graph
 
@@ -75,12 +80,22 @@ graph TD
     Bit["Bit<br/>(Bitwise Ops)"] --> Word["Word<br/>(Fixed-Width Integers)"]
     Bytes["Bytes<br/>(Byte Order)"] --> Word
     Bytes --> Bit
+    Numeric["Word.Numeric<br/>(Numeric Typeclasses)"] --> Word
+    Numeric --> Bit
     Memory["Memory<br/>(Abstract Memory)"] --> Word
     Memory --> Bytes
     Binary["Binary<br/>(Format DSL)"] --> Word
     Binary --> Memory
     Binary --> Bit
     Binary --> Bytes
+    Alignment["Alignment<br/>(Address Alignment)"] --> Word
+    RingBuffer["RingBuffer<br/>(Circular Queue)"] --> Memory
+    Bitmap["Bitmap<br/>(Dense Bitset)"] --> Word
+    Bitmap --> Bit
+    CRC["CRC<br/>(Checksums)"] --> Word
+    CRC --> Bit
+    MemoryPool["MemoryPool<br/>(Allocator Models)"] --> Memory
+    MemoryPool --> Word
     System["System<br/>(OS Interface)"] --> Word
     System --> Bytes
     System --> Memory
@@ -91,12 +106,18 @@ graph TD
     style Bytes fill:#2196F3,color:white
     style Memory fill:#2196F3,color:white
     style Binary fill:#2196F3,color:white
+    style Numeric fill:#66BB6A,color:white
+    style Alignment fill:#66BB6A,color:white
+    style RingBuffer fill:#2196F3,color:white
+    style Bitmap fill:#2196F3,color:white
+    style CRC fill:#2196F3,color:white
+    style MemoryPool fill:#2196F3,color:white
     style System fill:#FF9800,color:white
     style Concurrency fill:#9C27B0,color:white
     style BareMetal fill:#9C27B0,color:white
 ```
 
-Dependencies flow upward from `Word`. Each higher module builds on lower ones.
+Dependencies still flow upward from `Word`, but v0.2.0 adds a second cluster of verified data-structure modules on top of the original core: `Alignment`, `RingBuffer`, `Bitmap`, `CRC`, `MemoryPool`, and the width-generic `Word.Numeric` API.
 
 ## Trusted Computing Base (TCB)
 
@@ -120,9 +141,9 @@ The TCB is the set of components whose correctness is **assumed, not proven**:
 
 | Decision | Summary | ADR |
 |----------|---------|-----|
-| Three-layer architecture | Maximize verified code, minimize trusted code | [ADR-001](../../spec/adr/0001-three-layer-architecture.md) |
-| Build on Mathlib BitVec | Use `BitVec n` as spec-level canonical representation | [ADR-002](../../spec/adr/0002-build-on-mathlib-bitvec.md) |
-| Signed integers via two's complement | Wrap unsigned types, interpret MSB as sign | [ADR-003](../../spec/adr/0003-signed-integers-twos-complement.md) |
+| Three-layer architecture | Maximize verified code, minimize trusted code | [ADR-001](../design/adr.md) |
+| Build on Mathlib BitVec | Use `BitVec n` as spec-level canonical representation | [ADR-002](../design/adr.md) |
+| Signed integers via two's complement | Wrap unsigned types, interpret MSB as sign | [ADR-003](../design/adr.md) |
 
 ## Related Documents
 

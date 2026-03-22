@@ -1,6 +1,6 @@
 # Product Roadmap
 
-<!-- Last updated: 2026-03-14 -->
+<!-- Last updated: 2026-03-22 -->
 
 ## Vision
 
@@ -16,16 +16,17 @@ with complete formal verification and zero-cost abstraction.
 3. **Downstream Ergonomics** — make Radix easy to depend on and compose with
 4. **Toolchain Resilience** — stay compatible with Lean 4 / Mathlib evolution
 
-## Current Release: v0.1.0 (2026-03-14)
+## Current Release: v0.2.0 (2026-03-21)
 
-First verified baseline. All 8 modules implemented with the three-layer
-architecture (Spec → Impl → Bridge). 702+ theorems, zero `sorry`.
+Current stable release. Extends the v0.1.0 baseline with verified data
+structures and numeric abstractions. All 13 modules follow the three-layer
+architecture (Spec → Impl → Bridge). 1062+ theorems, zero `sorry`.
 
 ### What's included
 
 | Module | Key Capabilities |
 |--------|-----------------|
-| Word | 10 integer types, 4 arithmetic modes, width conversions |
+| Word | 10 integer types, 4 arithmetic modes, width conversions, numeric typeclasses |
 | Bit | Boolean algebra, shifts, rotates, scanning, bit fields |
 | Bytes | Endianness, bswap, ByteSlice |
 | Memory | Buffer, Ptr, LayoutDesc, region disjointness |
@@ -33,10 +34,15 @@ architecture (Spec → Impl → Bridge). 702+ theorems, zero `sorry`.
 | System | File I/O state machine, SysError, FD, withFile bracket |
 | Concurrency | C11 memory ordering, AtomicCell, CAS, happens-before |
 | BareMetal | Platform model, memory map, linker scripts, startup, GC-free |
+| Alignment | alignUp/Down, padding, power-of-two fast paths |
+| RingBuffer | Fixed-capacity FIFO queue with wrap-around proofs |
+| Bitmap | Dense bit-array, set algebra, popcount, find-first |
+| CRC | CRC-32/CRC-16 with GF(2) polynomial specification |
+| MemoryPool | Bump/slab allocator models with safety invariants |
 
 ---
 
-## Next Release: v0.2.0 — "Bedrock"
+## Released in v0.2.0 — "Bedrock"
 
 Theme: **Deepen the foundation — verified data structures and numeric traits**
 
@@ -73,12 +79,12 @@ has to do it again.
 
 ### Release Criteria
 
-- [ ] All new features follow three-layer architecture
-- [ ] Zero `sorry` across entire codebase
-- [ ] Unit tests + property tests for every new feature
-- [ ] Benchmark comparison with C equivalent for Ring Buffer and CRC
-- [ ] Documentation (English + Japanese) for all new APIs
-- [ ] Examples demonstrating each new feature
+- [x] All new features follow three-layer architecture
+- [x] Zero `sorry` across entire codebase
+- [x] Unit tests + property tests for every new feature
+- [x] Benchmark comparison with C equivalent for Ring Buffer and CRC
+- [x] Documentation (English + Japanese) for all new APIs
+- [x] Examples demonstrating each new feature
 
 ---
 

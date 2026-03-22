@@ -117,4 +117,3 @@ This is formally specified in `Word.Spec` and proven for all signed types in `Wo
 - [Architecture Overview](../architecture/) — Three-layer architecture
 - [Patterns](patterns.md) — Design patterns
 - [ADRs](adr.md) — Decision records
-- [Constraints](../../spec/requirements/constraints.md) — Project constraints

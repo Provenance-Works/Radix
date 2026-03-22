@@ -9,8 +9,9 @@ Radixは多層テスト戦略を採用：
 | レイヤー | 種類 | 検証内容 |
 |-------|------|-----------------|
 | **形式証明** | Lean 4 型システム | 数学的正しさ（Lemmasモジュール） |
-| **ユニットテスト** | `tests/Main.lean` | 全型の具体的な入出力の正しさ |
+| **ユニットテスト** | `tests/Main.lean` | 全13モジュールの具体的な入出力の正しさ |
 | **プロパティテスト** | `tests/PropertyTests.lean` | ランダム入力に対する代数的性質 |
+| **包括テスト** | `tests/ComprehensiveTests.lean` | モジュール横断の回帰検証とアサーション集計 |
 | **使用例** | `examples/Main.lean` | アサーション付きの使用例の実行 |
 
 ```mermaid
@@ -19,13 +20,15 @@ graph TD
         Proofs["形式証明<br/>(Lemmas モジュール)<br/>Lean 4 カーネルで検証"]
     end
     subgraph "ランタイム（実行テスト）"
-        Unit["ユニットテスト<br/>(tests/Main.lean)<br/>全8モジュール × 具体値"]
+        Unit["ユニットテスト<br/>(tests/Main.lean)<br/>全13モジュール × 具体値"]
         Prop["プロパティテスト<br/>(tests/PropertyTests.lean)<br/>500イテレーション × ランダム入力"]
-        Ex["使用例<br/>(examples/Main.lean)<br/>11セクション、アサーション付き"]
+        Comp["包括テスト<br/>(tests/ComprehensiveTests.lean)<br/>完全な回帰カバレッジ"]
+        Ex["使用例<br/>(examples/Main.lean)<br/>コア説明 + 15個の実行可能例"]
     end
     Proofs --> Unit
     Unit --> Prop
-    Prop --> Ex
+      Prop --> Comp
+      Comp --> Ex
     style Proofs fill:#4CAF50,color:white
     style Unit fill:#2196F3,color:white
     style Prop fill:#FF9800,color:white
@@ -35,24 +38,27 @@ graph TD
 ## テストの実行
 
 ```bash
-# ユニットテスト — 全8モジュール
+# ユニットテスト — 全13モジュール
 lake exe test
 
 # プロパティベーステスト — ランダム + エッジケース
 lake exe proptest
 
+# 包括的な回帰テスト
+lake exe comptest
+
 # 使用例 — アサーション付き使用例
 lake exe examples
 
 # 全テスト
-lake exe test && lake exe proptest && lake exe examples
+lake exe test && lake exe proptest && lake exe comptest && lake exe examples
 ```
 
 全コマンドが失敗なしで完了するはずです。
 
 ## ユニットテスト（`tests/Main.lean`）
 
-全8モジュールを具体的なテスト値でカバー：
+全13モジュールを具体的なテスト値でカバー：
 
 | モジュール | カバレッジ |
 |--------|----------|
@@ -64,6 +70,11 @@ lake exe test && lake exe proptest && lake exe examples
 | **System** | ファイル書き込み/読み取りラウンドトリップ、メタデータ、存在チェック、文字列I/O、withFileブラケット |
 | **Concurrency** | オーダリング分類、妥当性、CAS、strengthen/combine、AtomicCell操作、トレース |
 | **BareMetal** | プラットフォーム属性、領域、メモリマップ、スタートアップバリデーション、GCフリー、リンカー、アライメント |
+| **Alignment** | `alignUp`、`alignDown`、`isAligned`、`alignPadding`、2の冪の高速パス |
+| **RingBuffer** | `push`、`pop`、`peek`、`pushForce`、ラップアラウンド、FIFO保持 |
+| **Bitmap** | `set`、`clear`、`test`、`toggle`、集合演算、popcount、探索 |
+| **CRC** | CRC-32/CRC-16 の既知ベクタ、ストリーミング API の一貫性 |
+| **MemoryPool** | Bump pool の割り当て/リセットと slab pool の割り当て/解放安全性 |
 
 ### テストパターン
 

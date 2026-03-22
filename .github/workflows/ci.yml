@@ -4,30 +4,27 @@
 #
 # Architecture:
 #   Phase 0: Change detection + pipeline configuration (instant)
-#   Phase 1: Dependency resolution + Mathlib cache warmup (parallel: lint, security)
-#   Phase 2: Library build (parallel: lint, security still running)
-#   Phase 3: Fan-out — tests, bench, examples builds (maximum parallelism)
-#   Phase 4: Test execution + proof verification (maximum parallelism)
-#   Phase 5: Benchmarks (main branch only)
-#   Phase 6: Pipeline summary + quality gate enforcement
+#   Phase 1: Dependency validation (parallel: lint, security)
+#   Phase 2: Build, test, and proof verification in one workspace
+#   Phase 3: Benchmarks (main branch only, parallel when enabled)
+#   Phase 4: Pipeline summary + quality gate enforcement
 #
 # DAG (critical path highlighted with *):
 #
-#   *changes* ──┬── *resolve-deps* ── *build-lib* ──┬── *build-tests* ──┬── *test-unit*
-#               │                                    │                   ├── *test-property*
-#               │                                    │                   └── *test-comprehensive*
-#               │                                    ├── build-examples ── test-examples
-#               │                                    ├── build-bench ── benchmarks
-#               │                                    └── verify-proofs
+#   *changes* ──┬── *resolve-deps* ── *build-lib*
 #               ├── lint (no build needed — instant start)
-#               └── security-scan (no build needed — instant start)
-#                                                                        └── ci-summary
+#               ├── security-scan (no build needed — instant start)
+#               └── benchmarks (main/manual only)
 #
-# Cache Strategy (4-layer):
+#   (*build-lib*, lint, security-scan, benchmarks) ──> ci-summary
+#
+# Cache Strategy (3-layer):
 #   L1: ~/.elan (toolchain, keyed by lean-toolchain)
-#   L2: .lake/packages (deps, keyed by lake-manifest.json + lakefile.lean)
+#   L2: .lake/packages without Mathlib oleans (deps, keyed by lake-manifest.json + lakefile.lean)
 #   L3: .lake/packages/mathlib/.lake/build (Mathlib oleans, keyed by mathlib rev)
-#   L4: .lake/build (Radix build artifacts, keyed by commit SHA)
+#
+#   Deliberately not caching .lake/build across jobs: cross-job transfer is slower
+#   than rebuilding inside a single workspace on ephemeral ARC runners.
 #
 # Runner: arc-runner-set-pw (self-hosted ARC runner)
 # =============================================================================
@@ -37,7 +34,7 @@ run-name: "${{ github.actor }} — ${{ github.event_name }} on ${{ github.ref_na
 
 on:
   push:
-    branches: [main, develop, "release/*", "hotfix/*"]
+    branches: [main, "release/*"]
     paths-ignore:
       - "docs/**"
       - "*.md"
@@ -50,7 +47,7 @@ on:
       - ".github/PULL_REQUEST_TEMPLATE.md"
       - ".github/FUNDING.yml"
   pull_request:
-    branches: [main, develop, "release/*"]
+    branches: [main, "release/*"]
     types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
@@ -194,67 +191,15 @@ jobs:
           echo "| Actor | ${{ github.actor }} |" >> "$GITHUB_STEP_SUMMARY"
 
   # ===========================================================================
-  # Phase 1: Dependency Resolution & Mathlib Cache Warmup
+  # Phase 1: Dependency Validation
   # ===========================================================================
   resolve-deps:
-    name: "Resolve Dependencies"
+    name: "Validate Dependencies"
     runs-on: arc-runner-set-pw
     needs: [changes]
-    timeout-minutes: 120
-    outputs:
-      lake_cache_key: ${{ steps.cache-info.outputs.lake_key }}
-      mathlib_cache_restored: ${{ steps.mathlib-cache.outputs.cache-hit }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: "Install elan & Lean"
-        run: |
-          if ! command -v elan &> /dev/null; then
-            curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
-          fi
-          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-          export PATH="$HOME/.elan/bin:$PATH"
-          TOOLCHAIN=$(cat lean-toolchain | tr -d '[:space:]')
-          elan toolchain install "$TOOLCHAIN" || elan toolchain list | grep -q "$TOOLCHAIN"
-          elan default "$TOOLCHAIN"
-          lean --version
-          lake --version
-
-      # L1+L2: Elan + Lake packages
-      - name: "Restore .lake directory cache"
-        id: lake-cache
-        if: inputs.skip_cache != true
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: |
-            .lake/packages
-            .lake/build
-          key: ${{ needs.changes.outputs.cache_prefix }}-lake-${{ hashFiles('lake-manifest.json', 'lakefile.lean') }}
-          restore-keys: |
-            ${{ needs.changes.outputs.cache_prefix }}-lake-
-
-      # L3: Mathlib oleans (biggest cache layer ~2-4GB)
-      - name: "Restore Mathlib oleans cache"
-        id: mathlib-cache
-        if: inputs.skip_cache != true
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: .lake/packages/mathlib/.lake/build
-          key: mathlib-oleans-${{ needs.changes.outputs.mathlib_rev }}-${{ needs.changes.outputs.lean_toolchain }}
-          restore-keys: |
-            mathlib-oleans-${{ needs.changes.outputs.mathlib_rev }}-
-
-      - name: "Lake update (fetch dependencies)"
-        run: |
-          if [ -d .lake/packages/mathlib ] && [ "${{ steps.lake-cache.outputs.cache-hit }}" = "true" ]; then
-            echo "Lake packages cache hit — skipping lake update"
-          else
-            lake update
-          fi
-
-      - name: "Fetch Mathlib oleans"
-        if: steps.mathlib-cache.outputs.cache-hit != 'true'
-        run: lake exe cache get || echo "::warning::Mathlib cache get failed — will build from source"
 
       - name: "Verify dependency integrity"
         run: |
@@ -279,151 +224,208 @@ jobs:
           print(f"All {len(manifest.get('packages', []))} dependencies verified")
           PYEOF
 
-      - name: "Generate cache info"
-        id: cache-info
-        run: |
-          echo "lake_key=${{ needs.changes.outputs.cache_prefix }}-lake-${{ hashFiles('lake-manifest.json', 'lakefile.lean') }}" >> "$GITHUB_OUTPUT"
-
   # ===========================================================================
-  # Phase 2: Build Library (critical path)
+  # Phase 2: Build, Test & Verify (single workspace, no cross-job build cache)
   # ===========================================================================
   build-lib:
-    name: "Build Library"
+    name: "Build, Test & Verify"
     runs-on: arc-runner-set-pw
     needs: [changes, resolve-deps]
-    timeout-minutes: 90
+    if: >-
+      needs.changes.outputs.any_lean == 'true' ||
+      needs.changes.outputs.build_system == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: "Setup Lean"
+        id: setup-lean
         uses: ./.github/actions/lean-setup
         with:
-          cache-key: ${{ needs.changes.outputs.cache_prefix }}-lake-${{ hashFiles('lake-manifest.json', 'lakefile.lean') }}
-          cache-restore-keys: |
-            ${{ needs.changes.outputs.cache_prefix }}-lake-
+          dependency-cache-key: ${{ needs.changes.outputs.cache_prefix }}-deps-${{ hashFiles('lake-manifest.json', 'lakefile.lean') }}
+          dependency-cache-restore-keys: |
+            ${{ needs.changes.outputs.cache_prefix }}-deps-
+          mathlib-cache-key: mathlib-oleans-${{ needs.changes.outputs.mathlib_rev }}-${{ needs.changes.outputs.lean_toolchain }}
+          mathlib-cache-restore-keys: |
+            mathlib-oleans-${{ needs.changes.outputs.mathlib_rev }}-
+          mathlib-cache: "true"
           skip-cache: ${{ inputs.skip_cache && 'true' || 'false' }}
 
-      - name: "Build: Radix library"
-        run: time lake build Radix 2>&1 | tail -30
-
-      # Save build artifacts for all downstream jobs
-      - name: "Save Radix build cache"
-        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        if: always()
-        with:
-          path: |
-            .lake/packages
-            .lake/build
-          key: ${{ needs.changes.outputs.cache_prefix }}-radix-build-${{ github.sha }}
-
-  # ===========================================================================
-  # Phase 3: Fan-out Builds (maximum parallelism)
-  # ===========================================================================
-  build-tests:
-    name: "Build Tests"
-    runs-on: arc-runner-set-pw
-    needs: [changes, build-lib]
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: "Setup Lean"
-        uses: ./.github/actions/lean-setup
-        with:
-          cache-key: ${{ needs.changes.outputs.cache_prefix }}-radix-build-${{ github.sha }}
-          cache-restore-keys: |
-            ${{ needs.changes.outputs.cache_prefix }}-lake-
-
-      - name: "Build: Unit tests"
-        run: time lake build test 2>&1 | tail -10
-
-      - name: "Build: Property tests"
-        run: time lake build proptest 2>&1 | tail -10
-
-      - name: "Build: Comprehensive tests"
-        run: time lake build comptest 2>&1 | tail -10
-
-      - name: "Save test build cache"
-        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        if: always()
-        with:
-          path: |
-            .lake/packages
-            .lake/build
-          key: ${{ needs.changes.outputs.cache_prefix }}-test-build-${{ github.sha }}
-
-  build-bench:
-    name: "Build Benchmarks"
-    runs-on: arc-runner-set-pw
-    needs: [changes, build-lib]
-    if: >-
-      !cancelled() && needs.build-lib.result == 'success' &&
-      (
-        needs.changes.outputs.benchmarks == 'true' ||
-        needs.changes.outputs.core == 'true' ||
-        needs.changes.outputs.build_system == 'true' ||
-        needs.changes.outputs.ci == 'true' ||
-        github.event_name == 'workflow_dispatch'
-      ) && (
-        needs.changes.outputs.is_main == 'true' ||
-        inputs.force_benchmarks
-      )
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: "Setup Lean"
-        uses: ./.github/actions/lean-setup
-        with:
-          cache-key: ${{ needs.changes.outputs.cache_prefix }}-radix-build-${{ github.sha }}
-          cache-restore-keys: |
-            ${{ needs.changes.outputs.cache_prefix }}-lake-
-
-      - name: "Build: Lean benchmarks"
-        run: time lake build bench 2>&1 | tail -10
-
-      - name: "Build: C baseline benchmarks"
+      - name: "Initialize result flags"
         run: |
-          if [ -f benchmarks/baseline.c ]; then
-            gcc -O2 -march=native -fno-builtin -o benchmarks/baseline benchmarks/baseline.c
-            echo "C baseline compiled with: $(gcc --version | head -1)"
-          fi
+          echo "build_exit=1" >> "$GITHUB_ENV"
+          echo "unit_exit=0" >> "$GITHUB_ENV"
+          echo "prop_exit=0" >> "$GITHUB_ENV"
+          echo "comp_exit=0" >> "$GITHUB_ENV"
+          echo "examples_exit=0" >> "$GITHUB_ENV"
+          echo "sorry_exit=0" >> "$GITHUB_ENV"
 
-      - name: "Save benchmark build cache"
+      - name: "Build: Radix library"
+        continue-on-error: true
+        run: |
+          START=$(date +%s)
+          lake build Radix 2>&1 | tee build-lib-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          DURATION=$(($(date +%s) - START))
+          echo "Duration: ${DURATION}s"
+          echo "build_exit=${EXIT_CODE}" >> "$GITHUB_ENV"
+
+      - name: "Run unit tests"
+        if: env.build_exit == '0'
+        continue-on-error: true
+        run: |
+          START=$(date +%s)
+          lake exe test 2>&1 | tee test-unit-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          DURATION=$(($(date +%s) - START))
+          echo "Duration: ${DURATION}s"
+          echo "unit_exit=${EXIT_CODE}" >> "$GITHUB_ENV"
+
+      - name: "Run property-based tests"
+        if: env.build_exit == '0'
+        continue-on-error: true
+        run: |
+          START=$(date +%s)
+          lake exe proptest 2>&1 | tee test-property-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          DURATION=$(($(date +%s) - START))
+          echo "Duration: ${DURATION}s"
+          echo "prop_exit=${EXIT_CODE}" >> "$GITHUB_ENV"
+
+      - name: "Run comprehensive tests"
+        if: env.build_exit == '0'
+        continue-on-error: true
+        run: |
+          START=$(date +%s)
+          lake exe comptest 2>&1 | tee test-comprehensive-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          DURATION=$(($(date +%s) - START))
+          echo "Duration: ${DURATION}s"
+          echo "comp_exit=${EXIT_CODE}" >> "$GITHUB_ENV"
+
+      - name: "Run examples"
+        if: >-
+          env.build_exit == '0' &&
+          (
+            needs.changes.outputs.core == 'true' ||
+            needs.changes.outputs.examples == 'true' ||
+            needs.changes.outputs.build_system == 'true' ||
+            needs.changes.outputs.ci == 'true' ||
+            github.event_name == 'workflow_dispatch'
+          )
+        continue-on-error: true
+        run: |
+          START=$(date +%s)
+          lake exe examples 2>&1 | tee test-examples-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          DURATION=$(($(date +%s) - START))
+          echo "Duration: ${DURATION}s"
+          echo "examples_exit=${EXIT_CODE}" >> "$GITHUB_ENV"
+
+      - name: "Theorem/lemma census"
+        if: env.build_exit == '0'
+        run: |
+          THEOREMS=$(grep -rn '^theorem\|^  theorem' Radix/ | wc -l)
+          LEMMAS=$(grep -rn '^lemma\|^  lemma' Radix/ | wc -l)
+          INSTANCES=$(grep -rn '^instance\|^  instance' Radix/ | wc -l)
+          DEFS=$(grep -rn '^def\|^  def\|^private def' Radix/ | wc -l)
+          AXIOMS=$(grep -rn '^axiom\|^  axiom' Radix/ | wc -l)
+
+          echo "### Proof Census" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Type | Count |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Theorems | $THEOREMS |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Lemmas | $LEMMAS |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Instances | $INSTANCES |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Definitions | $DEFS |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Axioms | $AXIOMS |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Zero-sorry audit"
+        if: env.build_exit == '0'
+        continue-on-error: true
+        run: |
+          SORRY_COUNT=$(grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/' | wc -l)
+          if [ "$SORRY_COUNT" -gt 0 ]; then
+            echo "::error::Found $SORRY_COUNT 'sorry' in codebase"
+            grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/'
+            echo "sorry_exit=1" >> "$GITHUB_ENV"
+            exit 1
+          fi
+          echo "Zero sorry — all proofs complete"
+          echo "sorry_exit=0" >> "$GITHUB_ENV"
+
+      - name: "Trust assumptions audit"
+        if: env.build_exit == '0'
+        run: |
+          echo "=== Trust Assumptions ==="
+          TRUST_ITEMS=$(grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | grep -v '\.lake/' | wc -l)
+          echo "Trust assumptions: $TRUST_ITEMS"
+          grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | grep -v '\.lake/' || true
+
+          echo "### Trust Audit" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Sorry: 0" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Trust assumptions: $TRUST_ITEMS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Save dependency cache"
+        if: >-
+          always() &&
+          inputs.skip_cache != true &&
+          steps.setup-lean.outputs.dependency-cache-hit != 'true'
         uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        if: always()
         with:
           path: |
             .lake/packages
-            .lake/build
-          key: ${{ needs.changes.outputs.cache_prefix }}-bench-build-${{ github.sha }}
+            !.lake/packages/mathlib/.lake/build
+          key: ${{ needs.changes.outputs.cache_prefix }}-deps-${{ hashFiles('lake-manifest.json', 'lakefile.lean') }}
 
-  build-examples:
-    name: "Build Examples"
-    runs-on: arc-runner-set-pw
-    needs: [changes, build-lib]
-    if: >-
-      !cancelled() && needs.build-lib.result == 'success' &&
-      (
-        needs.changes.outputs.core == 'true' ||
-        needs.changes.outputs.examples == 'true' ||
-        needs.changes.outputs.build_system == 'true' ||
-        needs.changes.outputs.ci == 'true' ||
-        github.event_name == 'workflow_dispatch'
-      )
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: "Setup Lean"
-        uses: ./.github/actions/lean-setup
+      - name: "Save Mathlib oleans cache"
+        if: >-
+          always() &&
+          inputs.skip_cache != true &&
+          steps.setup-lean.outputs.mathlib-cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
-          cache-key: ${{ needs.changes.outputs.cache_prefix }}-radix-build-${{ github.sha }}
-          cache-restore-keys: |
-            ${{ needs.changes.outputs.cache_prefix }}-lake-
+          path: .lake/packages/mathlib/.lake/build
+          key: mathlib-oleans-${{ needs.changes.outputs.mathlib_rev }}-${{ needs.changes.outputs.lean_toolchain }}
 
-      - name: "Build: Examples"
-        run: time lake build examples 2>&1 | tail -10
+      - name: "Upload test results"
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-results-${{ needs.changes.outputs.short_sha }}
+          path: |
+            build-lib-output.txt
+            test-unit-output.txt
+            test-property-output.txt
+            test-comprehensive-output.txt
+            test-examples-output.txt
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: "Assert pass"
+        run: |
+          FAILED=0
+          for pair in \
+            "Build Library:${build_exit:-1}" \
+            "Unit Tests:${unit_exit:-0}" \
+            "Property Tests:${prop_exit:-0}" \
+            "Comprehensive Tests:${comp_exit:-0}" \
+            "Examples:${examples_exit:-0}" \
+            "Zero Sorry:${sorry_exit:-0}"; do
+            NAME=${pair%%:*}
+            CODE=${pair##*:}
+            if [ "$CODE" -ne 0 ]; then
+              echo "::error::${NAME} failed with exit code ${CODE}"
+              FAILED=$((FAILED + 1))
+            fi
+          done
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::${FAILED} verification step(s) failed"
+            exit 1
+          fi
 
   # ===========================================================================
   # Phase 2 (parallel): Lint — No build dependency (instant start)
@@ -607,211 +609,23 @@ jobs:
           if-no-files-found: ignore
 
   # ===========================================================================
-  # Phase 4: Test Execution (maximum parallelism — 3 test suites in parallel)
-  # ===========================================================================
-  test-unit:
-    name: "Unit Tests"
-    runs-on: arc-runner-set-pw
-    needs: [changes, build-tests]
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: "Setup Lean"
-        uses: ./.github/actions/lean-setup
-        with:
-          cache-key: ${{ needs.changes.outputs.cache_prefix }}-test-build-${{ github.sha }}
-          cache-restore-keys: |
-            ${{ needs.changes.outputs.cache_prefix }}-radix-build-${{ github.sha }}
-
-      - name: "Run unit tests"
-        run: |
-          START=$(date +%s)
-          lake exe test 2>&1 | tee test-unit-output.txt
-          EXIT_CODE=${PIPESTATUS[0]}
-          DURATION=$(($(date +%s) - START))
-          echo "Duration: ${DURATION}s"
-          echo "unit_exit=${EXIT_CODE}" >> "$GITHUB_ENV"
-
-      - name: "Upload results"
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: test-unit-${{ needs.changes.outputs.short_sha }}
-          path: test-unit-output.txt
-          retention-days: 30
-
-      - name: "Assert pass"
-        run: exit ${unit_exit:-1}
-
-  test-property:
-    name: "Property Tests"
-    runs-on: arc-runner-set-pw
-    needs: [changes, build-tests]
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: "Setup Lean"
-        uses: ./.github/actions/lean-setup
-        with:
-          cache-key: ${{ needs.changes.outputs.cache_prefix }}-test-build-${{ github.sha }}
-          cache-restore-keys: |
-            ${{ needs.changes.outputs.cache_prefix }}-radix-build-${{ github.sha }}
-
-      - name: "Run property-based tests"
-        run: |
-          START=$(date +%s)
-          lake exe proptest 2>&1 | tee test-property-output.txt
-          EXIT_CODE=${PIPESTATUS[0]}
-          DURATION=$(($(date +%s) - START))
-          echo "Duration: ${DURATION}s"
-          echo "prop_exit=${EXIT_CODE}" >> "$GITHUB_ENV"
-
-      - name: "Upload results"
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: test-property-${{ needs.changes.outputs.short_sha }}
-          path: test-property-output.txt
-          retention-days: 30
-
-      - name: "Assert pass"
-        run: exit ${prop_exit:-1}
-
-  test-comprehensive:
-    name: "Comprehensive Tests"
-    runs-on: arc-runner-set-pw
-    needs: [changes, build-tests]
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: "Setup Lean"
-        uses: ./.github/actions/lean-setup
-        with:
-          cache-key: ${{ needs.changes.outputs.cache_prefix }}-test-build-${{ github.sha }}
-          cache-restore-keys: |
-            ${{ needs.changes.outputs.cache_prefix }}-radix-build-${{ github.sha }}
-
-      - name: "Run comprehensive tests"
-        run: |
-          START=$(date +%s)
-          lake exe comptest 2>&1 | tee test-comprehensive-output.txt
-          EXIT_CODE=${PIPESTATUS[0]}
-          DURATION=$(($(date +%s) - START))
-          echo "Duration: ${DURATION}s"
-          echo "comp_exit=${EXIT_CODE}" >> "$GITHUB_ENV"
-
-      - name: "Upload results"
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: test-comprehensive-${{ needs.changes.outputs.short_sha }}
-          path: test-comprehensive-output.txt
-          retention-days: 30
-
-      - name: "Assert pass"
-        run: exit ${comp_exit:-1}
-
-  test-examples:
-    name: "Examples"
-    runs-on: arc-runner-set-pw
-    needs: [changes, build-examples]
-    if: >-
-      !cancelled() && needs.build-examples.result == 'success'
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: "Setup Lean"
-        uses: ./.github/actions/lean-setup
-        with:
-          cache-key: ${{ needs.changes.outputs.cache_prefix }}-radix-build-${{ github.sha }}
-          cache-restore-keys: |
-            ${{ needs.changes.outputs.cache_prefix }}-lake-
-
-      - name: "Run examples"
-        run: lake exe examples
-
-  # ===========================================================================
-  # Phase 4 (parallel): Proof Verification — Trust Boundary Enforcement
-  # ===========================================================================
-  verify-proofs:
-    name: "Verify Proofs"
-    runs-on: arc-runner-set-pw
-    needs: [changes, build-lib]
-    if: >-
-      !cancelled() && needs.build-lib.result == 'success' &&
-      (
-        needs.changes.outputs.core == 'true' ||
-        needs.changes.outputs.build_system == 'true' ||
-        needs.changes.outputs.ci == 'true' ||
-        github.event_name == 'workflow_dispatch'
-      )
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: "Setup Lean"
-        uses: ./.github/actions/lean-setup
-        with:
-          cache-key: ${{ needs.changes.outputs.cache_prefix }}-radix-build-${{ github.sha }}
-          cache-restore-keys: |
-            ${{ needs.changes.outputs.cache_prefix }}-lake-
-
-      - name: "Verify all proofs type-check"
-        run: |
-          echo "=== Proof Verification ==="
-          time lake build Radix 2>&1 | tail -20
-          echo "=== All proofs verified ==="
-
-      - name: "Theorem/lemma census"
-        run: |
-          THEOREMS=$(grep -rn '^theorem\|^  theorem' Radix/ | wc -l)
-          LEMMAS=$(grep -rn '^lemma\|^  lemma' Radix/ | wc -l)
-          INSTANCES=$(grep -rn '^instance\|^  instance' Radix/ | wc -l)
-          DEFS=$(grep -rn '^def\|^  def\|^private def' Radix/ | wc -l)
-          AXIOMS=$(grep -rn '^axiom\|^  axiom' Radix/ | wc -l)
-
-          echo "### Proof Census" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Type | Count |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|-------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Theorems | $THEOREMS |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Lemmas | $LEMMAS |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Instances | $INSTANCES |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Definitions | $DEFS |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Axioms | $AXIOMS |" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: "Zero-sorry audit"
-        run: |
-          SORRY_COUNT=$(grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/' | wc -l)
-          if [ "$SORRY_COUNT" -gt 0 ]; then
-            echo "::error::Found $SORRY_COUNT 'sorry' in codebase"
-            grep -rn '\bsorry\b' Radix/ | grep -v '\.lake/'
-            exit 1
-          fi
-          echo "Zero sorry — all proofs complete"
-
-      - name: "Trust assumptions audit"
-        run: |
-          echo "=== Trust Assumptions ==="
-          TRUST_ITEMS=$(grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | grep -v '\.lake/' | wc -l)
-          echo "Trust assumptions: $TRUST_ITEMS"
-          grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | grep -v '\.lake/' || true
-
-          echo "### Trust Audit" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Sorry: 0" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Trust assumptions: $TRUST_ITEMS" >> "$GITHUB_STEP_SUMMARY"
-
-  # ===========================================================================
   # Phase 5: Benchmarks (main branch + manual dispatch only)
   # ===========================================================================
   benchmarks:
     name: "Benchmarks"
     runs-on: arc-runner-set-pw
-    needs: [changes, build-bench]
+    needs: [changes, resolve-deps]
+    if: >-
+      !cancelled() && (
+        needs.changes.outputs.benchmarks == 'true' ||
+        needs.changes.outputs.core == 'true' ||
+        needs.changes.outputs.build_system == 'true' ||
+        needs.changes.outputs.ci == 'true' ||
+        github.event_name == 'workflow_dispatch'
+      ) && (
+        needs.changes.outputs.is_main == 'true' ||
+        inputs.force_benchmarks
+      )
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -819,9 +633,14 @@ jobs:
       - name: "Setup Lean"
         uses: ./.github/actions/lean-setup
         with:
-          cache-key: ${{ needs.changes.outputs.cache_prefix }}-bench-build-${{ github.sha }}
-          cache-restore-keys: |
-            ${{ needs.changes.outputs.cache_prefix }}-radix-build-${{ github.sha }}
+          dependency-cache-key: ${{ needs.changes.outputs.cache_prefix }}-deps-${{ hashFiles('lake-manifest.json', 'lakefile.lean') }}
+          dependency-cache-restore-keys: |
+            ${{ needs.changes.outputs.cache_prefix }}-deps-
+          mathlib-cache-key: mathlib-oleans-${{ needs.changes.outputs.mathlib_rev }}-${{ needs.changes.outputs.lean_toolchain }}
+          mathlib-cache-restore-keys: |
+            mathlib-oleans-${{ needs.changes.outputs.mathlib_rev }}-
+          mathlib-cache: "true"
+          skip-cache: ${{ inputs.skip_cache && 'true' || 'false' }}
 
       - name: "System info"
         run: |
@@ -882,16 +701,8 @@ jobs:
       - changes
       - resolve-deps
       - build-lib
-      - build-tests
-      - build-bench
-      - build-examples
       - lint
       - security-scan
-      - test-unit
-      - test-property
-      - test-comprehensive
-      - test-examples
-      - verify-proofs
       - benchmarks
     if: always()
     timeout-minutes: 5
@@ -902,18 +713,10 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Phase | Job | Status |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Prepare | Resolve Dependencies | \`${{ needs.resolve-deps.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Build | Library | \`${{ needs.build-lib.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Build | Tests | \`${{ needs.build-tests.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Build | Benchmarks | \`${{ needs.build-bench.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Build | Examples | \`${{ needs.build-examples.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Prepare | Validate Dependencies | \`${{ needs.resolve-deps.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Validate | Build, Test & Verify | \`${{ needs.build-lib.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Validate | Lint | \`${{ needs.lint.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Security | Scan | \`${{ needs.security-scan.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Test | Unit | \`${{ needs.test-unit.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Test | Property | \`${{ needs.test-property.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Test | Comprehensive | \`${{ needs.test-comprehensive.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Test | Examples | \`${{ needs.test-examples.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Verify | Proofs | \`${{ needs.verify-proofs.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Perf | Benchmarks | \`${{ needs.benchmarks.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**Commit:** \`${{ github.sha }}\` | **Actor:** ${{ github.actor }} | **Event:** ${{ github.event_name }}" >> "$GITHUB_STEP_SUMMARY"
@@ -925,19 +728,11 @@ jobs:
             "${{ needs.build-lib.result }}"
             "${{ needs.lint.result }}"
             "${{ needs.security-scan.result }}"
-            "${{ needs.test-unit.result }}"
-            "${{ needs.test-property.result }}"
-            "${{ needs.test-comprehensive.result }}"
-            "${{ needs.verify-proofs.result }}"
           )
           JOB_NAMES=(
-            "Build Library"
+            "Build, Test & Verify"
             "Lint & Validate"
             "Security Scan"
-            "Unit Tests"
-            "Property Tests"
-            "Comprehensive Tests"
-            "Proof Verification"
           )
           for i in "${!CRITICAL_JOBS[@]}"; do
             RESULT="${CRITICAL_JOBS[$i]}"

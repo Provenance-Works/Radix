@@ -6,7 +6,7 @@
 
 アーキテクチャ決定記録（ADR）は、Radix開発中に行われた重要なアーキテクチャ上の決定を記録します。各ADRは、コンテキスト、決定そのもの、検討した代替案、結果を文書化します。
 
-ADRの正式なソースファイルは [`spec/adr/`](../../../spec/adr/) で管理されています。
+この文書が、現在のリポジトリにおける正式な ADR 一覧です。
 
 ## ADR一覧
 
@@ -61,7 +61,7 @@ graph TD
 
 **結果:** 管理するファイルは増えるが、TCBの明確な監査証跡（`@[extern]` + `trust_*` 公理を検査）。
 
-> **ソース:** [`spec/adr/0001-three-layer-architecture.md`](../../../spec/adr/0001-three-layer-architecture.md)
+> **正式な所在:** この文書。
 
 ---
 
@@ -100,7 +100,7 @@ graph LR
 - Radix型は `BitVec` 等価性の証明を伴う
 - ユーザーは Mathlib の補題が直接必要な場合に `BitVec` に落とせる
 
-> **ソース:** [`spec/adr/0002-build-on-mathlib-bitvec.md`](../../../spec/adr/0002-build-on-mathlib-bitvec.md)
+> **正式な所在:** この文書。
 
 ---
 
@@ -133,13 +133,13 @@ structure Int32 where
 - 符号付き/符号なし間のキャストは無料（同じビット、異なる解釈）
 - 符号依存操作（比較、除算、算術右シフト）には個別の実装と証明が必要
 
-> **ソース:** [`spec/adr/0003-signed-integers-twos-complement.md`](../../../spec/adr/0003-signed-integers-twos-complement.md)
+> **正式な所在:** この文書。
 
 ---
 
 ## テンプレート
 
-新規ADRには [`spec/adr/template.md`](../../../spec/adr/template.md) のテンプレートを使用。
+新規 ADR は既存の構成に従ってこの文書へ追加してください。
 
 ## 関連ドキュメント
 

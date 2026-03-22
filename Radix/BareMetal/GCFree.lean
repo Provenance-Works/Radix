@@ -43,14 +43,19 @@ inductive Lifetime where
   | arena
   /-- Value is a compile-time constant (no runtime allocation). -/
   | compileTime
+  /-- Value lives on the GC/RC-managed heap (unbounded dynamic lifetime). -/
+  | heap
   deriving DecidableEq, Repr
 
-/-- Whether a lifetime is bounded (known at compile time). -/
+/-- Whether a lifetime is bounded (known at compile time).
+    Heap lifetimes are not bounded — their deallocation depends on
+    runtime reference counting or garbage collection. -/
 def Lifetime.isBounded : Lifetime → Bool
   | .static      => true
   | .stack        => true
   | .arena        => true
   | .compileTime  => true
+  | .heap         => false
 
 /-! ## Forbidden Patterns -/
 

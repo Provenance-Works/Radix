@@ -4,23 +4,28 @@
 
 ## コンポーネント概要
 
-Radixは8つのモジュールで構成され、それぞれがシステムプログラミングのプリミティブを提供します。全モジュールが3層アーキテクチャ（仕様 → 実装 → ブリッジ）に従います。
+Radixは13個のモジュールで構成され、それぞれがシステムプログラミングのプリミティブを提供します。全モジュールが3層アーキテクチャ（仕様 → 実装 → ブリッジ）に従い、v0.2.0 では既存基盤の上に数値型クラス、アライメント、リングバッファ、ビットマップ、CRC、メモリプールが追加されました。
 
 ```mermaid
 graph TD
-    subgraph "純粋モジュール（Layer 2-3 のみ）"
-        Word["Word<br/>固定幅整数<br/>10型、5算術モード"]
-        Bit["Bit<br/>ビット演算<br/>AND/OR/XOR/NOT、シフト、回転、走査"]
-        Bytes["Bytes<br/>バイトオーダー<br/>エンディアン、bswap、ByteSlice"]
+    subgraph "コア純粋モジュール"
+        Word["Word<br/>10整数型<br/>5算術モード + Numeric"]
+        Bit["Bit<br/>ビット演算<br/>走査 + フィールド"]
+        Bytes["Bytes<br/>バイトオーダー<br/>ByteSlice"]
         Memory["Memory<br/>抽象メモリ<br/>Buffer、Ptr、Layout"]
         Binary["Binary<br/>フォーマットDSL<br/>パーサー、シリアライザー、LEB128"]
     end
-    subgraph "副作用モジュール（Layer 1-3）"
-        System["System<br/>OSインターフェース<br/>ファイルI/O、Error、FD"]
+    subgraph "v0.2.0 純粋モジュール"
+        Alignment["Alignment<br/>アライメント計算<br/>2の冪高速パス"]
+        RingBuffer["RingBuffer<br/>固定容量FIFO<br/>Bufferベース"]
+        Bitmap["Bitmap<br/>高密度ビット集合<br/>ワード単位演算"]
+        CRC["CRC<br/>CRC-32 / CRC-16<br/>ストリーミング API"]
+        MemoryPool["MemoryPool<br/>bump + slab アロケータ<br/>純粋モデル"]
     end
-    subgraph "モデルモジュール（Layer 1-3）"
+    subgraph "ブリッジ / モデルモジュール"
+        System["System<br/>OSインターフェース<br/>ファイルI/O、Error、FD"]
         Concurrency["Concurrency<br/>アトミック操作モデル<br/>C11メモリオーダリング"]
-        BareMetal["BareMetal<br/>OS無しサポート<br/>リンカー、スタートアップ、GCFree"]
+        BareMetal["BareMetal<br/>プラットフォームモデル<br/>リンカー、スタートアップ、GCFree"]
     end
     Bit --> Word
     Bytes --> Word
@@ -31,14 +36,29 @@ graph TD
     Binary --> Memory
     Binary --> Bit
     Binary --> Bytes
+    Alignment --> Word
+    RingBuffer --> Memory
+    Bitmap --> Word
+    Bitmap --> Bit
+    CRC --> Word
+    CRC --> Bit
+    MemoryPool --> Memory
+    MemoryPool --> Word
     System --> Word
     System --> Bytes
     System --> Memory
+    Concurrency -.-> Word
+    BareMetal -.-> Memory
     style Word fill:#4CAF50,color:white
     style Bit fill:#66BB6A,color:white
     style Bytes fill:#42A5F5,color:white
     style Memory fill:#29B6F6,color:white
     style Binary fill:#26C6DA,color:white
+    style Alignment fill:#66BB6A,color:white
+    style RingBuffer fill:#29B6F6,color:white
+    style Bitmap fill:#26C6DA,color:white
+    style CRC fill:#26C6DA,color:white
+    style MemoryPool fill:#29B6F6,color:white
     style System fill:#FFA726,color:white
     style Concurrency fill:#AB47BC,color:white
     style BareMetal fill:#8D6E63,color:white
@@ -134,6 +154,46 @@ graph TD
 | `BareMetal.Startup` | 2 | `StartupAction`、最小/完全スタートアップアクション、バリデーション |
 | `BareMetal.Lemmas` | 3 | 領域分離性、メモリマップ、アライメント、スタートアップの証明 |
 | `BareMetal.Assumptions` | 1 | `trust_reset_entry`、`trust_bss_zeroed` 等 |
+
+### Alignment — アライメントユーティリティ
+
+| サブモジュール | レイヤー | 説明 |
+|-----------|-------|-------------|
+| `Alignment.Spec` | 3 | 数学的なアライメント仕様と 2 の冪ルール |
+| `Alignment.Ops` | 2 | `alignUp`、`alignDown`、`isAligned`、`alignPadding`、高速パス |
+| `Alignment.Lemmas` | 3 | 挟み込み境界、ラウンドトリップ、仕様一致の証明 |
+
+### RingBuffer — 固定容量リングキュー
+
+| サブモジュール | レイヤー | 説明 |
+|-----------|-------|-------------|
+| `RingBuffer.Spec` | 3 | FIFO キュー状態モデルと不変条件 |
+| `RingBuffer.Impl` | 2 | `push`、`pop`、`peek`、`pushForce`、バッチ操作 |
+| `RingBuffer.Lemmas` | 3 | 容量保存、FIFO 順序、不変条件保持の証明 |
+
+### Bitmap — 高密度ビット配列
+
+| サブモジュール | レイヤー | 説明 |
+|-----------|-------|-------------|
+| `Bitmap.Spec` | 3 | 抽象ビット集合モデルと末尾ワード不変条件 |
+| `Bitmap.Ops` | 2 | ビット更新、集合演算、popcount、探索操作 |
+| `Bitmap.Lemmas` | 3 | ブール代数性質と不変条件保持の証明 |
+
+### CRC — チェックサムアルゴリズム
+
+| サブモジュール | レイヤー | 説明 |
+|-----------|-------|-------------|
+| `CRC.Spec` | 3 | CRC-32 / CRC-16 の GF(2) 多項式モデル |
+| `CRC.Ops` | 2 | テーブル駆動 CRC 実装とストリーミング API |
+| `CRC.Lemmas` | 3 | ストリーミング一貫性と代数的正しさの証明 |
+
+### MemoryPool — アロケータモデル
+
+| サブモジュール | レイヤー | 説明 |
+|-----------|-------|-------------|
+| `MemoryPool.Spec` | 3 | Bump/slab アロケータ状態モデルと安全不変条件 |
+| `MemoryPool.Model` | 2 | `Memory.Buffer` を用いる純粋アロケータモデル |
+| `MemoryPool.Lemmas` | 3 | 容量追跡、リセット正しさ、二重解放防止の証明 |
 
 ## 関連ドキュメント
 
