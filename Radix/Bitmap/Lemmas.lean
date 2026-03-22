@@ -149,6 +149,12 @@ theorem difference_numBits (a b : Bitmap) (h : a.numBits = b.numBits) :
 The abstract specification has complete set/clear round-trip proofs.
 These are proven purely at the mathematical level (function manipulation). -/
 
+/-- (Concrete) All bits in a freshly created zeros bitmap test as false.
+    This confirms the last-word-clean invariant: even in-range bits are properly zero. -/
+theorem zeros_test (n : Nat) (idx : Nat) :
+    (Bitmap.zeros n).test idx = false := by
+  simp [Bitmap.test, Bitmap.zeros]
+
 /-- (Spec) Set then test at the same index returns true. -/
 theorem spec_set_test_eq (bm : Spec.BitmapState) (idx : Nat) (h : idx < bm.size) :
     (bm.set idx).test idx = true :=

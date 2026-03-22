@@ -44,7 +44,14 @@ namespace Radix.Bitmap
   (n + bitsPerWord - 1) / bitsPerWord
 
 /-- Dense bitmap backed by an array of UInt64 words.
-    Stores `numBits` bits in ⌈numBits/64⌉ words. -/
+    Stores `numBits` bits in ⌈numBits/64⌉ words.
+
+    **Internal invariant**: Bits beyond `numBits` in the last word are kept at zero.
+    This is maintained by all constructors (`zeros` fills with 0, `ones` masks the
+    last word) and single-bit operations (`set`/`clear`/`toggle` are no-ops for
+    out-of-range indices). The invariant ensures that `popcount` correctly counts
+    only valid bits. The `test` function independently returns `false` for
+    out-of-range indices regardless of the invariant (see `test_out_of_bounds`). -/
 structure Bitmap where
   /-- Total number of bits in the bitmap. -/
   numBits : Nat
