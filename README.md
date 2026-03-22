@@ -7,7 +7,7 @@
 [![CI](https://github.com/provenance-works/radix/actions/workflows/ci.yml/badge.svg)](https://github.com/provenance-works/radix/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Lean](https://img.shields.io/badge/Lean-4.29.0--rc4-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PHRleHQgeD0iMCIgeT0iMjAiIGZvbnQtc2l6ZT0iMjAiPkw8L3RleHQ+PC9zdmc+)](https://lean-lang.org/)
-[![v0.2.0](https://img.shields.io/badge/version-0.2.0-green.svg)](CHANGELOG.md)
+[![v0.2.1](https://img.shields.io/badge/version-0.2.1-green.svg)](CHANGELOG.md)
 [![Theorems](https://img.shields.io/badge/theorems-1062%2B-brightgreen.svg)](#verification-status)
 [![sorry-free](https://img.shields.io/badge/sorry-free-%E2%9C%93-brightgreen.svg)](#verification-status)
 
@@ -93,7 +93,7 @@ Add Radix to your `lakefile.lean`:
 
 ```lean
 require radix from git
-  "https://github.com/provenance-works/radix" @ "v0.2.0"
+  "https://github.com/provenance-works/radix" @ "v0.2.1"
 ```
 
 Then fetch dependencies:
@@ -193,7 +193,7 @@ lake exe bench
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap.
 
-- **v0.2.0** (current) "Bedrock" — 1062+ theorems, 13 modules, ring buffers, bitmaps, CRC, numeric typeclasses, memory pools, alignment
+- **v0.2.1** (current) "Bedrock" — 1062+ theorems, 13 modules, ring buffers, bitmaps, CRC, numeric typeclasses, memory pools, alignment
 - **v0.3.0** "Composable" — UTF-8, error correction, DMA, region algebra, timers
 
 ## Contributing
