@@ -6,7 +6,7 @@
 # =============================================================================
 
 .DEFAULT_GOAL := help
-.PHONY: help build test proptest examples bench lint clean check setup fmt sorry-check
+.PHONY: help build build-baseline build-ffi test proptest examples bench lint clean check setup fmt sorry-check
 
 # ---------------------------------------------------------------------------
 # Help
@@ -36,8 +36,16 @@ setup: ## Install dependencies and fetch Mathlib cache
 build: ## Build the entire library
 	lake build
 
-build-ffi: ## Build only the FFI C library
-	lake build radixffi
+build-baseline: ## Build the C benchmark baseline
+	@if printf 'int main(void){return 0;}\n' | gcc -x c - -o /tmp/radix-gcc-check >/dev/null 2>&1; then \
+		rm -f /tmp/radix-gcc-check; \
+		gcc -O2 -fno-builtin -o benchmarks/baseline benchmarks/baseline.c; \
+	else \
+		echo "Skipping baseline build: a working GCC toolchain is not available"; \
+	fi
+
+build-ffi: build-baseline ## Deprecated alias for the C benchmark baseline
+	@echo "build-ffi is deprecated; use build-baseline"
 
 # ---------------------------------------------------------------------------
 # Test

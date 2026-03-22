@@ -562,8 +562,8 @@ private def exampleConcurrency : IO Unit :=
   IO.println s!"    SeqCst strength:  {MemoryOrder.seqCst.strength}"
 
   -- Ordering classification
-  IO.println "  SeqCst has acquire: {hasAcquireSemantics .seqCst}"
-  IO.println "  SeqCst has release: {hasReleaseSemantics .seqCst}"
+  IO.println s!"  SeqCst has acquire: {hasAcquireSemantics .seqCst}"
+  IO.println s!"  SeqCst has release: {hasReleaseSemantics .seqCst}"
 
   -- Atomic cell: load, store, CAS
   IO.println "  Atomic Operations:"
