@@ -182,7 +182,11 @@ def alloc (pool : SlabPool) : Option (Nat × Nat × SlabPool) :=
         freeList := rest
         allocated := blockIdx :: pool.allocated })
 
-/-- Free a block by its index. Returns `none` on double-free attempt. -/
+/-- Free a block by its index. Returns `none` on double-free attempt.
+    Note: This specification model uses `List.contains` and `List.filter` which are O(n)
+    in the number of allocated blocks. A real implementation would use a bitmap or hash set
+    for O(1) free operations. The pure-functional list representation is chosen for
+    ease of formal verification. -/
 def free (pool : SlabPool) (blockIdx : Nat) : Option SlabPool :=
   if pool.allocated.contains blockIdx then
     some
