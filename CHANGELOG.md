@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### v0.3.0 Composable Modules
+- Added `Radix.UTF8` with a verified UTF-8 scalar model, executable encoding/decoding helpers, well-formedness checks, and round-trip proofs.
+- Added `Radix.ECC` with Hamming(7,4) codewords, parity helpers, syndrome computation, and single-bit correction proofs.
+- Added `Radix.DMA` with source/destination region descriptors, coherence and atomicity constraints, and a checked DMA copy simulator.
+- Added region algebra to `Radix.Memory.Spec.Region`: `intersects`, `adjacent`, `mergeable`, `span`, `intersection`, `union?`, and `difference`, with supporting lemmas.
+- Added `Radix.Timer` with monotonic clocks, deadlines, elapsed-time helpers, and expiry proofs.
+- Added `Radix.ProofAutomation` with `radix_decide` and `radix_omega` tactic macros for common Radix proof patterns.
+
+#### Tests, Examples, and Documentation
+- Added execution, comprehensive, and property tests covering all v0.3.0 modules and the new memory region algebra surface.
+- Added six new runnable examples: UTF-8, ECC, DMA, region algebra, timer, and proof automation.
+- Added English and Japanese API reference coverage for the v0.3.0 modules and updated development docs for the expanded module set.
+
 ## [0.2.1] - 2026-03-22
 
 ### Changed

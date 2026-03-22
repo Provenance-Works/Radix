@@ -1,0 +1,84 @@
+# DMA モジュール APIリファレンス
+
+> **モジュール**: `Radix.DMA`
+> **ソース**: `Radix/DMA/`
+
+## 概要
+
+DMA 転送を source / destination メモリ領域間の関係としてモデル化します。メモリ順序、キャッシュコヒーレンス、転送 atomicity でパラメータ化され、実行層では descriptor の検証と `ByteArray` 上のコピーシミュレーションを提供します。
+
+## 仕様 (`DMA.Spec`)
+
+```lean
+inductive Coherence where
+  | coherent
+  | nonCoherent
+
+inductive Atomicity where
+  | whole
+  | burst (bytes : Nat)
+
+structure Descriptor where
+  source : Radix.Memory.Spec.Region
+  destination : Radix.Memory.Spec.Region
+  order : Radix.Concurrency.Spec.MemoryOrder
+  coherence : Coherence
+  atomicity : Atomicity
+
+def fenceOrderSufficient (d : Descriptor) : Prop
+def atomicityValid (d : Descriptor) : Prop
+def Descriptor.valid (d : Descriptor) : Prop
+def Descriptor.bytesMoved (d : Descriptor) : Nat
+def Descriptor.stepCount (d : Descriptor) : Nat
+```
+
+### 妥当性ルール
+
+- source / destination は等しい正のサイズでなければなりません。
+- 2 領域は互いに disjoint である必要があります。
+- burst atomicity は正の chunk size で、かつ領域サイズ以下である必要があります。
+- non-coherent 転送では `seqCst` ordering が必要です。
+
+## 操作 (`DMA.Ops`)
+
+```lean
+abbrev Descriptor := Spec.Descriptor
+abbrev Coherence := Spec.Coherence
+abbrev Atomicity := Spec.Atomicity
+
+def isValid (d : Descriptor) : Bool
+def bytesMoved (d : Descriptor) : Nat
+def stepCount (d : Descriptor) : Nat
+def simulateCopy (src dst : ByteArray) (d : Descriptor) : Option ByteArray
+```
+
+### シミュレーションの注意点
+
+- `simulateCopy` は destination buffer のサイズを保存します。
+- descriptor が不正、または領域が out-of-bounds の場合は失敗します。
+- `stepCount` はバイト数ではなく visibility step 数です。
+
+## 証明 (`DMA.Lemmas`)
+
+- `isValid_iff_valid`: Bool の妥当性判定が仕様 predicate と一致
+- `bytesMoved_pos`: 妥当な descriptor は常に正のバイト数を移動する
+- `stepCount_pos`: 妥当な descriptor は少なくとも 1 つの visibility step を持つ
+
+## 使用例
+
+```lean
+import Radix.DMA
+
+def descriptor : Radix.DMA.Descriptor :=
+  { source := { start := 0, size := 4 }
+  , destination := { start := 8, size := 4 }
+  , order := .seqCst
+  , coherence := .nonCoherent
+  , atomicity := .burst 2
+  }
+```
+
+## 関連ドキュメント
+
+- [Memory](memory.md) — descriptor 検証で再利用される領域演算
+- [Concurrency](concurrency.md) — fence requirement に使うメモリ順序モデル

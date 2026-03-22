@@ -8,10 +8,10 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Lean](https://img.shields.io/badge/Lean-4.29.0--rc4-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PHRleHQgeD0iMCIgeT0iMjAiIGZvbnQtc2l6ZT0iMjAiPkw8L3RleHQ+PC9zdmc+)](https://lean-lang.org/)
 [![v0.2.1](https://img.shields.io/badge/version-0.2.1-green.svg)](CHANGELOG.md)
-[![Theorems](https://img.shields.io/badge/theorems-1062%2B-brightgreen.svg)](#verification-status)
+[![Theorems](https://img.shields.io/badge/theorems-1089%2B-brightgreen.svg)](#verification-status)
 [![sorry-free](https://img.shields.io/badge/sorry-free-%E2%9C%93-brightgreen.svg)](#verification-status)
 
-*1062+ verified theorems. Zero `sorry`. Proofs erase at runtime.*
+*1089+ verified theorems. Zero `sorry`. Proofs erase at runtime.*
 
 [Documentation](docs/en/README.md) · [Quick Start](#quick-start) · [Examples](examples/) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
@@ -50,6 +50,11 @@ Radix eliminates this trade-off:
 | **Bitmap** | Dense bit-array (UInt64-backed), set operations, popcount, find-first | 33 |
 | **CRC** | Table-driven CRC-32/CRC-16, GF(2) polynomial spec, streaming API | 10 |
 | **MemoryPool** | Bump allocator, slab allocator, no-double-free/capacity-tracking proofs | 36 |
+| **UTF8** | Verified Unicode scalar model, UTF-8 encoding/decoding, well-formedness checks | 5 |
+| **ECC** | Hamming(7,4) parity model, syndrome computation, single-bit correction | 4 |
+| **DMA** | Region-based DMA descriptors with coherence and atomicity validation | 4 |
+| **Timer** | Monotonic clocks, deadlines, timeout helpers, expiry proofs | 6 |
+| **ProofAutomation** | Reusable tactic macros for arithmetic and decision procedures | 0 |
 
 ### Architecture
 
@@ -59,7 +64,8 @@ Radix eliminates this trade-off:
 │  (crypto, networking, ISA, file systems, ...)   │
 ├─────────────────────────────────────────────────┤
 │  Radix — Verified Low-Level Primitives          │
-│  Word │ Bit │ Bytes │ Memory │ Binary │ System  │
+│  Word │ Bit │ Bytes │ Memory │ Binary │ UTF8    │
+│  ECC │ DMA │ Timer │ ProofAutomation │ System   │
 │  Concurrency │ BareMetal │ Alignment │ Bitmap   │
 │  RingBuffer │ CRC │ MemoryPool                  │
 ├─────────────────────────────────────────────────┤
@@ -77,7 +83,7 @@ Every module follows a three-layer design:
 | **Impl** | Computable Lean 4 code with correctness proofs | `Word.UInt`, `Bit.Ops` |
 | **Bridge** | System-level wrappers with named trust assumptions | `System.IO`, `BareMetal.Assumptions` |
 
-Ten modules are fully executable and self-contained in pure Lean. `System`, `Concurrency`, and `BareMetal` deliberately cross the trusted boundary: they formalize external OS or hardware behavior via named assumptions, and `BareMetal` is a verification model rather than a device-runtime implementation.
+Fifteen modules are fully executable and self-contained in pure Lean. `System`, `Concurrency`, and `BareMetal` deliberately cross the trusted boundary: they formalize external OS or hardware behavior via named assumptions, and `BareMetal` is a verification model rather than a device-runtime implementation.
 
 ## Quick Start
 
@@ -148,13 +154,13 @@ def packetFormat : Radix.Binary.Format :=
 -- Serialize structured data back to bytes
 ```
 
-See [examples/](examples/) for 15 complete, runnable examples covering all modules.
+See [examples/](examples/) for 21 complete, runnable examples covering the core and composable modules.
 
 ## Verification Status
 
 | Metric | Status |
 |--------|--------|
-| Total theorems | 1062+ |
+| Total theorems | 1089+ |
 | `sorry` statements | **0** |
 | Proof-to-code ratio | ~0.9:1 |
 | Trusted computing base | Lean 4 kernel + Mathlib + named `trust_*` axioms |
@@ -167,7 +173,7 @@ All proofs are machine-checked by the Lean 4 kernel. The `trust_*` axioms are li
 # Build the library
 lake build
 
-# Run unit tests (all 13 modules)
+# Run unit tests (all 18 modules)
 lake exe test
 
 # Run property-based tests (500 iterations, LCG PRNG)
@@ -187,14 +193,14 @@ lake exe bench
 - **[Architecture](docs/en/architecture/)** — Three-layer design, module dependencies, data flow
 - **[API Reference](docs/en/reference/api/)** — Per-module API documentation
 - **[Design Decisions](docs/en/design/adr.md)** — Architecture Decision Records
-- **[Examples](examples/)** — 15 runnable examples
+- **[Examples](examples/)** — 21 runnable examples
 
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap.
 
-- **v0.2.1** (current) "Bedrock" — 1062+ theorems, 13 modules, ring buffers, bitmaps, CRC, numeric typeclasses, memory pools, alignment
-- **v0.3.0** "Composable" — UTF-8, error correction, DMA, region algebra, timers
+- **v0.2.1** (latest release) "Bedrock" — 1062+ theorems, 13 modules, ring buffers, bitmaps, CRC, numeric typeclasses, memory pools, alignment
+- **v0.3.0** (in progress) "Composable" — UTF-8, error correction, DMA, region algebra, timers, proof automation
 
 ## Contributing
 

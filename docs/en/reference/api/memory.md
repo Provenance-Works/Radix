@@ -5,7 +5,7 @@
 
 ## Overview
 
-Provides an abstract memory model built on Lean 4's `ByteArray`. Includes proof-carrying buffers, pointer abstractions, and packed struct layout computation. All operations are GC-friendly — no manual memory management.
+Provides an abstract memory model built on Lean 4's `ByteArray`. Includes proof-carrying buffers, pointer abstractions, packed struct layout computation, and interval-style region algebra for memory-map reasoning. All operations are GC-friendly — no manual memory management.
 
 ## Buffer (`Memory.Model`)
 
@@ -103,15 +103,31 @@ structure Region where
   size : Nat
 
 def Region.endOffset (r : Region) : Nat
+def Region.intersects (a b : Region) : Prop
 def Region.disjoint (a b : Region) : Prop
-def Region.contains (r : Region) (addr : Nat) : Prop
+def Region.adjacent (a b : Region) : Prop
+def Region.mergeable (a b : Region) : Prop
+def Region.contains (outer inner : Region) : Prop
+def Region.inBounds (r : Region) (addr : Nat) : Prop
+def Region.span (a b : Region) : Region
+def Region.intersection (a b : Region) : Region
+def Region.union? (a b : Region) : Option Region
+def Region.difference (a b : Region) : List Region
 def isAligned (addr align : Nat) : Prop
 ```
+
+### Region Algebra Notes
+
+- `span` returns the smallest interval containing both input regions.
+- `intersection` returns a zero-length region at the overlap boundary when the inputs do not overlap.
+- `union?` succeeds only when two regions overlap or are exactly adjacent.
+- `difference` returns zero, one, or two residual regions because subtracting one interval from another can split the source.
 
 ## Proofs (`Memory.Lemmas`)
 
 - **Buffer size preservation**: `(Buffer.zeros n).size = n`, `(buf.writeU8 ..).size = buf.size`
-- **Region disjointness**: commutativity, `empty_left`, `empty_right`
+- **Region disjointness**: commutativity, `empty_left`, `empty_right`, `intersects_comm`, `adjacent_comm`
+- **Region algebra**: `span_contains_left`, `span_contains_right`, `span_comm`, `intersection_comm`, `union?_isSome_iff_mergeable`, `span_least_upper_bound`
 - **Alignment**: `isAligned_zero`, `isAligned_mul`
 - **Layout**: `empty_totalSize`, `appendField_totalSize`
 - **Checked API**: `checkedReadU8_some` (when in bounds), `checkedReadU8_none` (when out of bounds)

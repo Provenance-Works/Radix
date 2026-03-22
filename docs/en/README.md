@@ -60,7 +60,7 @@ mindmap
 | Document | Audience | Description |
 |----------|----------|-------------|
 | [Overview](architecture/README.md) | All | Three-layer architecture and high-level system design |
-| [Components](architecture/components.md) | Devs | Internal component breakdown (13 modules) |
+| [Components](architecture/components.md) | Devs | Internal component breakdown (18 modules) |
 | [Data Model](architecture/data-model.md) | Devs | Core data structures and BitVec relationships |
 | [Data Flow](architecture/data-flow.md) | Devs | How data moves between layers and modules |
 | [Module Dependencies](architecture/module-dependency.md) | Devs | Module dependency graph |
