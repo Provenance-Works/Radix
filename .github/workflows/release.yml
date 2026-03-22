@@ -145,32 +145,32 @@ jobs:
           lake build examples
           lake exe examples
 
-        - name: "Build & Run: Lean benchmarks"
+      - name: "Build & Run: Lean benchmarks"
         run: |
           lake build bench
           lake exe bench | tee bench-lean.txt
 
-        - name: "Build & Run: C baseline benchmarks"
+      - name: "Build & Run: C baseline benchmarks"
         run: |
-            COMPILER=""
-            for candidate in /usr/bin/gcc gcc cc clang; do
-              if command -v "$candidate" &> /dev/null; then
-                if printf 'int main(void){return 0;}\n' | "$candidate" -x c - -o /tmp/radix-cc-check >/dev/null 2>&1; then
-                  COMPILER="$candidate"
-                  break
-                fi
+          COMPILER=""
+          for candidate in /usr/bin/gcc gcc cc clang; do
+            if command -v "$candidate" &> /dev/null; then
+              if printf 'int main(void){return 0;}\n' | "$candidate" -x c - -o /tmp/radix-cc-check >/dev/null 2>&1; then
+                COMPILER="$candidate"
+                break
               fi
-            done
-            if [ -z "$COMPILER" ]; then
-              echo "::error::A working C compiler is required for release benchmark comparison"
-          exit 1
+            fi
+          done
+          if [ -z "$COMPILER" ]; then
+            echo "::error::A working C compiler is required for release benchmark comparison"
+            exit 1
           fi
-            rm -f /tmp/radix-cc-check
-            "$COMPILER" -O2 -march=native -fno-builtin -o benchmarks/baseline benchmarks/baseline.c
-            echo "C baseline compiler: $COMPILER"
+          rm -f /tmp/radix-cc-check
+          "$COMPILER" -O2 -march=native -fno-builtin -o benchmarks/baseline benchmarks/baseline.c
+          echo "C baseline compiler: $COMPILER"
           ./benchmarks/baseline | tee bench-c.txt
 
-        - name: "Verify: RingBuffer and CRC benchmark comparison"
+      - name: "Verify: RingBuffer and CRC benchmark comparison"
         run: |
           python3 << 'PYEOF'
           import os
@@ -193,9 +193,9 @@ jobs:
               if line.endswith(":") and "ns/op" not in line and "accumulator" not in line:
                 current = section_aliases.get(line[:-1])
                 continue
-                match = re.match(r"([A-Za-z0-9-]+): ([0-9]+(?:\.[0-9]+)?) ns/op", line)
+              match = re.match(r"([A-Za-z0-9-]+): ([0-9]+(?:\.[0-9]+)?) ns/op", line)
               if match and current is not None:
-                  results[(current, match.group(1))] = float(match.group(2))
+                results[(current, match.group(1))] = float(match.group(2))
             return results
 
           lean_results = parse(
@@ -216,7 +216,7 @@ jobs:
               if lean_ns is None or c_ns is None:
                 errors.append(f"Missing benchmark result for {section} / {op}")
                 continue
-                if lean_ns <= 0 or c_ns <= 0:
+              if lean_ns <= 0 or c_ns <= 0:
                 errors.append(
                   f"Non-positive ns/op for {section} / {op}: lean={lean_ns}, c={c_ns}"
                 )
