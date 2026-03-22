@@ -11,7 +11,7 @@
 [![Theorems](https://img.shields.io/badge/theorems-1062%2B-brightgreen.svg)](#verification-status)
 [![sorry-free](https://img.shields.io/badge/sorry-free-%E2%9C%93-brightgreen.svg)](#verification-status)
 
-*1062+ verified theorems. Zero `sorry`. Zero-cost abstractions.*
+*1062+ verified theorems. Zero `sorry`. Proofs erase at runtime.*
 
 [Documentation](docs/en/README.md) · [Quick Start](#quick-start) · [Examples](examples/) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
@@ -21,7 +21,7 @@
 
 ## Overview
 
-Radix provides the lowest layer of systems programming primitives for Lean 4 — integers, bits, bytes, memory, binary formats, concurrency, and bare-metal support — with **complete formal verification** and **zero-cost abstraction**.
+Radix provides the lowest layer of systems programming primitives for Lean 4 — integers, bits, bytes, memory, binary formats, concurrency, and bare-metal support — with **complete formal verification** and **proof-erased abstractions**.
 
 ### Why Radix?
 
@@ -30,7 +30,7 @@ Systems programming requires manipulating fixed-width integers, raw bytes, memor
 Radix eliminates this trade-off:
 
 - **Complete formal verification** — every operation has a mathematical specification in Mathlib `BitVec n`, proven to match its implementation. Zero `sorry` statements.
-- **Zero-cost abstraction** — proofs are erased at compile time. Runtime performance matches hand-written Lean 4 or C.
+- **Proof-erased abstractions** — proofs are erased at compile time, so verification artifacts do not add runtime overhead. The repository includes microbenchmarks and C baselines for inspection, but concrete performance still depends on workload, backend, and compiler settings.
 - **Pure Lean 4** — no FFI, no C code, no custom mathematical axioms. The trusted computing base is Lean's kernel plus explicitly named external-world assumptions (`trust_*`).
 
 ### Modules
