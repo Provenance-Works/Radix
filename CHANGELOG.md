@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced all remaining `native_decide` usages in library proofs with kernel-reduced proofs using `decide`, `simp`, or existing host-width lemmas.
+- Updated memory pointer and platform-width tests to remove the last `native_decide`-based proof witnesses.
+- Updated GitHub Actions and GitLab CI trust-audit checks to stop treating `native_decide` as a tracked trusted item.
+- Clarified README wording for trusted-boundary modules and documented `BareMetal` as a verification model rather than a hardware runtime implementation.
+
 ## [0.2.0] - 2026-03-21
 
 ### Added
