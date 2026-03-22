@@ -31,7 +31,7 @@ Radix eliminates this trade-off:
 
 - **Complete formal verification** — every operation has a mathematical specification in Mathlib `BitVec n`, proven to match its implementation. Zero `sorry` statements.
 - **Zero-cost abstraction** — proofs are erased at compile time. Runtime performance matches hand-written Lean 4 or C.
-- **Pure Lean 4** — no FFI, no C code, no custom axioms. The trusted computing base is Lean's kernel plus explicitly named hardware assumptions (`trust_*`).
+- **Pure Lean 4** — no FFI, no C code, no custom mathematical axioms. The trusted computing base is Lean's kernel plus explicitly named external-world assumptions (`trust_*`).
 
 ### Modules
 
@@ -42,9 +42,9 @@ Radix eliminates this trade-off:
 | **Bytes** | Endianness, bswap, ByteSlice | 60 |
 | **Memory** | Buffer, Ptr, LayoutDesc, region disjointness | 52 |
 | **Binary** | Format DSL, parser, serializer, LEB128 | 92 |
-| **System** | File I/O state machine, SysError, FD, withFile bracket | 41 |
-| **Concurrency** | C11 memory ordering specification model, AtomicCell, CAS, happens-before | 32 |
-| **BareMetal** | Platform specification model, memory map, linker scripts, startup, GC-free | 36 |
+| **System** | File I/O state machine plus trusted OS boundary wrappers | 41 |
+| **Concurrency** | C11 memory ordering specification model with trusted hardware assumptions | 32 |
+| **BareMetal** | Bare-metal platform formalization: memory map, linker scripts, startup, GC-free | 36 |
 | **Alignment** | alignUp/Down, isAligned, power-of-two fast paths, HasAlignment typeclass | 18 |
 | **RingBuffer** | Fixed-capacity circular queue, push/pop/peek, FIFO ordering proofs | 24 |
 | **Bitmap** | Dense bit-array (UInt64-backed), set operations, popcount, find-first | 33 |
@@ -76,6 +76,8 @@ Every module follows a three-layer design:
 | **Spec** | Pure mathematical specification via `BitVec n` | `Word.Spec`, `Bit.Spec` |
 | **Impl** | Computable Lean 4 code with correctness proofs | `Word.UInt`, `Bit.Ops` |
 | **Bridge** | System-level wrappers with named trust assumptions | `System.IO`, `BareMetal.Assumptions` |
+
+Ten modules are fully executable and self-contained in pure Lean. `System`, `Concurrency`, and `BareMetal` deliberately cross the trusted boundary: they formalize external OS or hardware behavior via named assumptions, and `BareMetal` is a verification model rather than a device-runtime implementation.
 
 ## Quick Start
 
@@ -157,7 +159,7 @@ See [examples/](examples/) for 15 complete, runnable examples covering all modul
 | Proof-to-code ratio | ~0.9:1 |
 | Trusted computing base | Lean 4 kernel + Mathlib + named `trust_*` axioms |
 
-All proofs are machine-checked by the Lean 4 kernel. The `trust_*` axioms are limited to external-world assumptions (POSIX behavior, hardware semantics) and are explicitly named and documented.
+All proofs are machine-checked by the Lean 4 kernel. The `trust_*` axioms are limited to external-world assumptions (POSIX behavior, hardware semantics) and are explicitly named and documented. In particular, the `BareMetal` module models linker layout, startup, and platform invariants for verification; it does not perform real hardware I/O.
 
 ## Building & Testing
 
