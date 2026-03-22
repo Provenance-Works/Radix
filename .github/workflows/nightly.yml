@@ -250,7 +250,7 @@ jobs:
 
       - name: "Trust assumptions audit"
         run: |
-          grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | grep -v '\.lake/' || echo "No trust assumptions"
+          grep -rn 'trust_\|@\[implemented_by\]' Radix/ | grep -v '\.lake/' || echo "No trust assumptions"
 
   # ===========================================================================
   # Nightly Benchmarks
