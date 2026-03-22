@@ -4,7 +4,9 @@
 
 ## Component Overview
 
-Radix consists of 8 modules, each providing a distinct set of systems programming primitives. All modules follow the three-layer architecture (Spec → Impl → Bridge).
+Radix consists of 13 modules, each providing a distinct set of systems programming primitives. All modules follow the three-layer architecture (Spec → Impl → Bridge).
+
+The dependency diagram below focuses on the original foundation modules. v0.2.0 extends the surface with Alignment, RingBuffer, Bitmap, CRC, and MemoryPool.
 
 ```mermaid
 graph TD
@@ -134,6 +136,46 @@ graph TD
 | `BareMetal.Startup` | 2 | `StartupAction`, minimal/full startup actions, validation |
 | `BareMetal.Lemmas` | 3 | Region disjointness, memory map, alignment, startup proofs |
 | `BareMetal.Assumptions` | 1 | `trust_reset_entry`, `trust_bss_zeroed`, etc. |
+
+### Alignment — Alignment Utilities
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `Alignment.Spec` | 3 | Mathematical alignment specification and power-of-two rules |
+| `Alignment.Ops` | 2 | `alignUp`, `alignDown`, `isAligned`, `alignPadding`, fast paths |
+| `Alignment.Lemmas` | 3 | Sandwich bounds, round-trip, and ops-vs-spec equivalence proofs |
+
+### RingBuffer — Fixed-Capacity Circular Queue
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `RingBuffer.Spec` | 3 | FIFO queue state model and invariants |
+| `RingBuffer.Impl` | 2 | `push`, `pop`, `peek`, `pushForce`, batch operations |
+| `RingBuffer.Lemmas` | 3 | Capacity conservation, FIFO ordering, invariant preservation |
+
+### Bitmap — Dense Bit Array
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `Bitmap.Spec` | 3 | Abstract bitset model and last-word-clean invariant |
+| `Bitmap.Ops` | 2 | Bit updates, set algebra, population count, search operations |
+| `Bitmap.Lemmas` | 3 | Boolean algebra properties and invariant preservation proofs |
+
+### CRC — Checksum Algorithms
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `CRC.Spec` | 3 | GF(2) polynomial model for CRC-32 and CRC-16 |
+| `CRC.Ops` | 2 | Table-driven CRC implementations and streaming API |
+| `CRC.Lemmas` | 3 | Streaming consistency and algebraic correctness proofs |
+
+### MemoryPool — Allocator Models
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `MemoryPool.Spec` | 3 | Bump/slab allocator state models and safety invariants |
+| `MemoryPool.Model` | 2 | Pure allocator models backed by `Memory.Buffer` |
+| `MemoryPool.Lemmas` | 3 | Capacity tracking, reset correctness, no double-free proofs |
 
 ## Related Documents
 

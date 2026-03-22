@@ -4,7 +4,9 @@
 
 ## コンポーネント概要
 
-Radixは8つのモジュールで構成され、それぞれがシステムプログラミングのプリミティブを提供します。全モジュールが3層アーキテクチャ（仕様 → 実装 → ブリッジ）に従います。
+Radixは13個のモジュールで構成され、それぞれがシステムプログラミングのプリミティブを提供します。全モジュールが3層アーキテクチャ（仕様 → 実装 → ブリッジ）に従います。
+
+下の依存関係図は元の基盤モジュール群に焦点を当てています。v0.2.0 では Alignment、RingBuffer、Bitmap、CRC、MemoryPool が追加されました。
 
 ```mermaid
 graph TD
@@ -134,6 +136,46 @@ graph TD
 | `BareMetal.Startup` | 2 | `StartupAction`、最小/完全スタートアップアクション、バリデーション |
 | `BareMetal.Lemmas` | 3 | 領域分離性、メモリマップ、アライメント、スタートアップの証明 |
 | `BareMetal.Assumptions` | 1 | `trust_reset_entry`、`trust_bss_zeroed` 等 |
+
+### Alignment — アライメントユーティリティ
+
+| サブモジュール | レイヤー | 説明 |
+|-----------|-------|-------------|
+| `Alignment.Spec` | 3 | 数学的なアライメント仕様と 2 の冪ルール |
+| `Alignment.Ops` | 2 | `alignUp`、`alignDown`、`isAligned`、`alignPadding`、高速パス |
+| `Alignment.Lemmas` | 3 | 挟み込み境界、ラウンドトリップ、仕様一致の証明 |
+
+### RingBuffer — 固定容量リングキュー
+
+| サブモジュール | レイヤー | 説明 |
+|-----------|-------|-------------|
+| `RingBuffer.Spec` | 3 | FIFO キュー状態モデルと不変条件 |
+| `RingBuffer.Impl` | 2 | `push`、`pop`、`peek`、`pushForce`、バッチ操作 |
+| `RingBuffer.Lemmas` | 3 | 容量保存、FIFO 順序、不変条件保持の証明 |
+
+### Bitmap — 高密度ビット配列
+
+| サブモジュール | レイヤー | 説明 |
+|-----------|-------|-------------|
+| `Bitmap.Spec` | 3 | 抽象ビット集合モデルと末尾ワード不変条件 |
+| `Bitmap.Ops` | 2 | ビット更新、集合演算、popcount、探索操作 |
+| `Bitmap.Lemmas` | 3 | ブール代数性質と不変条件保持の証明 |
+
+### CRC — チェックサムアルゴリズム
+
+| サブモジュール | レイヤー | 説明 |
+|-----------|-------|-------------|
+| `CRC.Spec` | 3 | CRC-32 / CRC-16 の GF(2) 多項式モデル |
+| `CRC.Ops` | 2 | テーブル駆動 CRC 実装とストリーミング API |
+| `CRC.Lemmas` | 3 | ストリーミング一貫性と代数的正しさの証明 |
+
+### MemoryPool — アロケータモデル
+
+| サブモジュール | レイヤー | 説明 |
+|-----------|-------|-------------|
+| `MemoryPool.Spec` | 3 | Bump/slab アロケータ状態モデルと安全不変条件 |
+| `MemoryPool.Model` | 2 | `Memory.Buffer` を用いる純粋アロケータモデル |
+| `MemoryPool.Lemmas` | 3 | 容量追跡、リセット正しさ、二重解放防止の証明 |
 
 ## 関連ドキュメント
 

@@ -117,4 +117,3 @@ Radixはカスタム数学的公理を導入しません。Layer 1 の `trust_*`
 - [アーキテクチャ概要](../architecture/) — 3層アーキテクチャ
 - [設計パターン](patterns.md) — パターン
 - [ADR](adr.md) — 決定記録
-- [制約](../../spec/requirements/constraints.md) — プロジェクト制約

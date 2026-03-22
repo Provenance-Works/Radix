@@ -6,7 +6,7 @@
 
 Architecture Decision Records (ADRs) capture significant architectural decisions made during Radix development. Each ADR documents the context, the decision itself, alternatives considered, and the consequences.
 
-The canonical ADR source files are maintained under [`spec/adr/`](../../../spec/adr/).
+This document is the canonical ADR index for the current repository.
 
 ## ADR Index
 
@@ -62,7 +62,7 @@ graph TD
 
 **Consequences:** More files to manage, but a clear audit trail for TCB (inspect `@[extern]` + `trust_*` axioms).
 
-> **Source:** [`spec/adr/0001-three-layer-architecture.md`](../../../spec/adr/0001-three-layer-architecture.md)
+> **Canonical location:** This document.
 
 ---
 
@@ -101,7 +101,7 @@ graph LR
 - Radix types carry a proof of `BitVec` equivalence
 - Users can drop down to `BitVec` when they need Mathlib lemmas directly
 
-> **Source:** [`spec/adr/0002-build-on-mathlib-bitvec.md`](../../../spec/adr/0002-build-on-mathlib-bitvec.md)
+> **Canonical location:** This document.
 
 ---
 
@@ -134,7 +134,7 @@ The sign is determined by the MSB. Operations map directly to Lean 4's built-in 
 - Casting between signed/unsigned is free (same bits, different interpretation)
 - Sign-dependent operations (comparison, division, arithmetic right shift) need separate implementations with separate proofs
 
-> **Source:** [`spec/adr/0003-signed-integers-twos-complement.md`](../../../spec/adr/0003-signed-integers-twos-complement.md)
+> **Canonical location:** This document.
 
 ---
 
@@ -236,13 +236,13 @@ Remove `develop` and `hotfix/*` from CI triggers. Hotfixes follow the same flow 
 - The `develop` branch (if it exists) should be deleted
 - Contributors see a simple model: fork → branch from `main` → PR to `main`
 
-> **Source:** [`spec/adr/0004-trunk-based-with-release-branches.md`](../../../spec/adr/0004-trunk-based-with-release-branches.md)
+> **Canonical location:** This document.
 
 ---
 
 ## Template
 
-For new ADRs, use the template at [`spec/adr/template.md`](../../../spec/adr/template.md).
+For new ADRs, add a new section to this document following the existing structure.
 
 ## Related Documents
 

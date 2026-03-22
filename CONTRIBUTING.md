@@ -92,8 +92,13 @@ lake exe bench
 ### Project Structure
 
 ```
-Radix.lean              # Root import (all 8 modules)
+Radix.lean              # Root import (all 13 modules)
 Radix/
+├── Alignment.lean      # Alignment utilities
+├── Bitmap.lean         # Dense bit arrays
+├── CRC.lean            # CRC-32 / CRC-16
+├── MemoryPool.lean     # Bump/slab allocator models
+├── RingBuffer.lean     # Fixed-capacity circular queue
 ├── Word.lean           # Fixed-width integers (UInt8–64, Int8–64, UWord, IWord)
 ├── Bit.lean            # Bitwise operations
 ├── Bytes.lean          # Byte order and slices
@@ -108,7 +113,7 @@ Radix/
     ├── Lemmas.lean     # Verified theorems
     └── Assumptions.lean # Layer 1: Trust axioms (where needed)
 tests/                  # Unit, property-based, and comprehensive tests
-examples/               # 11 runnable usage examples
+examples/               # 15 runnable usage examples
 benchmarks/             # Microbenchmarks with C baseline
 docs/                   # English and Japanese documentation
 ```

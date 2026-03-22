@@ -120,9 +120,9 @@ The TCB is the set of components whose correctness is **assumed, not proven**:
 
 | Decision | Summary | ADR |
 |----------|---------|-----|
-| Three-layer architecture | Maximize verified code, minimize trusted code | [ADR-001](../../spec/adr/0001-three-layer-architecture.md) |
-| Build on Mathlib BitVec | Use `BitVec n` as spec-level canonical representation | [ADR-002](../../spec/adr/0002-build-on-mathlib-bitvec.md) |
-| Signed integers via two's complement | Wrap unsigned types, interpret MSB as sign | [ADR-003](../../spec/adr/0003-signed-integers-twos-complement.md) |
+| Three-layer architecture | Maximize verified code, minimize trusted code | [ADR-001](../design/adr.md) |
+| Build on Mathlib BitVec | Use `BitVec n` as spec-level canonical representation | [ADR-002](../design/adr.md) |
+| Signed integers via two's complement | Wrap unsigned types, interpret MSB as sign | [ADR-003](../design/adr.md) |
 
 ## Related Documents
 
