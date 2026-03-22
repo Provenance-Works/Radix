@@ -414,16 +414,20 @@ private def benchBitFields : IO Unit := do
 /-! ## Ring Buffer Benchmarks                                        -/
 /-! ================================================================ -/
 
+private def ringBufferBenchCapacity : Nat := 1024
+
 private def benchRingBuffer : IO Unit := do
   IO.println "Ring Buffer (v0.2.0):"
   let data := genRandomArray numIter 10
 
-  -- Push throughput: push N bytes into ring buffer
+  -- Match the C baseline: fixed 1024-byte ring, reset when full.
   bench "push" do
-    let mut rb := Radix.RingBuffer.RingBuf.new numIter
+    let mut rb := Radix.RingBuffer.RingBuf.new ringBufferBenchCapacity
     let mut acc : UInt64 := 0
     for v in data do
       let byte : Radix.UInt8 := ⟨v.toUInt8⟩
+      if rb.count >= rb.capacity then
+        rb := rb.clear
       match rb.push byte with
       | some rb' =>
         rb := rb'
@@ -433,9 +437,9 @@ private def benchRingBuffer : IO Unit := do
 
   -- Pop throughput: push all, then pop all
   bench "pop" do
-    let mut rb := Radix.RingBuffer.RingBuf.new 1024
+    let mut rb := Radix.RingBuffer.RingBuf.new ringBufferBenchCapacity
     -- Fill buffer
-    for i in [:1024] do
+    for i in [:ringBufferBenchCapacity] do
       let byte : Radix.UInt8 := ⟨(data[i % data.size]!).toUInt8⟩
       match rb.push byte with
       | some rb' => rb := rb'
@@ -449,8 +453,8 @@ private def benchRingBuffer : IO Unit := do
         rb := rb'
       | none =>
         -- Refill
-        rb := Radix.RingBuffer.RingBuf.new 1024
-        for j in [:1024] do
+        rb := Radix.RingBuffer.RingBuf.new ringBufferBenchCapacity
+        for j in [:ringBufferBenchCapacity] do
           let byte : Radix.UInt8 := ⟨(data[j % data.size]!).toUInt8⟩
           match rb.push byte with
           | some rb' => rb := rb'
