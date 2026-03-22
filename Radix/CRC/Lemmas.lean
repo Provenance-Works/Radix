@@ -31,11 +31,11 @@ namespace Radix.CRC.Lemmas
 
 /-- CRC-32 table has exactly 256 entries. -/
 theorem crc32_table_size : CRC32.table.size = 256 := by
-  native_decide
+  simp [CRC32.table]
 
 /-- CRC-16 table has exactly 256 entries. -/
 theorem crc16_table_size : CRC16.table.size = 256 := by
-  native_decide
+  simp [CRC16.table]
 
 /-! ## Streaming API Consistency -/
 
