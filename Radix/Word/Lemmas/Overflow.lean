@@ -15,13 +15,11 @@ matches the specification in `Word.Spec`.
 
 This is a **Layer 3 (Verified Specification)** module.
 
-## Design Note: `native_decide` usage
+## Design Note: Closed Edge-Case Proofs
 
-Signed-integer edge-case proofs (e.g. `MIN / -1`, wrapping at boundaries) use
-`native_decide` because they assert equalities on specific concrete values.
-These are ground-truth checks where `bv_decide` or `omega` would be overkill
-or unable to reduce the custom struct definitions.  `native_decide` is safe
-here because the statements are closed propositions on fixed literals.
+Signed-integer edge-case proofs (e.g. `MIN / -1`, wrapping at boundaries)
+are closed propositions on fixed literals. They are discharged by kernel
+reduction through `decide`, avoiding runtime proof evaluation.
 
 ## References
 
@@ -320,26 +318,26 @@ namespace Int8
 /-- Checked signed division returns `none` for `MIN / -1`.
     FR-001.2a compliance. -/
 theorem checkedDiv_min_neg1 :
-    checkedDiv minVal (fromInt (-1)) = none := by native_decide
+  checkedDiv minVal (fromInt (-1)) = none := by decide
 
 /-- Checked signed remainder returns `none` for `MIN % -1`.
     FR-001.2b compliance. -/
 theorem checkedRem_min_neg1 :
-    checkedRem minVal (fromInt (-1)) = none := by native_decide
+  checkedRem minVal (fromInt (-1)) = none := by decide
 
 /-- Wrapping addition wraps correctly (modular). -/
-theorem wrappingAdd_wraps : wrappingAdd maxVal ⟨1⟩ = minVal := by native_decide
+theorem wrappingAdd_wraps : wrappingAdd maxVal ⟨1⟩ = minVal := by decide
 
 /-- Overflowing division `MIN / -1` flags true. -/
 theorem overflowingDiv_min_neg1 :
-    (overflowingDiv minVal (fromInt (-1)) (by decide)).2 = true := by native_decide
+  (overflowingDiv minVal (fromInt (-1)) (by decide)).2 = true := by decide
 
 /-- Wrapping subtraction wraps correctly: 0 - 1 wraps to -1. -/
-theorem wrappingSub_zero_one : wrappingSub ⟨0⟩ ⟨1⟩ = fromInt (-1) := by native_decide
+theorem wrappingSub_zero_one : wrappingSub ⟨0⟩ ⟨1⟩ = fromInt (-1) := by decide
 
 /-- Overflowing subtraction for MIN - 1 flags true. -/
 theorem overflowingSub_min_one :
-    (overflowingSub minVal ⟨1⟩).2 = true := by native_decide
+  (overflowingSub minVal ⟨1⟩).2 = true := by decide
 
 end Int8
 
@@ -350,17 +348,17 @@ end Int8
 namespace Int16
 
 theorem checkedDiv_min_neg1 :
-    checkedDiv minVal (fromInt (-1)) = none := by native_decide
+  checkedDiv minVal (fromInt (-1)) = none := by decide
 
 theorem checkedRem_min_neg1 :
-    checkedRem minVal (fromInt (-1)) = none := by native_decide
+  checkedRem minVal (fromInt (-1)) = none := by decide
 
-theorem wrappingAdd_wraps : wrappingAdd maxVal ⟨1⟩ = minVal := by native_decide
+theorem wrappingAdd_wraps : wrappingAdd maxVal ⟨1⟩ = minVal := by decide
 
 theorem overflowingDiv_min_neg1 :
-    (overflowingDiv minVal (fromInt (-1)) (by decide)).2 = true := by native_decide
+  (overflowingDiv minVal (fromInt (-1)) (by decide)).2 = true := by decide
 
-theorem wrappingSub_zero_one : wrappingSub ⟨0⟩ ⟨1⟩ = fromInt (-1) := by native_decide
+theorem wrappingSub_zero_one : wrappingSub ⟨0⟩ ⟨1⟩ = fromInt (-1) := by decide
 
 end Int16
 
@@ -371,17 +369,17 @@ end Int16
 namespace Int32
 
 theorem checkedDiv_min_neg1 :
-    checkedDiv minVal (fromInt (-1)) = none := by native_decide
+  checkedDiv minVal (fromInt (-1)) = none := by decide
 
 theorem checkedRem_min_neg1 :
-    checkedRem minVal (fromInt (-1)) = none := by native_decide
+  checkedRem minVal (fromInt (-1)) = none := by decide
 
-theorem wrappingAdd_wraps : wrappingAdd maxVal ⟨1⟩ = minVal := by native_decide
+theorem wrappingAdd_wraps : wrappingAdd maxVal ⟨1⟩ = minVal := by decide
 
 theorem overflowingDiv_min_neg1 :
-    (overflowingDiv minVal (fromInt (-1)) (by decide)).2 = true := by native_decide
+  (overflowingDiv minVal (fromInt (-1)) (by decide)).2 = true := by decide
 
-theorem wrappingSub_zero_one : wrappingSub ⟨0⟩ ⟨1⟩ = fromInt (-1) := by native_decide
+theorem wrappingSub_zero_one : wrappingSub ⟨0⟩ ⟨1⟩ = fromInt (-1) := by decide
 
 end Int32
 
@@ -392,17 +390,17 @@ end Int32
 namespace Int64
 
 theorem checkedDiv_min_neg1 :
-    checkedDiv minVal (fromInt (-1)) = none := by native_decide
+  checkedDiv minVal (fromInt (-1)) = none := by decide
 
 theorem checkedRem_min_neg1 :
-    checkedRem minVal (fromInt (-1)) = none := by native_decide
+  checkedRem minVal (fromInt (-1)) = none := by decide
 
-theorem wrappingAdd_wraps : wrappingAdd maxVal ⟨1⟩ = minVal := by native_decide
+theorem wrappingAdd_wraps : wrappingAdd maxVal ⟨1⟩ = minVal := by decide
 
 theorem overflowingDiv_min_neg1 :
-    (overflowingDiv minVal (fromInt (-1)) (by decide)).2 = true := by native_decide
+  (overflowingDiv minVal (fromInt (-1)) (by decide)).2 = true := by decide
 
-theorem wrappingSub_zero_one : wrappingSub ⟨0⟩ ⟨1⟩ = fromInt (-1) := by native_decide
+theorem wrappingSub_zero_one : wrappingSub ⟨0⟩ ⟨1⟩ = fromInt (-1) := by decide
 
 end Int64
 

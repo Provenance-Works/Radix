@@ -855,11 +855,11 @@ verify_proofs:
       echo ""
       echo "=== Trust Assumptions ==="
       set +e
-      TRUST_ITEMS=$(grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/ | wc -l)
+      TRUST_ITEMS=$(grep -rn 'trust_\|@\[implemented_by\]' Radix/ | wc -l)
       set -e
       echo "Trust assumptions: $TRUST_ITEMS"
       if [ "$TRUST_ITEMS" -gt 0 ]; then
-        grep -rn 'trust_\|@\[implemented_by\]\|native_decide' Radix/
+        grep -rn 'trust_\|@\[implemented_by\]' Radix/
       else
         echo "  (none)"
       fi

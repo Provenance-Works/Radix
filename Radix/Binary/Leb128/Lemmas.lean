@@ -31,7 +31,7 @@ private theorem ba_size_push (a : ByteArray) (v : _root_.UInt8) :
   unfold ByteArray.push ByteArray.size; simp [Array.size_push]
 
 private theorem ba_empty_size : ByteArray.empty.size = 0 := by
-  native_decide
+  decide
 
 /-! ================================================================ -/
 /-! ## encodeUnsigned Bounds                                          -/

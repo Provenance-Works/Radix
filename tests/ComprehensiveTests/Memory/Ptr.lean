@@ -18,16 +18,16 @@ def runMemoryPtrTests : IO Nat := do
   let buf := Radix.Memory.Buffer.zeros 32
 
   -- Create Ptr 1 at offset 0
-  let p1 := Radix.Memory.Ptr.ofBuffer buf 1 (by native_decide)
+  let p1 := Radix.Memory.Ptr.ofBuffer buf 1 (by decide)
   assert (p1.offset == 0) "Ptr1 offset 0"
 
   -- Create Ptr 2 at offset 0
-  let p2 := Radix.Memory.Ptr.ofBuffer buf 2 (by native_decide)
+  let p2 := Radix.Memory.Ptr.ofBuffer buf 2 (by decide)
   assert (p2.offset == 0) "Ptr2 offset 0"
 
   -- Ptr 4 and Ptr 8
-  let p4 := Radix.Memory.Ptr.ofBuffer buf 4 (by native_decide)
-  let p8 := Radix.Memory.Ptr.ofBuffer buf 8 (by native_decide)
+  let p4 := Radix.Memory.Ptr.ofBuffer buf 4 (by decide)
+  let p8 := Radix.Memory.Ptr.ofBuffer buf 8 (by decide)
   assert (p4.offset == 0) "Ptr4 offset 0"
   assert (p8.offset == 0) "Ptr8 offset 0"
 
@@ -63,10 +63,10 @@ def runMemoryPtrTests : IO Nat := do
   assert (p8wBE.readU64BE == ⟨0xCAFEBABEDEADFACE⟩) "Ptr8 writeU64BE-readU64BE"
 
   -- ## Ptr advance
-  let pAdv := p1.advance 5 (by native_decide)
+  let pAdv := p1.advance 5 (by decide)
   assert (pAdv.offset == 5) "Ptr advance offset"
 
-  let pAdv2 := pAdv.advance 3 (by native_decide)
+  let pAdv2 := pAdv.advance 3 (by decide)
   assert (pAdv2.offset == 8) "Ptr double advance"
 
   -- Advance and write
@@ -74,11 +74,11 @@ def runMemoryPtrTests : IO Nat := do
   assert (pAdvW.readU8.toNat == 0x42) "Ptr advance write-read"
 
   -- ## Ptr retreat
-  let pRet := pAdv.retreat 3 (by native_decide) (by native_decide)
+  let pRet := pAdv.retreat 3 (by decide) (by decide)
   assert (pRet.offset == 2) "Ptr retreat offset"
 
   -- ## Ptr cast
-  let pCast := p1.cast 4 (by native_decide)
+  let pCast := p1.cast 4 (by decide)
   assert (pCast.offset == 0) "Ptr cast offset preserved"
   let v32 := pCast.readU32LE
   assert (v32.toNat == 0) "Ptr cast readU32LE"
@@ -86,18 +86,18 @@ def runMemoryPtrTests : IO Nat := do
   -- ## Ptr sequential writes
   -- Write bytes at sequential positions using advance
   let buf2 := Radix.Memory.Buffer.zeros 8
-  let base := Radix.Memory.Ptr.ofBuffer buf2 1 (by native_decide)
+  let base := Radix.Memory.Ptr.ofBuffer buf2 1 (by decide)
   let base := base.writeU8 ⟨0x10⟩
-  let next := base.advance 1 (by native_decide)
+  let next := base.advance 1 (by decide)
   let next := next.writeU8 ⟨0x20⟩
-  let next2 := next.advance 1 (by native_decide)
+  let next2 := next.advance 1 (by decide)
   let next2 := next2.writeU8 ⟨0x30⟩
   -- Read back from beginning
-  let rd := Radix.Memory.Ptr.ofBuffer next2.buf 1 (by native_decide)
+  let rd := Radix.Memory.Ptr.ofBuffer next2.buf 1 (by decide)
   assert (rd.readU8.toNat == 0x10) "sequential write [0]"
-  let rd1 := rd.advance 1 (by native_decide)
+  let rd1 := rd.advance 1 (by decide)
   assert (rd1.readU8.toNat == 0x20) "sequential write [1]"
-  let rd2 := rd1.advance 1 (by native_decide)
+  let rd2 := rd1.advance 1 (by decide)
   assert (rd2.readU8.toNat == 0x30) "sequential write [2]"
 
   c.get

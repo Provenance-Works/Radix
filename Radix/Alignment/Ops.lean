@@ -100,22 +100,22 @@ class HasAlignment (α : Type) where
 instance : HasAlignment Radix.UInt8 where
   alignment := 1
   alignment_pos := by decide
-  alignment_pow2 := by native_decide
+  alignment_pow2 := by decide
 
 instance : HasAlignment Radix.UInt16 where
   alignment := 2
   alignment_pos := by decide
-  alignment_pow2 := by native_decide
+  alignment_pow2 := by decide
 
 instance : HasAlignment Radix.UInt32 where
   alignment := 4
   alignment_pos := by decide
-  alignment_pow2 := by native_decide
+  alignment_pow2 := by decide
 
 instance : HasAlignment Radix.UInt64 where
   alignment := 8
   alignment_pos := by decide
-  alignment_pow2 := by native_decide
+  alignment_pow2 := by decide
 
 /-- Get the natural alignment for a type. -/
 @[inline] def alignmentOf (α : Type) [HasAlignment α] : Nat :=

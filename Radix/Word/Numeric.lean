@@ -85,10 +85,10 @@ instance : BoundedUInt UInt8 where
   checkedAdd := UInt8.checkedAdd
   checkedSub := UInt8.checkedSub
   checkedMul := UInt8.checkedMul
-  toNat_minVal := by native_decide
-  toNat_maxVal := by native_decide
+  toNat_minVal := by decide
+  toNat_maxVal := by decide
   wrappingAdd_eq_add := by intro x y; rfl
-  toBitVec_minVal := by native_decide
+  toBitVec_minVal := by decide
 
 instance : BoundedUInt UInt16 where
   minVal := UInt16.minVal
@@ -102,10 +102,10 @@ instance : BoundedUInt UInt16 where
   checkedAdd := UInt16.checkedAdd
   checkedSub := UInt16.checkedSub
   checkedMul := UInt16.checkedMul
-  toNat_minVal := by native_decide
-  toNat_maxVal := by native_decide
+  toNat_minVal := by decide
+  toNat_maxVal := by decide
   wrappingAdd_eq_add := by intro x y; rfl
-  toBitVec_minVal := by native_decide
+  toBitVec_minVal := by decide
 
 instance : BoundedUInt UInt32 where
   minVal := UInt32.minVal
@@ -119,10 +119,10 @@ instance : BoundedUInt UInt32 where
   checkedAdd := UInt32.checkedAdd
   checkedSub := UInt32.checkedSub
   checkedMul := UInt32.checkedMul
-  toNat_minVal := by native_decide
-  toNat_maxVal := by native_decide
+  toNat_minVal := by decide
+  toNat_maxVal := by decide
   wrappingAdd_eq_add := by intro x y; rfl
-  toBitVec_minVal := by native_decide
+  toBitVec_minVal := by decide
 
 instance : BoundedUInt UInt64 where
   minVal := UInt64.minVal
@@ -136,10 +136,10 @@ instance : BoundedUInt UInt64 where
   checkedAdd := UInt64.checkedAdd
   checkedSub := UInt64.checkedSub
   checkedMul := UInt64.checkedMul
-  toNat_minVal := by native_decide
-  toNat_maxVal := by native_decide
+  toNat_minVal := by decide
+  toNat_maxVal := by decide
   wrappingAdd_eq_add := by intro x y; rfl
-  toBitVec_minVal := by native_decide
+  toBitVec_minVal := by decide
 
 /-! ## BoundedInt Typeclass -/
 
@@ -167,8 +167,8 @@ instance : BoundedInt Int8 where
   toInt := Int8.toInt
   isNeg := Int8.isNeg
   fromInt := Int8.fromInt
-  toInt_minVal := by native_decide
-  toInt_maxVal := by native_decide
+  toInt_minVal := by decide
+  toInt_maxVal := by decide
 
 instance : BoundedInt Int16 where
   minVal := Int16.minVal
@@ -176,8 +176,8 @@ instance : BoundedInt Int16 where
   toInt := Int16.toInt
   isNeg := Int16.isNeg
   fromInt := Int16.fromInt
-  toInt_minVal := by native_decide
-  toInt_maxVal := by native_decide
+  toInt_minVal := by decide
+  toInt_maxVal := by decide
 
 instance : BoundedInt Int32 where
   minVal := Int32.minVal
@@ -185,8 +185,8 @@ instance : BoundedInt Int32 where
   toInt := Int32.toInt
   isNeg := Int32.isNeg
   fromInt := Int32.fromInt
-  toInt_minVal := by native_decide
-  toInt_maxVal := by native_decide
+  toInt_minVal := by decide
+  toInt_maxVal := by decide
 
 instance : BoundedInt Int64 where
   minVal := Int64.minVal
@@ -194,8 +194,8 @@ instance : BoundedInt Int64 where
   toInt := Int64.toInt
   isNeg := Int64.isNeg
   fromInt := Int64.fromInt
-  toInt_minVal := by native_decide
-  toInt_maxVal := by native_decide
+  toInt_minVal := by decide
+  toInt_maxVal := by decide
 
 /-! ## BitwiseOps Typeclass -/
 
