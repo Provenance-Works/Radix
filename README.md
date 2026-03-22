@@ -91,7 +91,7 @@ Add Radix to your `lakefile.lean`:
 
 ```lean
 require radix from git
-  "https://github.com/provenance-works/radix" @ "v0.1.0"
+  "https://github.com/provenance-works/radix" @ "v0.2.0"
 ```
 
 Then fetch dependencies:
