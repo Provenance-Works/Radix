@@ -17,6 +17,12 @@ import tests.ComprehensiveTests.RingBuffer
 import tests.ComprehensiveTests.Bitmap
 import tests.ComprehensiveTests.CRC
 import tests.ComprehensiveTests.MemoryPool
+import tests.ComprehensiveTests.Memory.Region
+import tests.ComprehensiveTests.UTF8
+import tests.ComprehensiveTests.ECC
+import tests.ComprehensiveTests.DMA
+import tests.ComprehensiveTests.Timer
+import tests.ComprehensiveTests.ProofAutomation
 
 /-! # Radix Execution Tests -/
 
@@ -1129,6 +1135,15 @@ def main : IO Unit := do
   IO.println "All Radix Phase 4 tests passed!"
   IO.println ""
   IO.println "Running Radix Phase 5 tests..."
+  let _ ← runMemoryRegionTests
+  let _ ← runUTF8Tests
+  let _ ← runECCTests
+  let _ ← runDMATests
+  let _ ← runTimerTests
+  let _ ← runProofAutomationTests
+  IO.println "All Radix Phase 5 tests passed!"
+  IO.println ""
+  IO.println "Running Radix Phase 6 tests..."
   testConcurrency
   testBareMetal
-  IO.println "All Radix Phase 5 tests passed!"
+  IO.println "All Radix Phase 6 tests passed!"

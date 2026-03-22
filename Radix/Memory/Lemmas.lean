@@ -91,6 +91,18 @@ theorem Spec.Region.disjoint_comm (a b : Spec.Region) :
   simp [Spec.Region.disjoint]; tauto
 
 open Spec in
+theorem Spec.Region.intersects_comm (a b : Spec.Region) :
+    Spec.Region.intersects a b ↔ Spec.Region.intersects b a := by
+  simp [Spec.Region.intersects, Spec.Region.endOffset]
+  constructor <;> intro h <;> omega
+
+open Spec in
+theorem Spec.Region.adjacent_comm (a b : Spec.Region) :
+    Spec.Region.adjacent a b ↔ Spec.Region.adjacent b a := by
+  simp [Spec.Region.adjacent]
+  tauto
+
+open Spec in
 theorem Spec.Region.disjoint_empty_left (r : Spec.Region) :
     Spec.Region.disjoint Spec.Region.empty r := by
   simp [Spec.Region.disjoint, Spec.Region.endOffset, Spec.Region.empty]
@@ -147,6 +159,40 @@ theorem Buffer.readU8_writeU8_ne (buf : Buffer) (i j : Nat) (val : Radix.UInt8)
 open Spec in
 theorem Spec.Region.contains_refl (r : Spec.Region) : Spec.Region.contains r r := by
   simp [Spec.Region.contains, Spec.Region.endOffset]
+
+open Spec in
+theorem Spec.Region.span_contains_left (a b : Spec.Region) :
+    Spec.Region.contains (Spec.Region.span a b) a := by
+  simp [Spec.Region.contains, Spec.Region.span, Spec.Region.endOffset]
+
+open Spec in
+theorem Spec.Region.span_contains_right (a b : Spec.Region) :
+    Spec.Region.contains (Spec.Region.span a b) b := by
+  simp [Spec.Region.contains, Spec.Region.span, Spec.Region.endOffset]
+
+open Spec in
+theorem Spec.Region.span_comm (a b : Spec.Region) :
+    Spec.Region.span a b = Spec.Region.span b a := by
+  simp [Spec.Region.span, Nat.min_comm, Nat.max_comm]
+
+open Spec in
+theorem Spec.Region.intersection_comm (a b : Spec.Region) :
+    Spec.Region.intersection a b = Spec.Region.intersection b a := by
+  unfold Spec.Region.intersection
+  simp [Nat.max_comm, Nat.min_comm]
+
+open Spec in
+theorem Spec.Region.union?_isSome_iff_mergeable (a b : Spec.Region) :
+    (Spec.Region.union? a b).isSome = true ↔ Spec.Region.mergeable a b := by
+  unfold Spec.Region.union?
+  by_cases h : Spec.Region.mergeable a b <;> simp [h]
+
+open Spec in
+theorem Spec.Region.span_least_upper_bound (a b c : Spec.Region)
+    (ha : Spec.Region.contains c a) (hb : Spec.Region.contains c b) :
+    Spec.Region.contains c (Spec.Region.span a b) := by
+  simp [Spec.Region.contains, Spec.Region.span, Spec.Region.endOffset] at *
+  omega
 
 open Spec in
 theorem Spec.Region.inBounds_start (r : Spec.Region) (h : 0 < r.size) :

@@ -15,6 +15,10 @@ import Radix.Bitmap
 import Radix.CRC
 import Radix.MemoryPool
 import Radix.Word.Numeric
+import Radix.UTF8
+import Radix.ECC
+import Radix.DMA
+import Radix.Timer
 
 /-!
 # Radix Phase 4 — Property-Based Tests (P4-01)
@@ -63,6 +67,10 @@ def PRNG.next (rng : PRNG) : PRNG × UInt64 :=
 def PRNG.nextBounded (rng : PRNG) (bound : UInt64) : PRNG × UInt64 :=
   let (rng', v) := rng.next
   if bound == 0 then (rng', 0) else (rng', v % bound)
+
+def PRNG.nextNat (rng : PRNG) (bound : Nat) : PRNG × Nat :=
+  let (rng', v) := rng.nextBounded bound.toUInt64
+  (rng', v.toNat)
 
 def PRNG.nextUInt8 (rng : PRNG) : PRNG × UInt8 :=
   let (rng', v) := rng.next
@@ -1739,6 +1747,81 @@ private def testNumericTypeclassProperties : IO Unit := do
       s!"BitwiseOps popcount UInt64 consistency: {v}"
 
 /-! ================================================================ -/
+/-! ## v0.3.0 Property Tests                                         -/
+/-! ================================================================ -/
+
+private def testUTF8Properties : IO Unit := do
+  IO.println "  UTF8 properties..."
+  let asciiVals := [0x00, 0x24, 0x41, 0x7F]
+  for n in asciiVals do
+    match Radix.UTF8.ofNat? n with
+    | some scalar =>
+      let encoded := Radix.UTF8.encodeScalar scalar
+      assert (Radix.UTF8.isWellFormed encoded) s!"UTF8 scalar well formed: {n}"
+      match Radix.UTF8.decodeBytes? encoded with
+      | some [decoded] => assert (decoded.val == n) s!"UTF8 round-trip: {n}"
+      | _ => assert false s!"UTF8 round-trip decode failed: {n}"
+    | none => assert false s!"UTF8 scalar constructor failed: {n}"
+
+private def testECCProperties : IO Unit := do
+  IO.println "  ECC properties..."
+  let mut rng := PRNG.new 700
+  for _ in [:numIter] do
+    let (rng', v) := rng.nextUInt8; rng := rng'
+    let nibble : Radix.ECC.Nibble := ⟨v.toNat % 16, by omega⟩
+    let encoded := Radix.ECC.encodeNibble nibble
+    assert (Radix.ECC.decode encoded == nibble.val.toUInt8)
+      s!"ECC decode(encode): {nibble.val}"
+    let corrupted := encoded ^^^ 0x01
+    assert (Radix.ECC.decode (Radix.ECC.correct corrupted) == nibble.val.toUInt8)
+      s!"ECC single-bit correction: {nibble.val}"
+
+private def testDMAProperties : IO Unit := do
+  IO.println "  DMA properties..."
+  let valid : Radix.DMA.Descriptor :=
+    { source := { start := 0, size := 4 }
+    , destination := { start := 4, size := 4 }
+    , order := .seqCst
+    , coherence := .nonCoherent
+    , atomicity := .burst 2
+    }
+  assert (Radix.DMA.isValid valid) "DMA valid descriptor"
+  assert (Radix.DMA.stepCount valid == 2) "DMA burst step count"
+
+private def testRegionAlgebraProperties : IO Unit := do
+  IO.println "  Region algebra properties..."
+  let mut rng := PRNG.new 800
+  for _ in [:numIter] do
+    let (rng', s0) := rng.nextNat 128; rng := rng'
+    let (rng', len0) := rng.nextNat 32; rng := rng'
+    let (rng', s1) := rng.nextNat 128; rng := rng'
+    let (rng', len1) := rng.nextNat 32; rng := rng'
+    let a : Radix.Memory.Spec.Region := { start := s0, size := len0 + 1 }
+    let b : Radix.Memory.Spec.Region := { start := s1, size := len1 + 1 }
+    let inter := Radix.Memory.Spec.Region.intersection a b
+    if (Radix.Memory.Spec.Region.union? a b).isSome || inter.size > 0 then
+      assert (Radix.Memory.Spec.Region.contains a inter)
+        s!"intersection contained in left: {reprStr a} {reprStr b}"
+      assert (Radix.Memory.Spec.Region.contains b inter)
+        s!"intersection contained in right: {reprStr a} {reprStr b}"
+    else
+      pure ()
+
+private def testTimerProperties : IO Unit := do
+  IO.println "  Timer properties..."
+  let mut rng := PRNG.new 900
+  for _ in [:numIter] do
+    let (rng', startTicks) := rng.nextNat 1000; rng := rng'
+    let (rng', delta) := rng.nextNat 100; rng := rng'
+    let start : Radix.Timer.Clock := { ticks := startTicks }
+    let finish := Radix.Timer.tick start delta
+    assert (Radix.Timer.elapsed start finish == delta)
+      s!"timer elapsed: {startTicks} {delta}"
+    let deadline := Radix.Timer.after start (delta + 1)
+    assert (Radix.Timer.hasExpired finish deadline == false)
+      s!"deadline still future: {startTicks} {delta}"
+
+/-! ================================================================ -/
 /-! ## Main Entry Point                                              -/
 /-! ================================================================ -/
 
@@ -1806,6 +1889,14 @@ def main : IO Unit := do
 
   IO.println "Numeric typeclasses:"
   testNumericTypeclassProperties
+  IO.println ""
+
+  IO.println "v0.3.0 modules:"
+  testUTF8Properties
+  testECCProperties
+  testDMAProperties
+  testRegionAlgebraProperties
+  testTimerProperties
   IO.println ""
 
   IO.println "All Radix Phase 4 Property Tests passed!"

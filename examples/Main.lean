@@ -31,6 +31,12 @@ import examples.BitmapDemo
 import examples.AlignmentDemo
 import examples.MemoryPoolDemo
 import examples.NumericDemo
+import examples.UTF8Demo
+import examples.ECCDemo
+import examples.DMADemo
+import examples.RegionAlgebraDemo
+import examples.TimerDemo
+import examples.ProofAutomationDemo
 
 /-!
 # Radix Usage Examples (P4-03)
@@ -733,5 +739,18 @@ def main : IO Unit := do
   Examples.AlignmentDemo.main
   Examples.MemoryPoolDemo.main
   Examples.NumericDemo.main
+
+  IO.println ""
+  IO.println "=============================="
+  IO.println "v0.3.0 Feature Examples"
+  IO.println "=============================="
+  IO.println ""
+
+  Examples.UTF8Demo.main
+  Examples.ECCDemo.main
+  Examples.DMADemo.main
+  Examples.RegionAlgebraDemo.main
+  Examples.TimerDemo.main
+  Examples.ProofAutomationDemo.main
 
   IO.println "All examples completed successfully!"
