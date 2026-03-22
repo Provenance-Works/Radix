@@ -263,11 +263,11 @@ def popMany (rb : RingBuf) (n : Nat) : List Radix.UInt8 × RingBuf :=
   go rb n []
 where
   go (rb : RingBuf) : Nat → List Radix.UInt8 → List Radix.UInt8 × RingBuf
-    | 0, acc => (acc, rb)
+    | 0, acc => (acc.reverse, rb)
     | n + 1, acc =>
       match rb.pop with
-      | some (v, rb') => go rb' n (acc ++ [v])
-      | none => (acc, rb)
+      | some (v, rb') => go rb' n (v :: acc)
+      | none => (acc.reverse, rb)
 
 /-- Drain all elements from the buffer. -/
 def drain (rb : RingBuf) : List Radix.UInt8 × RingBuf :=
