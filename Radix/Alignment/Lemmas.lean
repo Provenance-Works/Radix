@@ -195,4 +195,73 @@ theorem ops_alignDown_eq_spec (offset align : Nat) :
   unfold Alignment.alignDown Spec.alignDown
   rfl
 
+/-! ## Power-of-Two Fast Path Equivalence
+
+When alignment is a power of two, the bitwise operations (`alignUpPow2`,
+`alignDownPow2`, `isAlignedPow2`) produce exactly the same results as the
+division-based spec operations. This formally justifies replacing division
+with bit masks as a performance optimization. -/
+
+/-- For 2^k, the lower-bit mask equals the mod: x &&& (2^k - 1) = x % 2^k. -/
+private theorem nat_and_two_pow_sub_one_eq_mod (k x : Nat) :
+    x &&& (2 ^ k - 1) = x % 2 ^ k := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  simp [Nat.testBit_mod_two_pow]
+
+/-- Subtracting the remainder gives the quotient product. -/
+private theorem nat_sub_mod_eq_div_mul (x n : Nat) :
+    x - x % n = x / n * n := by
+  have h := Nat.div_add_mod x n
+  rw [Nat.mul_comm] at h
+  omega
+
+/-- Bridge from `Spec.isPowerOfTwo` (bitwise test) to `Nat.isPowerOfTwo` (existential). -/
+private theorem spec_isPowerOfTwo_to_nat (n : Nat) (h : Spec.isPowerOfTwo n) :
+    Nat.isPowerOfTwo n := by
+  obtain ⟨hpos, hand⟩ := h
+  exact (Nat.and_sub_one_eq_zero_iff_isPowerOfTwo (by omega)).mp hand
+
+/-- For power-of-two n, masking with (n - 1) equals mod n. -/
+private theorem land_sub_one_eq_mod (n x : Nat) (hpow : Nat.isPowerOfTwo n) :
+    x &&& (n - 1) = x % n := by
+  obtain ⟨k, rfl⟩ := hpow
+  exact nat_and_two_pow_sub_one_eq_mod k x
+
+/-- `alignDownPow2` equals `Spec.alignDown` when alignment is a power of two. -/
+theorem alignDownPow2_eq_spec (offset align : Nat) (h : Spec.isPowerOfTwo align) :
+    Alignment.alignDownPow2 offset align = Spec.alignDown offset align := by
+  unfold Alignment.alignDownPow2 Spec.alignDown
+  have hpos : align > 0 := h.1
+  simp [beq_zero_false_of_pos hpos]
+  have hpow := spec_isPowerOfTwo_to_nat align h
+  rw [land_sub_one_eq_mod align offset hpow, nat_sub_mod_eq_div_mul]
+
+/-- `alignUpPow2` equals `Spec.alignUp` when alignment is a power of two. -/
+theorem alignUpPow2_eq_spec (offset align : Nat) (h : Spec.isPowerOfTwo align) :
+    Alignment.alignUpPow2 offset align = Spec.alignUp offset align := by
+  unfold Alignment.alignUpPow2 Spec.alignUp
+  have hpos : align > 0 := h.1
+  simp [beq_zero_false_of_pos hpos]
+  have hpow := spec_isPowerOfTwo_to_nat align h
+  rw [land_sub_one_eq_mod align (offset + (align - 1)) hpow, nat_sub_mod_eq_div_mul]
+  have : offset + (align - 1) = offset + align - 1 := by omega
+  rw [this]
+
+/-- `isAlignedPow2` is equivalent to `Spec.isAligned` for power-of-two alignment. -/
+theorem isAlignedPow2_iff_spec (offset align : Nat) (h : Spec.isPowerOfTwo align) :
+    Alignment.isAlignedPow2 offset align = true ↔ Spec.isAligned offset align := by
+  unfold Alignment.isAlignedPow2 Spec.isAligned
+  have hpos : align > 0 := h.1
+  have hpow := spec_isPowerOfTwo_to_nat align h
+  constructor
+  · intro heq
+    refine ⟨hpos, ?_⟩
+    have hland : offset &&& (align - 1) = 0 := by simpa using heq
+    rw [land_sub_one_eq_mod align offset hpow] at hland
+    exact hland
+  · intro ⟨_, hmod⟩
+    have := land_sub_one_eq_mod align offset hpow
+    simp [this, hmod]
+
 end Radix.Alignment
