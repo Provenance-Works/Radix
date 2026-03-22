@@ -58,6 +58,71 @@ structure RingBuf where
 
 namespace RingBuf
 
+@[inline] private def wrapSuccFast (idx capacity : Nat) : Nat :=
+  let next := idx + 1
+  if next = capacity then 0 else next
+
+private theorem wrapSuccFast_lt {idx capacity : Nat}
+    (hcap : capacity > 0) (hidx : idx < capacity) :
+    wrapSuccFast idx capacity < capacity := by
+  simp [wrapSuccFast]
+  by_cases hEq : idx + 1 = capacity
+  · simp [hEq, hcap]
+  · simp [hEq]
+    omega
+
+@[inline] private def pushFast (rb : RingBuf) (val : Radix.UInt8) : Option RingBuf :=
+  if h : rb.count < rb.capacity then
+    have hcap : rb.capacity > 0 := by omega
+    have htail_valid : rb.tail < rb.buf.bytes.size := by
+      have h1 := rb.hSize; simp [Memory.Buffer.size] at h1
+      have h2 := rb.hTail hcap; omega
+    let buf' := rb.buf.writeU8 rb.tail val htail_valid
+    let newTail := wrapSuccFast rb.tail rb.capacity
+    some {
+      buf := buf'
+      capacity := rb.capacity
+      head := rb.head
+      tail := newTail
+      count := rb.count + 1
+      hCount := by omega
+      hHead := rb.hHead
+      hTail := by
+        intro hcap'
+        simpa [newTail] using wrapSuccFast_lt hcap' (rb.hTail hcap')
+      hSize := by
+        show (Memory.Buffer.writeU8 rb.buf rb.tail val htail_valid).size = rb.capacity
+        unfold Memory.Buffer.writeU8 Memory.Buffer.size
+        rw [Memory.Buffer.set_size_eq]
+        exact rb.hSize
+    }
+  else
+    none
+
+@[inline] private def popFast (rb : RingBuf) : Option (Radix.UInt8 × RingBuf) :=
+  if h : rb.count > 0 then
+    have hcap : rb.capacity > 0 := by have := rb.hCount; omega
+    have hhead_valid : rb.head < rb.buf.bytes.size := by
+      have h1 := rb.hSize; simp [Memory.Buffer.size] at h1
+      have h2 := rb.hHead hcap; omega
+    let val := rb.buf.readU8 rb.head hhead_valid
+    let newHead := wrapSuccFast rb.head rb.capacity
+    some (val, {
+      buf := rb.buf
+      capacity := rb.capacity
+      head := newHead
+      tail := rb.tail
+      count := rb.count - 1
+      hCount := by have := rb.hCount; omega
+      hHead := by
+        intro hcap'
+        simpa [newHead] using wrapSuccFast_lt hcap' (rb.hHead hcap')
+      hTail := rb.hTail
+      hSize := rb.hSize
+    })
+  else
+    none
+
 /-! ## Construction -/
 
 /-- Create a new ring buffer with the given capacity, initialized to zeros. -/
@@ -87,7 +152,7 @@ def new (capacity : Nat) : RingBuf :=
 
 /-- Push a byte onto the tail of the ring buffer.
     Returns `none` if the buffer is full. -/
-def push (rb : RingBuf) (val : Radix.UInt8) : Option RingBuf :=
+@[implemented_by pushFast] def push (rb : RingBuf) (val : Radix.UInt8) : Option RingBuf :=
   if h : rb.count < rb.capacity then
     -- tail is valid because count < capacity
     have hcap : rb.capacity > 0 := by omega
@@ -147,7 +212,7 @@ def pushForce (rb : RingBuf) (val : Radix.UInt8) : RingBuf :=
 
 /-- Pop a byte from the head of the ring buffer.
     Returns `none` if the buffer is empty. -/
-def pop (rb : RingBuf) : Option (Radix.UInt8 × RingBuf) :=
+@[implemented_by popFast] def pop (rb : RingBuf) : Option (Radix.UInt8 × RingBuf) :=
   if h : rb.count > 0 then
     have hcap : rb.capacity > 0 := by have := rb.hCount; omega
     have hhead_valid : rb.head < rb.buf.bytes.size := by
