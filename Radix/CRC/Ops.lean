@@ -67,17 +67,71 @@ where
 def table : Array _root_.UInt32 :=
   Array.ofFn (n := 256) fun i => buildTableEntry i.val.toUInt32
 
+@[inline] private def tableGet0 (idx : _root_.UInt8) : _root_.UInt32 :=
+  table.uget idx.toUSize (by simpa [table] using idx.toNat_lt_size)
+
 /-- Update CRC-32 with a single byte using table lookup.
     Core operation: `crc = table[(crc ^ byte) & 0xFF] ^ (crc >> 8)` -/
 @[inline] def updateByte (crc : _root_.UInt32) (byte : _root_.UInt8) : _root_.UInt32 :=
-  let index := ((crc ^^^ byte.toUInt32) &&& 0xFF).toNat
-  match table[index]? with
-  | some entry => entry ^^^ (crc >>> 8)
-  | none => crc  -- Unreachable: index is always < 256
+  let index := crc.toUInt8 ^^^ byte
+  tableGet0 index ^^^ (crc >>> 8)
+
+private def extendTable (prev : Array _root_.UInt32) : Array _root_.UInt32 :=
+  Array.ofFn (n := 256) fun i =>
+    let crc := prev[i.val]!
+    (crc >>> 8) ^^^ table[(crc &&& 0xFF).toNat]!
+
+/-- Additional lookup tables for slicing-by-4 CRC-32. -/
+private def table1 : Array _root_.UInt32 := extendTable table
+private def table2 : Array _root_.UInt32 := extendTable table1
+private def table3 : Array _root_.UInt32 := extendTable table2
+
+@[inline] private def tableGet1 (idx : _root_.UInt8) : _root_.UInt32 :=
+  table1.uget idx.toUSize (by simpa [table1, extendTable] using idx.toNat_lt_size)
+
+@[inline] private def tableGet2 (idx : _root_.UInt8) : _root_.UInt32 :=
+  table2.uget idx.toUSize (by simpa [table2, extendTable, table1] using idx.toNat_lt_size)
+
+@[inline] private def tableGet3 (idx : _root_.UInt8) : _root_.UInt32 :=
+  table3.uget idx.toUSize (by simpa [table3, extendTable, table2] using idx.toNat_lt_size)
+
+@[inline] private def updateTail (crc : _root_.UInt32) (data : ByteArray)
+    (offset remaining : Nat) (hSize : offset + remaining = data.size) : _root_.UInt32 :=
+  match remaining with
+  | 0 => crc
+  | remaining + 1 =>
+    let byte := data.get offset (by omega)
+    updateTail (updateByte crc byte) data (offset + 1) remaining (by omega)
+  termination_by remaining
+
+@[inline] private def updateFast (crc : _root_.UInt32) (data : ByteArray) : _root_.UInt32 :=
+  go 0 data.size crc (by simp)
+where
+  go (i remaining : Nat) (acc : _root_.UInt32)
+      (hSize : i + remaining = data.size) : _root_.UInt32 :=
+    if h4 : 4 ≤ remaining then
+      let b0 := data.get i (by omega)
+      let b1 := data.get (i + 1) (by omega)
+      let b2 := data.get (i + 2) (by omega)
+      let b3 := data.get (i + 3) (by omega)
+      let word := b0.toUInt32 ||| (b1.toUInt32 <<< 8) ||| (b2.toUInt32 <<< 16) ||| (b3.toUInt32 <<< 24)
+      let crc' := acc ^^^ word
+      let idx0 := crc'.toUInt8
+      let idx1 := (crc' >>> 8).toUInt8
+      let idx2 := (crc' >>> 16).toUInt8
+      let idx3 := (crc' >>> 24).toUInt8
+      let acc' := tableGet3 idx0 ^^^ tableGet2 idx1 ^^^ tableGet1 idx2 ^^^ tableGet0 idx3
+      go (i + 4) (remaining - 4) acc' (by omega)
+    else
+      updateTail acc data i remaining hSize
+  termination_by remaining
+
+@[inline] private def computeFast (data : ByteArray) : Radix.UInt32 :=
+  ⟨(updateFast initVal data) ^^^ initVal⟩
 
 /-- Compute CRC-32 of a `ByteArray`.
     This is the primary entry point for CRC-32 computation. -/
-@[inline] def compute (data : ByteArray) : Radix.UInt32 :=
+@[implemented_by computeFast, inline] def compute (data : ByteArray) : Radix.UInt32 :=
   let result := data.foldl (init := initVal) fun crc byte =>
     updateByte crc byte
   ⟨result ^^^ initVal⟩
@@ -87,7 +141,7 @@ def table : Array _root_.UInt32 :=
 @[inline] def init : _root_.UInt32 := initVal
 
 /-- Feed more data into a running CRC-32 computation. -/
-@[inline] def update (crc : _root_.UInt32) (data : ByteArray) : _root_.UInt32 :=
+@[implemented_by updateFast, inline] def update (crc : _root_.UInt32) (data : ByteArray) : _root_.UInt32 :=
   data.foldl (init := crc) fun c byte => updateByte c byte
 
 /-- Finalize a running CRC-32 computation. -/
@@ -145,9 +199,7 @@ def table : Array _root_.UInt16 :=
 /-- Update CRC-16 with a single byte using table lookup. -/
 @[inline] def updateByte (crc : _root_.UInt16) (byte : _root_.UInt8) : _root_.UInt16 :=
   let index := ((crc ^^^ byte.toUInt16) &&& 0xFF).toNat
-  match table[index]? with
-  | some entry => entry ^^^ (crc >>> 8)
-  | none => crc  -- Unreachable: index is always < 256
+  table[index]! ^^^ (crc >>> 8)
 
 /-- Compute CRC-16/CCITT of a `ByteArray`. -/
 @[inline] def compute (data : ByteArray) : Radix.UInt16 :=
