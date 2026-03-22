@@ -104,8 +104,8 @@ static void run_bench(const char *label, bench_fn fn) {
 
     qsort(times, NUM_RUNS, sizeof(uint64_t), cmp_u64);
     uint64_t median = times[NUM_RUNS / 2];
-    printf("  %s: %lu ns/op (median of %d, %d iters)\n",
-           label, (unsigned long)(median / NUM_ITER), NUM_RUNS, NUM_ITER);
+        printf("  %s: %.3f ns/op (median of %d, %d iters)\n",
+            label, (double)median / (double)NUM_ITER, NUM_RUNS, NUM_ITER);
 }
 
 /* ================================================================ */
@@ -212,7 +212,7 @@ static void ringbuf_init(RingBuf *rb, int cap) {
     for (int i = 0; i < cap; i++) rb->buf[i] = 0;
 }
 
-static int ringbuf_push(RingBuf *rb, uint8_t val) {
+static __attribute__((noinline)) int ringbuf_push(RingBuf *rb, uint8_t val) {
     if (rb->count >= rb->capacity) return 0;
     rb->buf[rb->tail] = val;
     rb->tail = (rb->tail + 1) % rb->capacity;
@@ -220,7 +220,7 @@ static int ringbuf_push(RingBuf *rb, uint8_t val) {
     return 1;
 }
 
-static int ringbuf_pop(RingBuf *rb, uint8_t *out) {
+static __attribute__((noinline)) int ringbuf_pop(RingBuf *rb, uint8_t *out) {
     if (rb->count == 0) return 0;
     *out = rb->buf[rb->head];
     rb->head = (rb->head + 1) % rb->capacity;
@@ -228,7 +228,7 @@ static int ringbuf_pop(RingBuf *rb, uint8_t *out) {
     return 1;
 }
 
-static void ringbuf_push_force(RingBuf *rb, uint8_t val) {
+static __attribute__((noinline)) void ringbuf_push_force(RingBuf *rb, uint8_t val) {
     if (rb->count < rb->capacity) {
         ringbuf_push(rb, val);
     } else {
@@ -250,7 +250,10 @@ static uint64_t bench_ringbuf_push(void) {
         if (rb.count >= rb.capacity) {
             rb.head = 0; rb.tail = 0; rb.count = 0;
         }
-        acc += ringbuf_push(&rb, byte);
+        if (ringbuf_push(&rb, byte)) {
+            int last = (rb.tail + rb.capacity - 1) % rb.capacity;
+            acc += (uint64_t)rb.buf[last] + (uint64_t)rb.tail + (uint64_t)rb.count;
+        }
     }
     return acc;
 }
@@ -283,7 +286,8 @@ static uint64_t bench_ringbuf_pushforce(void) {
     for (int i = 0; i < NUM_ITER; i++) {
         uint8_t byte = (uint8_t)(data[i] & 0xFF);
         ringbuf_push_force(&rb, byte);
-        acc++;
+        int last = (rb.tail + rb.capacity - 1) % rb.capacity;
+        acc += (uint64_t)rb.buf[last] + (uint64_t)rb.head + (uint64_t)rb.tail;
     }
     return acc;
 }
@@ -317,40 +321,54 @@ static uint32_t crc32_compute(const uint8_t *buf, size_t len) {
     return crc ^ CRC32_INIT;
 }
 
-/* Pre-generated 1KB test block */
-static uint8_t crc_block_1k[1024];
+/* Pre-generated CRC workloads */
+#define CRC_BLOCK_VARIANTS 1024
+static uint8_t crc_blocks_1k[CRC_BLOCK_VARIANTS][1024];
+static uint8_t crc_blocks_64[CRC_BLOCK_VARIANTS][64];
 
-static void gen_crc_block(void) {
+static void gen_crc_blocks(void) {
     prng_seed(42);
-    for (int i = 0; i < 1024; i++)
-        crc_block_1k[i] = (uint8_t)(prng_next() & 0xFF);
+    for (int block = 0; block < CRC_BLOCK_VARIANTS; block++) {
+        for (int i = 0; i < 1024; i++) {
+            uint8_t byte = (uint8_t)(prng_next() & 0xFF);
+            crc_blocks_1k[block][i] = byte;
+            if (i < 64) {
+                crc_blocks_64[block][i] = byte;
+            }
+        }
+    }
 }
 
 static uint64_t bench_crc32_1kb(void) {
     uint64_t acc = 0;
-    for (int i = 0; i < NUM_ITER; i++)
-        acc ^= crc32_compute(crc_block_1k, 1024);
+    for (int i = 0; i < NUM_ITER; i++) {
+        const uint8_t *block = crc_blocks_1k[i & (CRC_BLOCK_VARIANTS - 1)];
+        acc += (uint64_t)crc32_compute(block, 1024) + 1ULL;
+    }
     return acc;
 }
 
 static uint64_t bench_crc32_streaming_4x256(void) {
     uint64_t acc = 0;
     for (int i = 0; i < NUM_ITER; i++) {
+        const uint8_t *block = crc_blocks_1k[i & (CRC_BLOCK_VARIANTS - 1)];
         uint32_t crc = CRC32_INIT;
         for (int c = 0; c < 4; c++) {
-            const uint8_t *chunk = crc_block_1k + c * 256;
+            const uint8_t *chunk = block + c * 256;
             for (int j = 0; j < 256; j++)
                 crc = crc32_table[(crc ^ chunk[j]) & 0xFF] ^ (crc >> 8);
         }
-        acc ^= (crc ^ CRC32_INIT);
+        acc += (uint64_t)(crc ^ CRC32_INIT) + 1ULL;
     }
     return acc;
 }
 
 static uint64_t bench_crc32_byte_at_a_time_64(void) {
     uint64_t acc = 0;
-    for (int i = 0; i < NUM_ITER; i++)
-        acc ^= crc32_compute(crc_block_1k, 64);
+    for (int i = 0; i < NUM_ITER; i++) {
+        const uint8_t *block = crc_blocks_64[i & (CRC_BLOCK_VARIANTS - 1)];
+        acc += (uint64_t)crc32_compute(block, 64) + 1ULL;
+    }
     return acc;
 }
 
@@ -393,7 +411,7 @@ int main(void) {
 
     printf("CRC-32:\n");
     crc32_init_table();
-    gen_crc_block();
+    gen_crc_blocks();
     run_bench("compute-1KB", bench_crc32_1kb);
     run_bench("streaming-4x256B", bench_crc32_streaming_4x256);
     run_bench("byte-at-a-time-64B", bench_crc32_byte_at_a_time_64);
