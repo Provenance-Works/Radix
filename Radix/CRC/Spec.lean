@@ -14,8 +14,10 @@ generator polynomial. This module defines the abstract computation and
 proves core properties:
 
 - CRC of empty data
-- Linearity: CRC(a ⊕ b) = CRC(a) ⊕ CRC(b)
-- Check property: CRC(data ++ crc_bytes) = 0 (for the check value)
+- GF(2) polynomial algebra: commutativity, associativity, identity, self-inverse,
+  left/right cancellation (complete group structure for XOR)
+- Streaming API consistency (single-chunk and multi-chunk equivalence)
+- Table correctness (CRC-32, CRC-16 tables have 256 entries)
 
 ## Supported Standards
 

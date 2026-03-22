@@ -10,10 +10,11 @@ import Radix.CRC.Ops
 
 Correctness proofs for CRC implementations:
 
-- Table size correctness
+- Table size correctness (CRC-32, CRC-16)
 - Streaming API consistency (init/update/finalize = compute)
 - Empty data CRC value
-- Spec-level properties (empty data, linearity of GF(2) operations)
+- GF(2) polynomial algebra: complete group structure (commutativity, associativity,
+  identity, self-inverse, left/right cancellation, xor-add equivalence)
 
 ## Architecture
 
@@ -73,6 +74,32 @@ open Spec in
 theorem gf2_add_self (a : GF2Poly) :
     GF2Poly.add a a = GF2Poly.zero := by
   simp [GF2Poly.add, GF2Poly.zero]
+
+open Spec in
+/-- GF(2) zero is a left identity: 0 + a = a. -/
+theorem gf2_zero_add (a : GF2Poly) :
+    GF2Poly.add GF2Poly.zero a = a := by
+  simp [GF2Poly.add, GF2Poly.zero]
+
+open Spec in
+/-- GF(2) right cancellation: (a + b) + b = a. -/
+theorem gf2_add_cancel_right (a b : GF2Poly) :
+    GF2Poly.add (GF2Poly.add a b) b = a := by
+  cases a; cases b
+  simp [GF2Poly.add, Nat.xor_assoc, Nat.xor_self, Nat.xor_zero]
+
+open Spec in
+/-- GF(2) left cancellation: a + (a + b) = b. -/
+theorem gf2_add_cancel_left (a b : GF2Poly) :
+    GF2Poly.add a (GF2Poly.add a b) = b := by
+  cases a; cases b
+  simp [GF2Poly.add, ← Nat.xor_assoc, Nat.xor_self, Nat.zero_xor]
+
+open Spec in
+/-- GF(2) xor is the same operation as add (by definition). -/
+theorem gf2_xor_eq_add (a b : GF2Poly) :
+    GF2Poly.xor a b = GF2Poly.add a b := by
+  simp [GF2Poly.xor]
 
 /-! ## Empty Data CRC
 
