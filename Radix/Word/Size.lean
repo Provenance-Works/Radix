@@ -32,10 +32,11 @@ class PlatformWidth (n : Nat) where
 
 /-- Default instance: resolve to host platform width.
     For cross-compilation, provide an explicit instance instead.
-    `native_decide` is appropriate here: it is a closed ground proposition
-    on `System.Platform.numBits` (always 32 or 64 in supported toolchains). -/
+    The proof is discharged by reducing the closed proposition on
+    `System.Platform.numBits` (always 32 or 64 in supported toolchains). -/
 instance : PlatformWidth System.Platform.numBits where
-  isValid := by native_decide
+  isValid := by
+    exact System.Platform.numBits_eq
 
 /-- Unsigned platform-width integer.
     All definitions and proofs are parametric over `platformWidth`. -/
