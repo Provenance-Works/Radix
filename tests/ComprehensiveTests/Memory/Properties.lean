@@ -97,7 +97,7 @@ def runMemoryPropertyTests : IO Nat := do
   for _ in [:numIter] do
     let (rng', v8) := rng.nextUInt8;  rng := rng'
     let buf := Radix.Memory.Buffer.zeros 16
-    let p := Radix.Memory.Ptr.ofBuffer buf 1 (by native_decide)
+    let p := Radix.Memory.Ptr.ofBuffer buf 1 (by decide)
     let pw := p.writeU8 ⟨v8⟩
     assert (pw.readU8 == ⟨v8⟩) "ptr u8 write-read"
 
