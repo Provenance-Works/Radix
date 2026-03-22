@@ -383,9 +383,15 @@ private def testUWord : IO Unit := do
   assert ((Radix.UWord.rotl one four).toNat == 16) "UWord rotl"
   assert ((Radix.UWord.rotr (⟨BitVec.ofNat _ 16⟩ : Radix.UWord) four).toNat == 1) "UWord rotr"
   -- extractBits / insertBits
-  assert ((Radix.UWord.extractBits (⟨BitVec.ofNat _ 0xFF⟩ : Radix.UWord) 0 4 ⟨by omega, by native_decide⟩).toNat == 0x0F)
+  assert ((Radix.UWord.extractBits (⟨BitVec.ofNat _ 0xFF⟩ : Radix.UWord) 0 4
+    ⟨by omega, by
+      have h := System.Platform.numBits_eq
+      omega⟩).toNat == 0x0F)
     "UWord extractBits"
-  assert ((Radix.UWord.insertBits (⟨BitVec.ofNat _ 0⟩ : Radix.UWord) ⟨BitVec.ofNat _ 0x0F⟩ 4 8 ⟨by omega, by native_decide⟩).toNat == 0xF0)
+  assert ((Radix.UWord.insertBits (⟨BitVec.ofNat _ 0⟩ : Radix.UWord) ⟨BitVec.ofNat _ 0x0F⟩ 4 8
+    ⟨by omega, by
+      have h := System.Platform.numBits_eq
+      omega⟩).toNat == 0xF0)
     "UWord insertBits"
 
 /-! ## IWord Tests -/
@@ -587,12 +593,12 @@ private def testMemoryBuffer : IO Unit := do
 private def testMemoryPtr : IO Unit := do
   IO.println "  Memory.Ptr..."
   let buf := Radix.Memory.Buffer.zeros 16
-  let p := Radix.Memory.Ptr.ofBuffer buf 1 (by native_decide)
+  let p := Radix.Memory.Ptr.ofBuffer buf 1 (by decide)
   let p' := p.writeU8 ⟨0x42⟩
   assert (p'.readU8.toNat == 0x42) "Ptr write/read U8"
-  let p2 := p.advance 4 (by native_decide)
+  let p2 := p.advance 4 (by decide)
   assert (p2.offset == 4) "Ptr advance offset"
-  let p32 := Radix.Memory.Ptr.ofBuffer buf 4 (by native_decide)
+  let p32 := Radix.Memory.Ptr.ofBuffer buf 4 (by decide)
   assert (p32.readU32LE.toNat == 0) "Ptr readU32LE zeros"
 
 /-! ================================================================ -/
