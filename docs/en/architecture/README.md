@@ -70,8 +70,13 @@ graph TD
 | Bitmap | `Bitmap.Spec`, `Bitmap.Lemmas` | `Bitmap.Ops` | — |
 | CRC | `CRC.Spec`, `CRC.Lemmas` | `CRC.Ops` | — |
 | MemoryPool | `MemoryPool.Spec`, `MemoryPool.Lemmas` | `MemoryPool.Model` | — |
+| UTF8 | `UTF8.Spec`, `UTF8.Lemmas` | `UTF8.Ops` | — |
+| ECC | `ECC.Spec`, `ECC.Lemmas` | `ECC.Ops` | — |
+| DMA | `DMA.Spec`, `DMA.Lemmas` | `DMA.Ops` | — |
+| Timer | `Timer.Spec`, `Timer.Lemmas` | `Timer.Ops` | — |
+| ProofAutomation | — | — | Meta-level tactic macros |
 
-> **Note:** Ten modules are fully pure in v0.2.0: Word, Bit, Bytes, Memory, Binary, Alignment, RingBuffer, Bitmap, CRC, and MemoryPool. Only System, Concurrency, and BareMetal cross the Layer 1 trusted boundary.
+> **Note:** Fourteen modules are fully pure in v0.3.0: Word, Bit, Bytes, Memory, Binary, Alignment, RingBuffer, Bitmap, CRC, MemoryPool, UTF8, ECC, DMA, and Timer. Only System, Concurrency, and BareMetal cross the Layer 1 trusted boundary, while `ProofAutomation` remains a meta-level support module.
 
 ## Module Dependency Graph
 
@@ -96,6 +101,12 @@ graph TD
     CRC --> Bit
     MemoryPool["MemoryPool<br/>(Allocator Models)"] --> Memory
     MemoryPool --> Word
+    UTF8["UTF8<br/>(Unicode Scalars)"]
+    ECC["ECC<br/>(Error Correction)"]
+    DMA["DMA<br/>(Transfer Model)"] --> Memory
+    DMA -.->|"uses ordering model"| Concurrency
+    Timer["Timer<br/>(Deadlines + Timeouts)"]
+    ProofAutomation["ProofAutomation<br/>(Tactic Macros)"]
     System["System<br/>(OS Interface)"] --> Word
     System --> Bytes
     System --> Memory
@@ -112,12 +123,17 @@ graph TD
     style Bitmap fill:#2196F3,color:white
     style CRC fill:#2196F3,color:white
     style MemoryPool fill:#2196F3,color:white
+    style UTF8 fill:#26A69A,color:white
+    style ECC fill:#26A69A,color:white
+    style DMA fill:#26A69A,color:white
+    style Timer fill:#26A69A,color:white
+    style ProofAutomation fill:#5C6BC0,color:white
     style System fill:#FF9800,color:white
     style Concurrency fill:#9C27B0,color:white
     style BareMetal fill:#9C27B0,color:white
 ```
 
-Dependencies still flow upward from `Word`, but v0.2.0 adds a second cluster of verified data-structure modules on top of the original core: `Alignment`, `RingBuffer`, `Bitmap`, `CRC`, `MemoryPool`, and the width-generic `Word.Numeric` API.
+Dependencies still flow upward from `Word`, but the current release now includes two extension layers: the v0.2.0 data-structure cluster (`Alignment`, `RingBuffer`, `Bitmap`, `CRC`, `MemoryPool`, and `Word.Numeric`) and the v0.3.0 composable cluster (`UTF8`, `ECC`, `DMA`, and `Timer`). Region algebra extends `Memory`, and `ProofAutomation` provides meta-level proof helpers outside the runtime layer stack.
 
 ## Trusted Computing Base (TCB)
 

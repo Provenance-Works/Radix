@@ -7,7 +7,7 @@
 [![CI](https://github.com/provenance-works/radix/actions/workflows/ci.yml/badge.svg)](https://github.com/provenance-works/radix/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Lean](https://img.shields.io/badge/Lean-4.29.0--rc4-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PHRleHQgeD0iMCIgeT0iMjAiIGZvbnQtc2l6ZT0iMjAiPkw8L3RleHQ+PC9zdmc+)](https://lean-lang.org/)
-[![v0.2.1](https://img.shields.io/badge/version-0.2.1-green.svg)](CHANGELOG.md)
+[![v0.3.0](https://img.shields.io/badge/version-0.3.0-green.svg)](CHANGELOG.md)
 [![Theorems](https://img.shields.io/badge/theorems-1089%2B-brightgreen.svg)](#verification-status)
 [![sorry-free](https://img.shields.io/badge/sorry-free-%E2%9C%93-brightgreen.svg)](#verification-status)
 
@@ -40,7 +40,7 @@ Radix eliminates this trade-off:
 | **Word** | 10 integer types (U/Int 8–64, UWord, IWord), 4 arithmetic modes, numeric typeclasses | 350 |
 | **Bit** | Boolean algebra, shifts, rotates, scanning, bit fields | 278 |
 | **Bytes** | Endianness, bswap, ByteSlice | 60 |
-| **Memory** | Buffer, Ptr, LayoutDesc, region disjointness | 52 |
+| **Memory** | Buffer, Ptr, LayoutDesc, region disjointness and algebra | 52 |
 | **Binary** | Format DSL, parser, serializer, LEB128 | 92 |
 | **System** | File I/O state machine plus trusted OS boundary wrappers | 41 |
 | **Concurrency** | C11 memory ordering specification model with trusted hardware assumptions | 32 |
@@ -75,7 +75,9 @@ Radix eliminates this trade-off:
 └─────────────────────────────────────────────────┘
 ```
 
-Every module follows a three-layer design:
+Seventeen runtime and model modules follow a three-layer design.
+`ProofAutomation` is a meta-level helper module that provides tactic macros
+rather than a runtime surface:
 
 | Layer | Purpose | Example |
 |-------|---------|---------|
@@ -83,7 +85,7 @@ Every module follows a three-layer design:
 | **Impl** | Computable Lean 4 code with correctness proofs | `Word.UInt`, `Bit.Ops` |
 | **Bridge** | System-level wrappers with named trust assumptions | `System.IO`, `BareMetal.Assumptions` |
 
-Fifteen modules are fully executable and self-contained in pure Lean. `System`, `Concurrency`, and `BareMetal` deliberately cross the trusted boundary: they formalize external OS or hardware behavior via named assumptions, and `BareMetal` is a verification model rather than a device-runtime implementation.
+Fourteen runtime modules are fully executable and self-contained in pure Lean. `ProofAutomation` is also pure Lean, but it operates at elaboration time as a meta-level helper rather than as an executable runtime module. `System`, `Concurrency`, and `BareMetal` deliberately cross the trusted boundary: they formalize external OS or hardware behavior via named assumptions, and `BareMetal` is a verification model rather than a device-runtime implementation.
 
 ## Quick Start
 
@@ -99,7 +101,7 @@ Add Radix to your `lakefile.lean`:
 
 ```lean
 require radix from git
-  "https://github.com/provenance-works/radix" @ "v0.2.1"
+  "https://github.com/provenance-works/radix" @ "v0.3.0"
 ```
 
 Then fetch dependencies:
@@ -199,8 +201,8 @@ lake exe bench
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap.
 
-- **v0.2.1** (latest release) "Bedrock" — 1062+ theorems, 13 modules, ring buffers, bitmaps, CRC, numeric typeclasses, memory pools, alignment
-- **v0.3.0** (in progress) "Composable" — UTF-8, error correction, DMA, region algebra, timers, proof automation
+- **v0.3.0** (latest release) "Composable" — 1089+ theorems, 18 modules, UTF-8, error correction, DMA, region algebra, timers, proof automation
+- **v0.2.1** "Bedrock" — patch release removing remaining `native_decide` usage from library proofs and CI trust-audit tracking
 
 ## Contributing
 
