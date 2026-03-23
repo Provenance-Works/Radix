@@ -5,7 +5,7 @@
 
 ## 概要
 
-Lean 4 の `ByteArray` 上に構築された抽象メモリモデルを提供します。証明付きバッファ、ポインタ抽象化、パックド構造体レイアウト計算を含みます。すべての操作は GC フレンドリーで、手動メモリ管理は不要です。
+Lean 4 の `ByteArray` 上に構築された抽象メモリモデルを提供します。証明付きバッファ、ポインタ抽象化、パックド構造体レイアウト計算に加えて、メモリマップ推論向けの区間代数も含みます。すべての操作は GC フレンドリーで、手動メモリ管理は不要です。
 
 ## バッファ (`Memory.Model`)
 
@@ -103,15 +103,31 @@ structure Region where
   size : Nat
 
 def Region.endOffset (r : Region) : Nat
+def Region.intersects (a b : Region) : Prop
 def Region.disjoint (a b : Region) : Prop
-def Region.contains (r : Region) (addr : Nat) : Prop
+def Region.adjacent (a b : Region) : Prop
+def Region.mergeable (a b : Region) : Prop
+def Region.contains (outer inner : Region) : Prop
+def Region.inBounds (r : Region) (addr : Nat) : Prop
+def Region.span (a b : Region) : Region
+def Region.intersection (a b : Region) : Region
+def Region.union? (a b : Region) : Option Region
+def Region.difference (a b : Region) : List Region
 def isAligned (addr align : Nat) : Prop
 ```
+
+### 領域代数のメモ
+
+- `span` は 2 つの入力領域を両方含む最小区間を返します。
+- `intersection` は重なりがない場合、正規化された `Region.empty` を返します。
+- `union?` は 2 領域が重なっている場合、ちょうど隣接している場合、または一方が空領域の場合に成功します。
+- `difference` は区間差で分割が起こり得るため、0 個、1 個、2 個の非空残余領域を返します。
 
 ## 証明 (`Memory.Lemmas`)
 
 - **バッファサイズ保存**: `(Buffer.zeros n).size = n`, `(buf.writeU8 ..).size = buf.size`
-- **領域分離性**: 可換律、`empty_left`、`empty_right`
+- **領域分離性**: 可換律、`empty_left`、`empty_right`、`intersects_comm`、`adjacent_comm`
+- **領域代数**: `span_contains_left`、`span_contains_right`、`span_comm`、`intersection_comm`、`union?_isSome_iff_mergeable`、`span_least_upper_bound`
 - **アライメント**: `isAligned_zero`、`isAligned_mul`
 - **レイアウト**: `empty_totalSize`、`appendField_totalSize`
 - **チェック付き API**: `checkedReadU8_some`（範囲内の場合）、`checkedReadU8_none`（範囲外の場合）

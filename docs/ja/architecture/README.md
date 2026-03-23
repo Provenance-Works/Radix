@@ -70,8 +70,13 @@ graph TD
 | Bitmap | `Bitmap.Spec`, `Bitmap.Lemmas` | `Bitmap.Ops` | — |
 | CRC | `CRC.Spec`, `CRC.Lemmas` | `CRC.Ops` | — |
 | MemoryPool | `MemoryPool.Spec`, `MemoryPool.Lemmas` | `MemoryPool.Model` | — |
+| UTF8 | `UTF8.Spec`, `UTF8.Lemmas` | `UTF8.Ops` | — |
+| ECC | `ECC.Spec`, `ECC.Lemmas` | `ECC.Ops` | — |
+| DMA | `DMA.Spec`, `DMA.Lemmas` | `DMA.Ops` | — |
+| Timer | `Timer.Spec`, `Timer.Lemmas` | `Timer.Ops` | — |
+| ProofAutomation | — | — | メタレベルタクティクマクロ |
 
-> **注記:** v0.2.0 では 10 モジュールが完全に純粋です。Word、Bit、Bytes、Memory、Binary、Alignment、RingBuffer、Bitmap、CRC、MemoryPool は Layer 2-3 のみで完結し、Layer 1 の信頼境界をまたぐのは System、Concurrency、BareMetal だけです。
+> **注記:** v0.3.0 では 14 モジュールが完全に純粋です。Word、Bit、Bytes、Memory、Binary、Alignment、RingBuffer、Bitmap、CRC、MemoryPool、UTF8、ECC、DMA、Timer は Layer 2-3 のみで完結し、Layer 1 の信頼境界をまたぐのは System、Concurrency、BareMetal だけです。`ProofAutomation` はランタイム層の外側にあるメタレベル支援モジュールです。
 
 ## モジュール依存関係グラフ
 
@@ -96,6 +101,12 @@ graph TD
     CRC --> Bit
     MemoryPool["MemoryPool<br/>(アロケータモデル)"] --> Memory
     MemoryPool --> Word
+    UTF8["UTF8<br/>(Unicode スカラ)"]
+    ECC["ECC<br/>(誤り訂正)"]
+    DMA["DMA<br/>(転送モデル)"] --> Memory
+    DMA -.->|"オーダリングモデルを利用"| Concurrency
+    Timer["Timer<br/>(デッドライン + タイムアウト)"]
+    ProofAutomation["ProofAutomation<br/>(タクティクマクロ)"]
     System["System<br/>(OSインターフェース)"] --> Word
     System --> Bytes
     System --> Memory
@@ -112,12 +123,17 @@ graph TD
     style Bitmap fill:#2196F3,color:white
     style CRC fill:#2196F3,color:white
     style MemoryPool fill:#2196F3,color:white
+    style UTF8 fill:#26A69A,color:white
+    style ECC fill:#26A69A,color:white
+    style DMA fill:#26A69A,color:white
+    style Timer fill:#26A69A,color:white
+    style ProofAutomation fill:#5C6BC0,color:white
     style System fill:#FF9800,color:white
     style Concurrency fill:#9C27B0,color:white
     style BareMetal fill:#9C27B0,color:white
 ```
 
-依存関係の核は引き続き `Word` ですが、v0.2.0 ではその上に `Alignment`、`RingBuffer`、`Bitmap`、`CRC`、`MemoryPool`、`Word.Numeric` が積み上がり、基礎整数・ビット演算を再利用する形に広がりました。
+依存関係の核は引き続き `Word` ですが、現在のリリースではその上に 2 つの拡張層が積み上がっています。1 つは v0.2.0 のデータ構造群（`Alignment`、`RingBuffer`、`Bitmap`、`CRC`、`MemoryPool`、`Word.Numeric`）、もう 1 つは v0.3.0 の composable 群（`UTF8`、`ECC`、`DMA`、`Timer`）です。領域代数は `Memory` を拡張し、`ProofAutomation` はランタイム層の外側で証明支援を提供します。
 
 ## 信頼計算基盤（TCB）
 

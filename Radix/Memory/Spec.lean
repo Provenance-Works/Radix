@@ -40,11 +40,32 @@ namespace Region
 /-- The end offset (exclusive) of the region. -/
 @[inline] def endOffset (r : Region) : Nat := r.start + r.size
 
+/-- Whether two regions overlap at any byte. -/
+def intersects (a b : Region) : Prop :=
+  0 < a.size ∧ 0 < b.size ∧ a.start < b.endOffset ∧ b.start < a.endOffset
+
+instance (a b : Region) : Decidable (intersects a b) :=
+  inferInstanceAs (Decidable (_ ∧ _))
+
 /-- Whether two regions are disjoint (non-overlapping). -/
 def disjoint (a b : Region) : Prop :=
   a.endOffset ≤ b.start ∨ b.endOffset ≤ a.start
 
 instance (a b : Region) : Decidable (disjoint a b) :=
+  inferInstanceAs (Decidable (_ ∨ _))
+
+/-- Whether two regions are exactly adjacent with no gap. -/
+def adjacent (a b : Region) : Prop :=
+  a.endOffset = b.start ∨ b.endOffset = a.start
+
+instance (a b : Region) : Decidable (adjacent a b) :=
+  inferInstanceAs (Decidable (_ ∨ _))
+
+/-- Regions can be unioned into a single interval when they overlap or touch. -/
+def mergeable (a b : Region) : Prop :=
+  intersects a b ∨ adjacent a b
+
+instance (a b : Region) : Decidable (mergeable a b) :=
   inferInstanceAs (Decidable (_ ∨ _))
 
 /-- Whether a region fully contains another. -/
@@ -63,6 +84,57 @@ instance (r : Region) (offset : Nat) : Decidable (inBounds r offset) :=
 
 /-- The empty region at offset 0. -/
 def empty : Region := ⟨0, 0⟩
+
+/-- The smallest interval containing both regions. -/
+def span (a b : Region) : Region :=
+  let start := min a.start b.start
+  let finish := max a.endOffset b.endOffset
+  ⟨start, finish - start⟩
+
+/-- The overlapping portion of two regions, or the empty region when disjoint. -/
+def intersection (a b : Region) : Region :=
+  let start := max a.start b.start
+  let finish := min a.endOffset b.endOffset
+  if start < finish then
+    ⟨start, finish - start⟩
+  else
+    empty
+
+/-- Exact interval union, defined only when the result remains a single interval.
+    Empty regions are neutral and return the other operand. -/
+def union? (a b : Region) : Option Region :=
+  if a.size = 0 then
+    some b
+  else if b.size = 0 then
+    some a
+  else if mergeable a b then
+    some (span a b)
+  else
+    none
+
+/-- Set difference of `a \ b`, represented as up to two residual intervals. -/
+def difference (a b : Region) : List Region :=
+  let inter := intersection a b
+  let rawPieces :=
+    if inter.size = 0 then
+      [a]
+    else
+      let left : Option Region :=
+        if a.start < inter.start then
+          some ⟨a.start, inter.start - a.start⟩
+        else
+          none
+      let right : Option Region :=
+        if inter.endOffset < a.endOffset then
+          some ⟨inter.endOffset, a.endOffset - inter.endOffset⟩
+        else
+          none
+      match left, right with
+      | some l, some r => [l, r]
+      | some l, none => [l]
+      | none, some r => [r]
+      | none, none => []
+  rawPieces.filter fun piece => decide (0 < piece.size)
 
 end Region
 

@@ -11,3 +11,8 @@ import Radix.RingBuffer
 import Radix.Bitmap
 import Radix.CRC
 import Radix.MemoryPool
+import Radix.UTF8
+import Radix.ECC
+import Radix.DMA
+import Radix.Timer
+import Radix.ProofAutomation

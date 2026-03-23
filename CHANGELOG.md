@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Renamed the Concurrency hardware-state inhabitance axiom to follow the `trust_` naming convention and corrected the System assumptions header to describe the full multi-module trusted boundary.
 
+## [0.3.0] - 2026-03-23
+
+### Added
+
+#### v0.3.0 Composable Modules
+- Added `Radix.UTF8` with a verified UTF-8 scalar model, executable encoding/decoding helpers, well-formedness checks, and round-trip proofs.
+- Added `Radix.ECC` with Hamming(7,4) codewords, parity helpers, syndrome computation, and single-bit correction proofs.
+- Added `Radix.DMA` with source/destination region descriptors, coherence and atomicity constraints, and a checked DMA copy simulator.
+- Added region algebra to `Radix.Memory.Spec.Region`: `intersects`, `adjacent`, `mergeable`, `span`, `intersection`, `union?`, and `difference`, with supporting lemmas.
+- Added `Radix.Timer` with monotonic clocks, deadlines, elapsed-time helpers, and expiry proofs.
+- Added `Radix.ProofAutomation` with `radix_decide` and `radix_omega` tactic macros for common Radix proof patterns.
+
+#### Tests, Examples, and Documentation
+- Added execution, comprehensive, and property tests covering all v0.3.0 modules and the new memory region algebra surface.
+- Added six new runnable examples: UTF-8, ECC, DMA, region algebra, timer, and proof automation.
+- Added English and Japanese API reference coverage for the v0.3.0 modules and updated development docs for the expanded module set.
+
 ## [0.2.1] - 2026-03-22
 
 ### Changed
@@ -239,7 +256,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation in English and Japanese
 - 11 usage examples demonstrating all modules
 
-[Unreleased]: https://github.com/provenance-works/radix/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/provenance-works/radix/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/provenance-works/radix/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/provenance-works/radix/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/provenance-works/radix/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/provenance-works/radix/compare/v0.1.2...v0.1.3

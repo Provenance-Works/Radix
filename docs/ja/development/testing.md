@@ -9,7 +9,7 @@ Radixは多層テスト戦略を採用：
 | レイヤー | 種類 | 検証内容 |
 |-------|------|-----------------|
 | **形式証明** | Lean 4 型システム | 数学的正しさ（Lemmasモジュール） |
-| **ユニットテスト** | `tests/Main.lean` | 全13モジュールの具体的な入出力の正しさ |
+| **ユニットテスト** | `tests/Main.lean` | 全18モジュールの具体的な入出力の正しさ |
 | **プロパティテスト** | `tests/PropertyTests.lean` | ランダム入力に対する代数的性質 |
 | **包括テスト** | `tests/ComprehensiveTests.lean` | モジュール横断の回帰検証とアサーション集計 |
 | **使用例** | `examples/Main.lean` | アサーション付きの使用例の実行 |
@@ -20,10 +20,10 @@ graph TD
         Proofs["形式証明<br/>(Lemmas モジュール)<br/>Lean 4 カーネルで検証"]
     end
     subgraph "ランタイム（実行テスト）"
-        Unit["ユニットテスト<br/>(tests/Main.lean)<br/>全13モジュール × 具体値"]
+        Unit["ユニットテスト<br/>(tests/Main.lean)<br/>全18モジュール × 具体値"]
         Prop["プロパティテスト<br/>(tests/PropertyTests.lean)<br/>500イテレーション × ランダム入力"]
         Comp["包括テスト<br/>(tests/ComprehensiveTests.lean)<br/>完全な回帰カバレッジ"]
-        Ex["使用例<br/>(examples/Main.lean)<br/>コア説明 + 15個の実行可能例"]
+        Ex["使用例<br/>(examples/Main.lean)<br/>コア説明 + 21個の実行可能例"]
     end
     Proofs --> Unit
     Unit --> Prop
@@ -38,7 +38,7 @@ graph TD
 ## テストの実行
 
 ```bash
-# ユニットテスト — 全13モジュール
+# ユニットテスト — 全18モジュール
 lake exe test
 
 # プロパティベーステスト — ランダム + エッジケース
@@ -58,7 +58,7 @@ lake exe test && lake exe proptest && lake exe comptest && lake exe examples
 
 ## ユニットテスト（`tests/Main.lean`）
 
-全13モジュールを具体的なテスト値でカバー：
+全18モジュールを具体的なテスト値でカバー：
 
 | モジュール | カバレッジ |
 |--------|----------|
@@ -75,6 +75,11 @@ lake exe test && lake exe proptest && lake exe comptest && lake exe examples
 | **Bitmap** | `set`、`clear`、`test`、`toggle`、集合演算、popcount、探索 |
 | **CRC** | CRC-32/CRC-16 の既知ベクタ、ストリーミング API の一貫性 |
 | **MemoryPool** | Bump pool の割り当て/リセットと slab pool の割り当て/解放安全性 |
+| **UTF8** | スカラ構築、バイト長クラス、ラウンドトリップ復号、不正列の拒否 |
+| **ECC** | Hamming エンコード/デコード、パリティ検査、シンドローム検出、単一ビット訂正 |
+| **DMA** | ディスクリプタ妥当性、burst ステップ数、チェック付き領域コピーシミュレーション |
+| **Timer** | 単調 tick、期限、残り時間の飽和、期限切れ判定 |
+| **ProofAutomation** | `radix_decide` と `radix_omega` の代表 goal に対する smoke test |
 
 ### テストパターン
 
@@ -164,6 +169,10 @@ private def testUInt8 : IO Unit := do
 | `Memory.Lemmas` | バッファサイズ保存、領域分離性、アライメント |
 | `Binary.Lemmas` | フォーマット性質、writePaddingサイズ、parse_padding_ok |
 | `Binary.Leb128.Lemmas` | LEB128ラウンドトリップ（全4バリアント）、サイズ上限 |
+| `UTF8.Lemmas` | エンコード長の一致、エンコード済みスカラの well-formedness |
+| `ECC.Lemmas` | Hamming の encode 後 decode と単一ビット訂正の正しさ |
+| `DMA.Lemmas` | ディスクリプタ妥当性の同値、転送バイト数、ステップ数の正値性 |
+| `Timer.Lemmas` | 単調 tick、期限切れ後に残時間が 0 になる性質 |
 | `Concurrency.Lemmas` | オーダリング証明、CAS正しさ、線形化可能性、DRF |
 | `BareMetal.Lemmas` | 領域性質、スタートアップバリデーション、アライメント、GCフリー |
 

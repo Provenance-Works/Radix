@@ -9,7 +9,7 @@ Radix employs a multi-layered testing strategy:
 | Layer | Type | What it verifies |
 |-------|------|-----------------|
 | **Formal proofs** | Lean 4 type system | Mathematical correctness (Lemmas modules) |
-| **Unit tests** | `tests/Main.lean` | Concrete input/output correctness for all 13 modules |
+| **Unit tests** | `tests/Main.lean` | Concrete input/output correctness for all 18 modules |
 | **Property tests** | `tests/PropertyTests.lean` | Algebraic properties hold over random inputs |
 | **Comprehensive tests** | `tests/ComprehensiveTests.lean` | Cross-module regression coverage and assertion counts |
 | **Examples** | `examples/Main.lean` | Usage examples execute with assertions |
@@ -20,10 +20,10 @@ graph TD
         Proofs["Formal Proofs<br/>(Lemmas modules)<br/>Verified by Lean 4 kernel"]
     end
     subgraph "Runtime (Execution Tests)"
-        Unit["Unit Tests<br/>(tests/Main.lean)<br/>All 13 modules × concrete values"]
+        Unit["Unit Tests<br/>(tests/Main.lean)<br/>All 18 modules × concrete values"]
         Prop["Property Tests<br/>(tests/PropertyTests.lean)<br/>500 iterations × random inputs"]
         Comp["Comprehensive Tests<br/>(tests/ComprehensiveTests.lean)<br/>Full regression coverage"]
-        Ex["Examples<br/>(examples/Main.lean)<br/>Core walkthrough + 15 runnable example modules"]
+        Ex["Examples<br/>(examples/Main.lean)<br/>Core walkthrough + 21 runnable example modules"]
     end
     Proofs --> Unit
     Unit --> Prop
@@ -38,7 +38,7 @@ graph TD
 ## Running Tests
 
 ```bash
-# Unit tests — all 13 modules
+# Unit tests — all 18 modules
 lake exe test
 
 # Property-based tests — random + edge cases
@@ -58,7 +58,7 @@ All commands should complete with zero failures.
 
 ## Unit Tests (`tests/Main.lean`)
 
-Covers all 13 modules with concrete test values:
+Covers all 18 modules with concrete test values:
 
 | Module | Coverage |
 |--------|----------|
@@ -75,6 +75,11 @@ Covers all 13 modules with concrete test values:
 | **Bitmap** | `set`, `clear`, `test`, `toggle`, set operations, population count, search |
 | **CRC** | CRC-32/CRC-16 known vectors, streaming update/finalize consistency |
 | **MemoryPool** | Bump pool allocation/reset and slab pool allocation/free safety |
+| **UTF8** | Scalar construction, byte-length classes, round-trip decoding, malformed sequence rejection |
+| **ECC** | Hamming encode/decode, parity checks, syndrome detection, single-bit correction |
+| **DMA** | Descriptor validity, burst step counts, checked region copy simulation |
+| **Timer** | Monotonic ticking, deadlines, remaining time saturation, expiry behavior |
+| **ProofAutomation** | `radix_decide` and `radix_omega` smoke tests against representative goals |
 
 ### Test Pattern
 
@@ -164,6 +169,10 @@ Formal proofs are verified at compile time by Lean 4's kernel. They provide the 
 | `Memory.Lemmas` | Buffer size preservation, region disjointness, alignment |
 | `Binary.Lemmas` | Format properties, writePadding size, parse_padding_ok |
 | `Binary.Leb128.Lemmas` | LEB128 round-trips (all 4 variants), size bounds |
+| `UTF8.Lemmas` | Encoded length agreement, well-formedness of encoded scalars |
+| `ECC.Lemmas` | Hamming decode-after-encode and single-bit correction correctness |
+| `DMA.Lemmas` | Descriptor validity equivalence, bytes moved, step-count positivity |
+| `Timer.Lemmas` | Monotonic ticking, remaining time collapse after expiry |
 | `Concurrency.Lemmas` | Ordering proofs, CAS correctness, linearizability, DRF |
 | `BareMetal.Lemmas` | Region properties, startup validation, alignment, GC-free |
 

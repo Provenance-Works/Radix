@@ -16,29 +16,24 @@ with complete formal verification and zero-cost abstraction.
 3. **Downstream Ergonomics** — make Radix easy to depend on and compose with
 4. **Toolchain Resilience** — stay compatible with Lean 4 / Mathlib evolution
 
-## Current Release: v0.2.0 (2026-03-21)
+## Current Release: v0.3.0 (2026-03-23)
 
-Current stable release. Extends the v0.1.0 baseline with verified data
-structures and numeric abstractions. All 13 modules follow the three-layer
-architecture (Spec → Impl → Bridge). 1062+ theorems, zero `sorry`.
+Current stable release. Extends the v0.2.x baseline with composable
+verification modules for text handling, coding theory, DMA reasoning, region
+algebra, timing, and proof automation. Radix now ships 18 top-level modules,
+1123+ theorems, zero `sorry`, and full execution, comprehensive, and property
+test coverage for the v0.3.0 surface.
 
-### What's included
+### Release Highlights
 
 | Module | Key Capabilities |
 |--------|-----------------|
-| Word | 10 integer types, 4 arithmetic modes, width conversions, numeric typeclasses |
-| Bit | Boolean algebra, shifts, rotates, scanning, bit fields |
-| Bytes | Endianness, bswap, ByteSlice |
-| Memory | Buffer, Ptr, LayoutDesc, region disjointness |
-| Binary | Format DSL, parser, serializer, LEB128 |
-| System | File I/O state machine, SysError, FD, withFile bracket |
-| Concurrency | C11 memory ordering, AtomicCell, CAS, happens-before |
-| BareMetal | Platform model, memory map, linker scripts, startup, GC-free |
-| Alignment | alignUp/Down, padding, power-of-two fast paths |
-| RingBuffer | Fixed-capacity FIFO queue with wrap-around proofs |
-| Bitmap | Dense bit-array, set algebra, popcount, find-first |
-| CRC | CRC-32/CRC-16 with GF(2) polynomial specification |
-| MemoryPool | Bump/slab allocator models with safety invariants |
+| UTF8 | Verified Unicode scalar model, UTF-8 encoding/decoding helpers, well-formedness checks |
+| ECC | Hamming(7,4) codewords, parity helpers, syndrome computation, single-bit correction |
+| DMA | Region-based descriptors, coherence and atomicity constraints, checked copy simulator |
+| Region Algebra | Intersection, adjacency, union, span, and difference over `Memory.Region` |
+| Timer | Monotonic clocks, deadlines, elapsed-time helpers, expiry reasoning |
+| ProofAutomation | `radix_decide` and `radix_omega` tactic macros for common proof patterns |
 
 ---
 
@@ -88,7 +83,7 @@ has to do it again.
 
 ---
 
-## Planned: v0.3.0 — "Composable"
+## Released in v0.3.0 — "Composable"
 
 Theme: **Composition patterns and richer verification**
 
@@ -100,6 +95,16 @@ Theme: **Composition patterns and richer verification**
 | Region Algebra | P1 | M | 70 | Union, intersection, difference of `Memory.Region` with lattice proofs. Enables complex memory map reasoning in downstream OS/driver projects. |
 | Timer / Clock Model | P2 | S | 66 | Monotonic clock, deadline, timeout specs for BareMetal + System. Needed for verified scheduler and real-time system projects. |
 | Proof Automation Tactics | P2 | M | 64 | Custom `radix_decide` or `radix_omega` for common proof patterns (overflow checking, alignment, region disjointness). Reduce proof boilerplate for downstream users. |
+
+### Release Criteria
+
+- [x] All new features are implemented and integrated into the public `Radix` surface
+- [x] Zero `sorry` across the entire codebase
+- [x] Execution tests cover every v0.3.0 module and the new region algebra surface
+- [x] Property tests cover UTF-8, ECC, DMA, region algebra, and timer behavior
+- [x] Comprehensive tests cover all v0.3.0 modules
+- [x] Examples demonstrate each new feature
+- [x] Documentation (English + Japanese) covers the released v0.3.0 API surface
 
 ---
 
