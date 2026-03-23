@@ -252,4 +252,126 @@ theorem isWellFormed_encodeScalars (scalars : List Scalar) :
     isWellFormed (encodeScalars scalars) = true := by
   simp [isWellFormed, decodeBytes_encodeScalars]
 
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Decoding an empty byte array yields an empty scalar list. -/
+theorem decodeBytes_empty : decodeBytes? (ByteArray.mk #[]) = some [] := by
+  simp [decodeBytes?, byteArrayToList, Spec.decodeAll?, Spec.decodeAllAux]
+
+/-- An empty byte array is well-formed. -/
+theorem isWellFormed_empty : isWellFormed (ByteArray.mk #[]) = true := by
+  simp [isWellFormed, decodeBytes_empty]
+
+/-- Operation-layer list decoding round-trips. -/
+theorem decodeList_encodeAll (scalars : List Scalar) :
+    decodeList? (Spec.encodeAll scalars) = some scalars := by
+  simp [decodeList?, decodeAll_encodeAll]
+
+/-- An empty list is well-formed (operation layer). -/
+theorem isWellFormedList_nil : isWellFormedList [] = true := by
+  simp [isWellFormedList, decodeList?, Spec.decodeAll?, Spec.decodeAllAux]
+
+/-- Scalar.isAscii agrees with the bound check. -/
+theorem scalar_isAscii_iff (s : Scalar) :
+    Spec.Scalar.isAscii s = true ↔ s.val < 0x80 := by
+  simp [Spec.Scalar.isAscii]
+
+/-- Scalar.isBMP agrees with the bound check. -/
+theorem scalar_isBMP_iff (s : Scalar) :
+    Spec.Scalar.isBMP s = true ↔ s.val < 0x10000 := by
+  simp [Spec.Scalar.isBMP]
+
+/-- ASCII scalars are always in the BMP. -/
+theorem ascii_implies_bmp (s : Scalar) (h : Spec.Scalar.isAscii s = true) :
+    Spec.Scalar.isBMP s = true := by
+  rw [scalar_isAscii_iff] at h
+  rw [scalar_isBMP_iff]
+  omega
+
+/-- Supplementary scalars are never in the BMP. -/
+theorem supplementary_not_bmp (s : Scalar) (h : Spec.Scalar.isSupplementary s = true) :
+    Spec.Scalar.isBMP s = false := by
+  unfold Spec.Scalar.isSupplementary at h
+  unfold Spec.Scalar.isBMP
+  simp at h ⊢
+  omega
+
+/-- The null scalar encodes to a single zero byte. -/
+theorem encode_null : Spec.encode Spec.Scalar.null = [0] := by
+  decide
+
+/-- The replacement character encodes to EF BF BD. -/
+theorem encode_replacement :
+    Spec.encode Spec.Scalar.replacement = [0xEF, 0xBF, 0xBD] := by
+  decide
+
+/-- The plane of an ASCII scalar is 0. -/
+theorem plane_ascii (s : Scalar) (h : s.val < 0x80) :
+    Spec.Scalar.plane s = 0 := by
+  unfold Spec.Scalar.plane
+  exact Nat.div_eq_of_lt (by omega)
+
+/-- Encoding is injective: distinct scalars produce distinct byte sequences. -/
+theorem encode_injective (s1 s2 : Scalar) (h : Spec.encode s1 = Spec.encode s2) :
+    s1 = s2 := by
+  have hd1 := decodeNext_encode s1
+  have hd2 := decodeNext_encode s2
+  rw [h] at hd1
+  rw [hd1] at hd2
+  have heq := congr_arg Prod.fst (Option.some.inj hd2)
+  simp at heq
+  exact heq
+
+/-- encodeAll is injective: distinct scalar lists produce distinct byte sequences. -/
+theorem encodeAll_injective (s1 s2 : List Scalar)
+    (h : Spec.encodeAll s1 = Spec.encodeAll s2) : s1 = s2 := by
+  have h1 := decodeAll_encodeAll s1
+  have h2 := decodeAll_encodeAll s2
+  rw [h] at h1
+  rw [h1] at h2
+  exact Option.some_injective _ h2
+
+/-- The total byte length function agrees with actual encoding length. -/
+theorem totalByteLength_eq_encodeAll_length (scalars : List Scalar) :
+    totalByteLength scalars = (Spec.encodeAll scalars).length := by
+  -- Generalize the accumulator for the foldl induction
+  suffices h : ∀ (acc : Nat),
+      scalars.foldl (fun a s => a + Scalar.byteCount s) acc =
+      acc + (Spec.encodeAll scalars).length by
+    simpa [totalByteLength] using h 0
+  induction scalars with
+  | nil => simp [Spec.encodeAll]
+  | cons s rest ih =>
+    intro acc
+    simp only [List.foldl_cons, Spec.encodeAll, List.length_append,
+               Spec.encode_length_eq_byteCount]
+    rw [ih]
+    omega
+
+/-- An empty list has no BOM. -/
+theorem hasBOM_nil : Spec.hasBOM [] = false := by rfl
+
+/-- BOM detection is correct on the BOM itself. -/
+theorem hasBOM_bom : Spec.hasBOM Spec.bom = true := by decide
+
+/-- stripBOM on a list without BOM is identity. -/
+theorem stripBOM_no_bom (bytes : List UInt8) (h : Spec.hasBOM bytes = false) :
+    Spec.stripBOM bytes = bytes := by
+  unfold Spec.stripBOM
+  rw [h]
+  simp
+
+/-- allAscii on an empty byte array is true. -/
+theorem allAscii_empty : allAscii (ByteArray.mk #[]) = true := by
+  simp [allAscii, byteArrayToList, Spec.allAscii]
+
+/-- Encoding all-ASCII scalars produces an all-ASCII byte stream. -/
+theorem allAscii_encode_of_ascii (s : Scalar) (h : s.val < 0x80) :
+    Spec.allAscii (Spec.encode s) = true := by
+  have h256 : s.val < 256 := by omega
+  simp [Spec.allAscii, Spec.encode, h, List.all_cons, Spec.isAsciiByte,
+        Nat.mod_eq_of_lt h256]
+
 end Radix.UTF8
