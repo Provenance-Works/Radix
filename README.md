@@ -8,10 +8,10 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Lean](https://img.shields.io/badge/Lean-4.29.0--rc4-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PHRleHQgeD0iMCIgeT0iMjAiIGZvbnQtc2l6ZT0iMjAiPkw8L3RleHQ+PC9zdmc+)](https://lean-lang.org/)
 [![v0.3.0](https://img.shields.io/badge/version-0.3.0-green.svg)](CHANGELOG.md)
-[![Theorems](https://img.shields.io/badge/theorems-1089%2B-brightgreen.svg)](#verification-status)
+[![Theorems](https://img.shields.io/badge/theorems-1123%2B-brightgreen.svg)](#verification-status)
 [![sorry-free](https://img.shields.io/badge/sorry-free-%E2%9C%93-brightgreen.svg)](#verification-status)
 
-*1089+ verified theorems. Zero `sorry`. Proofs erase at runtime.*
+*1123+ verified theorems. Zero `sorry`. Proofs erase at runtime.*
 
 [Documentation](docs/en/README.md) · [Quick Start](#quick-start) · [Examples](examples/) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
@@ -40,20 +40,20 @@ Radix eliminates this trade-off:
 | **Word** | 10 integer types (U/Int 8–64, UWord, IWord), 4 arithmetic modes, numeric typeclasses | 350 |
 | **Bit** | Boolean algebra, shifts, rotates, scanning, bit fields | 278 |
 | **Bytes** | Endianness, bswap, ByteSlice | 60 |
-| **Memory** | Buffer, Ptr, LayoutDesc, region disjointness and algebra | 52 |
+| **Memory** | Buffer, Ptr, LayoutDesc, region disjointness and algebra | 60 |
 | **Binary** | Format DSL, parser, serializer, LEB128 | 92 |
 | **System** | File I/O state machine plus trusted OS boundary wrappers | 41 |
 | **Concurrency** | C11 memory ordering specification model with trusted hardware assumptions | 32 |
 | **BareMetal** | Bare-metal platform formalization: memory map, linker scripts, startup, GC-free | 36 |
-| **Alignment** | alignUp/Down, isAligned, power-of-two fast paths, HasAlignment typeclass | 18 |
-| **RingBuffer** | Fixed-capacity circular queue, push/pop/peek, FIFO ordering proofs | 24 |
-| **Bitmap** | Dense bit-array (UInt64-backed), set operations, popcount, find-first | 33 |
-| **CRC** | Table-driven CRC-32/CRC-16, GF(2) polynomial spec, streaming API | 10 |
+| **Alignment** | alignUp/Down, isAligned, power-of-two fast paths, HasAlignment typeclass | 25 |
+| **RingBuffer** | Fixed-capacity circular queue, push/pop/peek, FIFO ordering proofs | 25 |
+| **Bitmap** | Dense bit-array (UInt64-backed), set operations, popcount, find-first | 34 |
+| **CRC** | Table-driven CRC-32/CRC-16, GF(2) polynomial spec, streaming API | 14 |
 | **MemoryPool** | Bump allocator, slab allocator, no-double-free/capacity-tracking proofs | 36 |
-| **UTF8** | Verified Unicode scalar model, UTF-8 encoding/decoding, well-formedness checks | 5 |
-| **ECC** | Hamming(7,4) parity model, syndrome computation, single-bit correction | 4 |
+| **UTF8** | Verified Unicode scalar model, UTF-8 encoding/decoding, well-formedness checks | 17 |
+| **ECC** | Hamming(7,4) parity model, syndrome computation, single-bit correction | 6 |
 | **DMA** | Region-based DMA descriptors with coherence and atomicity validation | 4 |
-| **Timer** | Monotonic clocks, deadlines, timeout helpers, expiry proofs | 6 |
+| **Timer** | Monotonic clocks, deadlines, timeout helpers, expiry proofs | 13 |
 | **ProofAutomation** | Reusable tactic macros for arithmetic and decision procedures | 0 |
 
 ### Architecture
@@ -162,7 +162,7 @@ See [examples/](examples/) for 21 complete, runnable examples covering the core 
 
 | Metric | Status |
 |--------|--------|
-| Total theorems | 1089+ |
+| Total theorems | 1123+ |
 | `sorry` statements | **0** |
 | Proof-to-code ratio | ~0.9:1 |
 | Trusted computing base | Lean 4 kernel + Mathlib + named `trust_*` axioms |
@@ -201,7 +201,7 @@ lake exe bench
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap.
 
-- **v0.3.0** (latest release) "Composable" — 1089+ theorems, 18 modules, UTF-8, error correction, DMA, region algebra, timers, proof automation
+- **v0.3.0** (latest release) "Composable" — 1123+ theorems, 18 modules, UTF-8, error correction, DMA, region algebra, timers, proof automation
 - **v0.2.1** "Bedrock" — patch release removing remaining `native_decide` usage from library proofs and CI trust-audit tracking
 
 ## Contributing

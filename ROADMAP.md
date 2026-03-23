@@ -21,7 +21,7 @@ with complete formal verification and zero-cost abstraction.
 Current stable release. Extends the v0.2.x baseline with composable
 verification modules for text handling, coding theory, DMA reasoning, region
 algebra, timing, and proof automation. Radix now ships 18 top-level modules,
-1089+ theorems, zero `sorry`, and full execution, comprehensive, and property
+1123+ theorems, zero `sorry`, and full execution, comprehensive, and property
 test coverage for the v0.3.0 surface.
 
 ### Release Highlights
