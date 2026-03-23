@@ -148,4 +148,122 @@ theorem Descriptor.stepCount_pos (d : Descriptor) (h : d.valid) :
         simpa using this
       simpa [Descriptor.stepCount, hAtomicity] using this
 
+-- ════════════════════════════════════════════════════════════════════
+-- Transfer Direction
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Direction of a DMA transfer relative to the device. -/
+inductive Direction where
+  | memToMem
+  | memToDev
+  | devToMem
+  deriving DecidableEq, Repr
+
+-- ════════════════════════════════════════════════════════════════════
+-- Alignment Requirements
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Alignment constraint: start address and size must both be multiples of `align`. -/
+def isAligned (r : Region) (align : Nat) : Prop :=
+  0 < align ∧ r.start % align = 0 ∧ r.size % align = 0
+
+instance (r : Region) (align : Nat) : Decidable (isAligned r align) :=
+  inferInstanceAs (Decidable (0 < align ∧ r.start % align = 0 ∧ r.size % align = 0))
+
+/-- A descriptor is aligned when both source and destination satisfy
+    the given alignment constraint. -/
+def Descriptor.isAligned (d : Descriptor) (align : Nat) : Prop :=
+  Spec.isAligned d.source align ∧ Spec.isAligned d.destination align
+
+instance (d : Descriptor) (align : Nat) : Decidable (d.isAligned align) :=
+  inferInstanceAs (Decidable (Spec.isAligned d.source align ∧ Spec.isAligned d.destination align))
+
+-- ════════════════════════════════════════════════════════════════════
+-- Scatter-Gather DMA Chain
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A chain is valid when every descriptor is valid. -/
+def chainValid (c : List Descriptor) : Prop :=
+  ∀ d ∈ c, d.valid
+
+/-- Total bytes transferred by a chain. -/
+def chainTotalBytes (c : List Descriptor) : Nat :=
+  c.foldl (fun acc d => acc + d.bytesMoved) 0
+
+/-- Source regions must not overlap within the chain (prevents read conflicts). -/
+def chainSourcesDisjoint (c : List Descriptor) : Prop :=
+  ∀ i j : Fin c.length,
+    i ≠ j → Region.disjoint (c.get i).source (c.get j).source
+
+/-- Destination regions must not overlap within the chain (prevents write conflicts). -/
+def chainDestinationsDisjoint (c : List Descriptor) : Prop :=
+  ∀ i j : Fin c.length,
+    i ≠ j → Region.disjoint (c.get i).destination (c.get j).destination
+
+-- ════════════════════════════════════════════════════════════════════
+-- DMA Channel Status
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Runtime status of a DMA channel. -/
+inductive ChannelStatus where
+  | idle
+  | running (descriptorIdx : Nat) (stepIdx : Nat)
+  | completed
+  | error (msg : String)
+  deriving DecidableEq, Repr
+
+/-- A DMA channel with a descriptor chain and a status. -/
+structure Channel where
+  chain : List Descriptor
+  status : ChannelStatus
+  deriving Repr
+
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Theorems
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Byte count at step 0 of a whole-atomicity descriptor equals the transfer size. -/
+theorem Descriptor.stepByteCount_zero_whole (d : Descriptor)
+    (hw : d.atomicity = .whole) :
+    d.stepByteCount 0 = d.bytesMoved := by
+  simp [Descriptor.stepByteCount, Descriptor.burstBytes, Descriptor.bytesMoved,
+        Descriptor.stepOffset, hw]
+
+/-- A whole-atomicity descriptor always has exactly 1 step. -/
+theorem Descriptor.stepCount_whole (d : Descriptor)
+    (hw : d.atomicity = .whole) :
+    d.stepCount = 1 := by
+  simp [Descriptor.stepCount, hw]
+
+/-- Source and destination chunks have the same size at each step. -/
+theorem Descriptor.chunks_same_size (d : Descriptor) (step : Nat) :
+    (d.sourceChunk step).size = (d.destinationChunk step).size := by
+  simp [Descriptor.sourceChunk, Descriptor.destinationChunk]
+
+/-- An empty chain transfers zero bytes. -/
+theorem chainTotalBytes_nil : chainTotalBytes [] = 0 := by
+  simp [chainTotalBytes]
+
+/-- An empty chain is vacuously valid. -/
+theorem chainValid_nil : chainValid [] := by
+  intro _ hd; simp at hd
+
+/-- A single-descriptor chain's total bytes equal the descriptor's transfer size. -/
+theorem chainTotalBytes_singleton (d : Descriptor) :
+    chainTotalBytes [d] = d.bytesMoved := by
+  simp [chainTotalBytes, Descriptor.bytesMoved]
+
+/-- Alignment at 1 is trivially satisfied for any region. -/
+theorem isAligned_one (r : Region) : isAligned r 1 := by
+  refine ⟨by omega, ?_, ?_⟩ <;> omega
+
+/-- If a region is aligned to `n`, it is also aligned to 1. -/
+theorem isAligned_implies_one (r : Region) (n : Nat) (_ : isAligned r n) :
+    isAligned r 1 := isAligned_one r
+
+/-- A zero-size region at offset 0 is aligned to any positive alignment. -/
+theorem isAligned_zero_region (align : Nat) (hpos : 0 < align) :
+    isAligned { start := 0, size := 0 } align := by
+  simp [isAligned, hpos]
+
 end Radix.DMA.Spec
