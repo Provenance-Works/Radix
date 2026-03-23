@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed the Concurrency hardware-state inhabitance axiom to follow the `trust_` naming convention and corrected the System assumptions header to describe the full multi-module trusted boundary.
+
 ## [0.3.0] - 2026-03-23
 
 ### Added

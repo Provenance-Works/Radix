@@ -47,8 +47,10 @@ open Radix.Concurrency.Spec
     are genuinely unprovable within the type system. -/
 opaque HWConcurrencyState : Type
 
-axiom hwConcurrencyState_nonempty : Nonempty HWConcurrencyState
-instance : Nonempty HWConcurrencyState := hwConcurrencyState_nonempty
+/-- Trusted witness that the modeled hardware state space is inhabited,
+    allowing opaque hardware-state assumptions to be quantified over. -/
+axiom trust_hwConcurrencyState_nonempty : Nonempty HWConcurrencyState
+instance : Nonempty HWConcurrencyState := trust_hwConcurrencyState_nonempty
 
 /-- The result of executing an atomic instruction on real hardware.
     The output trace of memory events is opaque — we cannot inspect

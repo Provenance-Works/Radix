@@ -8,8 +8,8 @@ import Radix.System.Spec
 # System Assumptions (Layer 1)
 
 This module contains all `axiom` declarations for the System module.
-These are the ONLY axioms permitted in the entire Radix library per
-ADR C-004a.
+The full library trusted boundary is split across the System,
+Concurrency, and BareMetal `Assumptions.lean` files per ADR C-004a.
 
 ## Rules (ADR C-004a)
 
