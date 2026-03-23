@@ -101,4 +101,135 @@ theorem later_ge_right (a b : Deadline) :
     b.deadlineTick ≤ (Radix.Timer.later a b).deadlineTick := by
   simpa [Radix.Timer.later] using Radix.Timer.Spec.later_deadlineTick_ge_right a b
 
+-- ════════════════════════════════════════════════════════════════════
+-- Frequency / Unit Conversion Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Seconds-to-ticks round-trips via ticks-to-seconds at exact multiples. -/
+theorem ticksToSeconds_secondsToTicks (freq : Spec.Frequency) (s : Nat) :
+    ticksToSeconds freq (secondsToTicks freq s) = s := by
+  simp [ticksToSeconds, secondsToTicks]
+  exact Spec.ticksToSeconds_secondsToTicks freq s
+
+/-- Zero seconds maps to zero ticks. -/
+theorem secondsToTicks_zero (freq : Spec.Frequency) :
+    secondsToTicks freq 0 = 0 := by
+  simp [secondsToTicks, Spec.secondsToTicks]
+
+/-- Zero millis maps to zero ticks. -/
+theorem millisToTicks_zero (freq : Spec.Frequency) :
+    millisToTicks freq 0 = 0 := by
+  simp [millisToTicks, Spec.millisToTicks]
+
+/-- Zero ticks maps to zero seconds. -/
+theorem ticksToSeconds_zero (freq : Spec.Frequency) :
+    ticksToSeconds freq 0 = 0 := by
+  simp [ticksToSeconds, Spec.ticksToSeconds]
+
+/-- Zero ticks maps to zero milliseconds. -/
+theorem ticksToMillis_zero (freq : Spec.Frequency) :
+    ticksToMillis freq 0 = 0 := by
+  simp [ticksToMillis, Spec.ticksToMillis]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Interval Timer Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A newly created interval timer has not yet fired. -/
+theorem mkInterval_not_fired (clock : Clock) (period : Nat) (hp : 0 < period) :
+    intervalFired clock (mkInterval clock period hp) = false := by
+  simp [intervalFired, mkInterval]
+  exact Spec.mkInterval_not_fired clock period hp
+
+/-- After reset, the interval timer has nextTick advanced by one period. -/
+theorem intervalReset_nextTick (timer : Spec.IntervalTimer) :
+    (intervalReset timer).nextTick = timer.nextTick + timer.period := by
+  simp [intervalReset, Spec.intervalReset]
+
+/-- Fire count is zero before the timer fires. -/
+theorem intervalFireCount_zero_before (clock : Clock) (timer : Spec.IntervalTimer)
+    (h : intervalFired clock timer = false) :
+    intervalFireCount clock timer = 0 := by
+  simp [intervalFireCount, intervalFired, Spec.intervalFireCount, Spec.intervalFired] at *
+  omega
+
+-- ════════════════════════════════════════════════════════════════════
+-- Watchdog Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A newly created watchdog has not expired. -/
+theorem mkWatchdog_not_expired (clock : Clock) (timeout : Nat) (hp : 0 < timeout) :
+    watchdogExpired clock (mkWatchdog clock timeout hp) = false := by
+  simp [watchdogExpired, mkWatchdog]
+  exact Spec.mkWatchdog_not_expired clock timeout hp
+
+/-- Kicking the watchdog resets its deadline. -/
+theorem watchdogKick_deadline (clock : Clock) (wd : Spec.Watchdog) :
+    (watchdogKick clock wd).deadline = Spec.deadlineAfter clock wd.timeout := by
+  simp [watchdogKick]
+  exact Spec.watchdogKick_deadline clock wd
+
+/-- A just-kicked watchdog is not expired. -/
+theorem watchdogKick_not_expired (clock : Clock) (wd : Spec.Watchdog) :
+    watchdogExpired clock (watchdogKick clock wd) = false := by
+  show Spec.watchdogExpired clock (Spec.watchdogKick clock wd) = false
+  simp [Spec.watchdogExpired, Spec.watchdogKick, Spec.deadlineAfter]
+  exact Nat.pos_iff_ne_zero.mp wd.timeoutPos
+
+-- ════════════════════════════════════════════════════════════════════
+-- Batch Operation Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Advancing by an empty list of steps is identity. -/
+theorem advanceN_nil (clock : Clock) :
+    advanceN clock [] = clock := by
+  simp [advanceN]
+
+/-- Advancing by a single step equals a single tick. -/
+theorem advanceN_singleton (clock : Clock) (d : Nat) :
+    advanceN clock [d] = tick clock d := by
+  simp [advanceN, tick, Spec.advance]
+
+/-- No expired deadlines from an empty list. -/
+theorem expiredDeadlines_nil (clock : Clock) :
+    expiredDeadlines clock [] = [] := by
+  simp [expiredDeadlines]
+
+/-- No pending deadlines from an empty list. -/
+theorem pendingDeadlines_nil (clock : Clock) :
+    pendingDeadlines clock [] = [] := by
+  simp [pendingDeadlines]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Clock Algebra Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Monotonicity is reflexive. -/
+theorem monotonic_refl (clock : Clock) : Spec.Monotonic clock clock := by
+  exact Spec.monotonic_refl clock
+
+/-- Ticking preserves monotonicity. -/
+theorem tick_tick_monotonic (clock : Clock) (d1 d2 : Nat) :
+    Spec.Monotonic clock (tick (tick clock d1) d2) := by
+  simp [tick, Spec.advance, Spec.Monotonic]
+  omega
+
+/-- Elapsed after double tick is the sum of deltas. -/
+theorem elapsed_tick_tick (clock : Clock) (d1 d2 : Nat) :
+    elapsed clock (tick (tick clock d1) d2) = d1 + d2 := by
+  simp [elapsed, tick, Spec.elapsed, Spec.advance]
+  omega
+
+/-- Sooner is commutative. -/
+theorem sooner_comm (a b : Deadline) :
+    (Radix.Timer.sooner a b).deadlineTick = (Radix.Timer.sooner b a).deadlineTick := by
+  simp [Radix.Timer.sooner]
+  exact Spec.sooner_comm a b
+
+/-- Later is commutative. -/
+theorem later_comm (a b : Deadline) :
+    (Radix.Timer.later a b).deadlineTick = (Radix.Timer.later b a).deadlineTick := by
+  simp [Radix.Timer.later]
+  exact Spec.later_comm a b
+
 end Radix.Timer
