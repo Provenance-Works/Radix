@@ -19,20 +19,25 @@ syntax "radix_omega" : tactic
 Expands to a small fallback chain:
 
 ```lean
-first | decide | simp | simp_all | omega
+first | omega | simp | simp_all | exact (by decide)
 ```
 
-Use it for closed goals or goals that can be discharged after simplification.
+Use it for small equalities, closed propositions, or decidable goals that become trivial after simplification.
 
 ### `radix_omega`
 
-Simplifies hypotheses and goals before handing the result to Presburger arithmetic:
+Expands to a short arithmetic-oriented chain:
 
 ```lean
-simp at * <;> omega
+first
+  | exact Nat.le_trans ‹_› ‹_›
+  | exact Nat.zero_le _
+  | try simp at *; omega
+  | aesop
+  | exact (by decide)
 ```
 
-Use it for linear arithmetic facts such as bounds, offsets, or order transitivity.
+Use it for order transitivity, zero-lower-bound goals, and arithmetic side conditions that become Presburger after simplification.
 
 ## Examples
 
@@ -42,7 +47,13 @@ import Radix.ProofAutomation
 example : 4 + 5 = 9 := by
   radix_decide
 
+example (a b : Nat) (h : a = b) : b = a := by
+  radix_decide
+
 example (a b c : Nat) (h1 : a ≤ b) (h2 : b ≤ c) : a ≤ c := by
+  radix_omega
+
+example (a : Nat) : 0 ≤ a := by
   radix_omega
 ```
 

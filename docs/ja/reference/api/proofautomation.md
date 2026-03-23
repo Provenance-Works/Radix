@@ -19,20 +19,25 @@ syntax "radix_omega" : tactic
 次の fallback chain に展開されます。
 
 ```lean
-first | decide | simp | simp_all | omega
+first | omega | simp | simp_all | exact (by decide)
 ```
 
-閉じた goal や、簡約後に解ける goal に向きます。
+小さな等式、閉じた proposition、簡約後に自明化する decidable goal に向きます。
 
 ### `radix_omega`
 
-仮定と goal を簡約してから Presburger arithmetic に渡します。
+次の算術寄り fallback chain に展開されます。
 
 ```lean
-simp at * <;> omega
+first
+  | exact Nat.le_trans ‹_› ‹_›
+  | exact Nat.zero_le _
+  | try simp at *; omega
+  | aesop
+  | exact (by decide)
 ```
 
-境界、オフセット、順序推移のような線形算術に向きます。
+順序推移、`0 ≤ _` 形の goal、簡約後に Presburger arithmetic に落ちる副条件に向きます。
 
 ## 使用例
 
@@ -42,7 +47,13 @@ import Radix.ProofAutomation
 example : 4 + 5 = 9 := by
   radix_decide
 
+example (a b : Nat) (h : a = b) : b = a := by
+  radix_decide
+
 example (a b c : Nat) (h1 : a ≤ b) (h2 : b ≤ c) : a ≤ c := by
+  radix_omega
+
+example (a : Nat) : 0 ≤ a := by
   radix_omega
 ```
 
