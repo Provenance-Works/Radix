@@ -82,8 +82,14 @@ lake exe test
 # Run property-based tests
 lake exe proptest
 
+# Run comprehensive regression tests
+lake exe comptest
+
 # Run examples
 lake exe examples
+
+# Run the full local verification gate before opening a PR
+make check
 
 # Run benchmarks
 lake exe bench

@@ -181,8 +181,14 @@ lake exe test
 # Run property-based tests (500 iterations, LCG PRNG)
 lake exe proptest
 
+# Run comprehensive regression tests
+lake exe comptest
+
 # Run all examples
 lake exe examples
+
+# Run the full local verification gate used for release prep
+make check
 
 # Run benchmarks
 lake exe bench
