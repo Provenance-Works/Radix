@@ -45,4 +45,8 @@ def remaining (clock : Clock) (deadline : Deadline) : Nat :=
 def elapsed (start finish : Clock) : Nat :=
   Spec.elapsed start finish
 
+/-- Checked elapsed ticks between two observations. -/
+def elapsed? (start finish : Clock) : Option Nat :=
+  Spec.elapsed? start finish
+
 end Radix.Timer

@@ -25,6 +25,21 @@ theorem elapsed_tick (clock : Clock) (delta : Nat) :
     elapsed clock (tick clock delta) = delta := by
   simp [elapsed, tick, Spec.elapsed, Spec.advance]
 
+/-- Checked elapsed time agrees with ticking on monotone observations. -/
+theorem elapsed?_tick (clock : Clock) (delta : Nat) :
+    elapsed? clock (tick clock delta) = some delta := by
+  simpa [elapsed?, elapsed, tick, Spec.elapsed, Spec.advance, Spec.Monotonic] using
+    Spec.elapsed?_eq_some_of_monotonic clock (Spec.advance clock delta)
+      (Spec.advance_monotonic clock delta)
+
+/-- Checked elapsed time rejects reversed observations. -/
+theorem elapsed?_none_of_reverse (start finish : Clock)
+    (h : finish.ticks < start.ticks) :
+    elapsed? start finish = none := by
+  apply Spec.elapsed?_eq_none_of_not_monotonic
+  simp [Spec.Monotonic]
+  omega
+
 /-- Remaining time is zero once a deadline has expired. -/
 theorem remaining_zero_of_hasExpired (clock : Clock) (deadline : Deadline)
     (h : hasExpired clock deadline = true) :

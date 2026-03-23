@@ -36,13 +36,25 @@ def zero : Clock :=
 def advance (clock : Clock) (delta : Nat) : Clock :=
   ⟨clock.ticks + delta⟩
 
-/-- The elapsed ticks between two clock snapshots. -/
+/-- The elapsed ticks between two clock snapshots, saturating at zero when the
+    observations are out of order. -/
 def elapsed (start finish : Clock) : Nat :=
   finish.ticks - start.ticks
 
 /-- Monotonicity between clock observations. -/
 def Monotonic (before after : Clock) : Prop :=
   before.ticks ≤ after.ticks
+
+instance (before after : Clock) : Decidable (Monotonic before after) :=
+  inferInstanceAs (Decidable (before.ticks ≤ after.ticks))
+
+/-- Checked elapsed ticks between two clock snapshots. Returns `none` when the
+    observations are out of order. -/
+def elapsed? (start finish : Clock) : Option Nat :=
+  if Monotonic start finish then
+    some (elapsed start finish)
+  else
+    none
 
 /-- Construct a deadline after `timeout` ticks from the current clock. -/
 def deadlineAfter (clock : Clock) (timeout : Nat) : Deadline :=
@@ -59,6 +71,18 @@ def remaining (clock : Clock) (deadline : Deadline) : Nat :=
 theorem advance_monotonic (clock : Clock) (delta : Nat) :
     Monotonic clock (advance clock delta) := by
   simp [Monotonic, advance]
+
+theorem elapsed?_eq_some_of_monotonic (start finish : Clock)
+    (h : Monotonic start finish) :
+    elapsed? start finish = some (elapsed start finish) := by
+  unfold elapsed?
+  rw [if_pos h]
+
+theorem elapsed?_eq_none_of_not_monotonic (start finish : Clock)
+    (h : ¬ Monotonic start finish) :
+    elapsed? start finish = none := by
+  unfold elapsed?
+  rw [if_neg h]
 
 theorem remaining_zero_of_expired (clock : Clock) (deadline : Deadline)
     (h : expired clock deadline) :

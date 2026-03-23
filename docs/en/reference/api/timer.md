@@ -19,6 +19,7 @@ structure Deadline where
 def zero : Clock
 def advance (clock : Clock) (delta : Nat) : Clock
 def elapsed (start finish : Clock) : Nat
+def elapsed? (start finish : Clock) : Option Nat
 def Monotonic (before after : Clock) : Prop
 def deadlineAfter (clock : Clock) (timeout : Nat) : Deadline
 def expired (clock : Clock) (deadline : Deadline) : Prop
@@ -38,17 +39,22 @@ def after (clock : Clock) (timeout : Nat) : Deadline
 def hasExpired (clock : Clock) (deadline : Deadline) : Bool
 def remaining (clock : Clock) (deadline : Deadline) : Nat
 def elapsed (start finish : Clock) : Nat
+def elapsed? (start finish : Clock) : Option Nat
 ```
 
 ### Semantics
 
 - `tick` advances the clock monotonically.
+- `elapsed` is a saturating helper: reversed observations collapse to `0`.
+- `elapsed?` rejects reversed observations with `none`.
 - `remaining` saturates at zero once the deadline has expired.
 - `hasExpired` is a boolean view of the spec-level `expired` predicate.
 
 ## Proofs (`Timer.Lemmas`)
 
 - `advance_monotonic`: advancing the clock preserves monotonicity
+- `elapsed?_eq_some_of_monotonic`: checked elapsed agrees with monotone observations
+- `elapsed?_eq_none_of_not_monotonic`: checked elapsed rejects reversed observations
 - `remaining_zero_of_expired`: no time remains once a deadline has expired
 - `expired_of_remaining_zero`: zero remaining time implies expiry
 - `tick_monotonic`: operation-layer ticking preserves monotonicity

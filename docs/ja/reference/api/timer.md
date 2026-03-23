@@ -19,6 +19,7 @@ structure Deadline where
 def zero : Clock
 def advance (clock : Clock) (delta : Nat) : Clock
 def elapsed (start finish : Clock) : Nat
+def elapsed? (start finish : Clock) : Option Nat
 def Monotonic (before after : Clock) : Prop
 def deadlineAfter (clock : Clock) (timeout : Nat) : Deadline
 def expired (clock : Clock) (deadline : Deadline) : Prop
@@ -38,17 +39,22 @@ def after (clock : Clock) (timeout : Nat) : Deadline
 def hasExpired (clock : Clock) (deadline : Deadline) : Bool
 def remaining (clock : Clock) (deadline : Deadline) : Nat
 def elapsed (start finish : Clock) : Nat
+def elapsed? (start finish : Clock) : Option Nat
 ```
 
 ### 意味論
 
 - `tick` はクロックを単調に進めます。
+- `elapsed` は飽和ヘルパーで、逆順の観測は `0` に潰れます。
+- `elapsed?` は逆順の観測を `none` で拒否します。
 - `remaining` は deadline を過ぎると 0 に飽和します。
 - `hasExpired` は仕様層 `expired` predicate の Bool 版です。
 
 ## 証明 (`Timer.Lemmas`)
 
 - `advance_monotonic`: クロックを進めると単調性が保たれる
+- `elapsed?_eq_some_of_monotonic`: checked elapsed は単調な観測と一致する
+- `elapsed?_eq_none_of_not_monotonic`: checked elapsed は逆順観測を拒否する
 - `remaining_zero_of_expired`: deadline 後は残時間が 0 になる
 - `expired_of_remaining_zero`: 残時間 0 なら期限切れ
 - `tick_monotonic`: 操作層の tick でも単調性が保たれる

@@ -1914,6 +1914,8 @@ private def testTimerProperties : IO Unit := do
     let finish := Radix.Timer.tick start delta
     assert (Radix.Timer.elapsed start finish == delta)
       s!"timer elapsed: {startTicks} {delta}"
+    assert (Radix.Timer.elapsed? start finish == some delta)
+      s!"timer checked elapsed: {startTicks} {delta}"
     let deadline := Radix.Timer.after start (delta + 1)
     assert (Radix.Timer.remaining finish deadline == 1)
       s!"deadline remaining before expiry: {startTicks} {delta}"
@@ -1924,6 +1926,8 @@ private def testTimerProperties : IO Unit := do
       s!"deadline expires exactly on boundary: {startTicks} {delta}"
     assert (Radix.Timer.remaining exact deadline == 0)
       s!"remaining saturates at expiry: {startTicks} {delta}"
+    assert (Radix.Timer.elapsed? exact start == none)
+      s!"timer checked elapsed rejects reversed observations: {startTicks} {delta}"
 
 /-! ================================================================ -/
 /-! ## Main Entry Point                                              -/
