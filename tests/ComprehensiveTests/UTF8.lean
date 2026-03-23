@@ -63,4 +63,39 @@ def runUTF8Tests : IO Nat := do
   assert (!Radix.UTF8.isWellFormed malformed3) "reject truncated four-byte sequence"
   assert (Radix.UTF8.ofNat? 0xD800 == none) "reject surrogate constructor"
 
+  -- ── Spec-level scalar predicates ──
+  assert (Radix.UTF8.Spec.Scalar.isAscii ascii) "ASCII scalar isAscii"
+  assert (!Radix.UTF8.Spec.Scalar.isAscii fourByte) "four-byte scalar not isAscii"
+  assert (Radix.UTF8.Spec.Scalar.isBMP threeByte) "3-byte scalar isBMP"
+  assert (!Radix.UTF8.Spec.Scalar.isBMP fourByte) "four-byte scalar not isBMP"
+  assert (Radix.UTF8.Spec.Scalar.isSupplementary fourByte) "four-byte scalar isSupplementary"
+  assert (!Radix.UTF8.Spec.Scalar.isSupplementary ascii) "ASCII not isSupplementary"
+  assert (Radix.UTF8.Spec.Scalar.plane ascii == 0) "ASCII on plane 0"
+  assert (Radix.UTF8.Spec.Scalar.plane fourByte == 1) "emoji on plane 1"
+
+  -- ── Ops-level helpers ──
+  let encodedList := Radix.UTF8.encodeAllToList [ascii, twoByte]
+  assert (encodedList.length > 0) "encodeAllToList produces bytes"
+  let decodedList := Radix.UTF8.decodeList? encodedList
+  match decodedList with
+  | some scalars => assert (scalars.length == 2) "decodeList? round-trip count"
+  | none => assert false "decodeList? round-trip failed"
+  assert (Radix.UTF8.isWellFormedList encodedList) "encodeAllToList is well-formed"
+  let byteCounts := Radix.UTF8.totalByteLength [ascii, twoByte, threeByte, fourByte]
+  assert (byteCounts == 10) "totalByteLength 1+2+3+4=10"
+  let nats := Radix.UTF8.scalarsToNats [ascii, twoByte]
+  assert (nats == [0x41, 0x00A2]) "scalarsToNats"
+
+  -- ── BOM tests ──
+  let bomBytes := Radix.UTF8.Spec.bom
+  assert (bomBytes == [0xEF, 0xBB, 0xBF]) "BOM bytes"
+  assert (Radix.UTF8.Spec.hasBOM [0xEF, 0xBB, 0xBF, 0x41]) "hasBOM true"
+  assert (!Radix.UTF8.Spec.hasBOM [0x41, 0x42]) "hasBOM false"
+  assert (Radix.UTF8.Spec.stripBOM [0xEF, 0xBB, 0xBF, 0x41] == [0x41]) "stripBOM"
+  assert (Radix.UTF8.Spec.stripBOM [0x41] == [0x41]) "stripBOM no BOM"
+
+  -- ── Byte classification ──
+  let classes := Radix.UTF8.classifyBytes (ByteArray.mk #[0x41, 0xC2, 0xA2, 0x80])
+  assert (classes.length == 4) "classifyBytes length"
+
   c.get
