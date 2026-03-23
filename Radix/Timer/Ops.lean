@@ -69,4 +69,82 @@ def elapsed (start finish : Clock) : Nat :=
 def elapsed? (start finish : Clock) : Option Nat :=
   Radix.Timer.Spec.elapsed? start finish
 
+-- ════════════════════════════════════════════════════════════════════
+-- Frequency / Unit Conversion
+-- ════════════════════════════════════════════════════════════════════
+
+abbrev Frequency := Spec.Frequency
+
+/-- Convert seconds to ticks at the given frequency. -/
+def secondsToTicks (freq : Frequency) (seconds : Nat) : Nat :=
+  Spec.secondsToTicks freq seconds
+
+/-- Convert milliseconds to ticks at the given frequency (rounds down). -/
+def millisToTicks (freq : Frequency) (millis : Nat) : Nat :=
+  Spec.millisToTicks freq millis
+
+/-- Convert ticks to seconds at the given frequency (rounds down). -/
+def ticksToSeconds (freq : Frequency) (ticks : Nat) : Nat :=
+  Spec.ticksToSeconds freq ticks
+
+/-- Convert ticks to milliseconds at the given frequency (rounds down). -/
+def ticksToMillis (freq : Frequency) (ticks : Nat) : Nat :=
+  Spec.ticksToMillis freq ticks
+
+-- ════════════════════════════════════════════════════════════════════
+-- Interval Timer
+-- ════════════════════════════════════════════════════════════════════
+
+abbrev IntervalTimer := Spec.IntervalTimer
+
+/-- Create an interval timer starting at the given clock. -/
+def mkInterval (clock : Clock) (period : Nat) (hp : 0 < period) : IntervalTimer :=
+  Spec.mkInterval clock period hp
+
+/-- Check if the interval timer has fired. -/
+def intervalFired (clock : Clock) (timer : IntervalTimer) : Bool :=
+  Spec.intervalFired clock timer
+
+/-- Reset the interval timer to the next period. -/
+def intervalReset (timer : IntervalTimer) : IntervalTimer :=
+  Spec.intervalReset timer
+
+/-- Number of times the interval timer has fired since its nextTick. -/
+def intervalFireCount (clock : Clock) (timer : IntervalTimer) : Nat :=
+  Spec.intervalFireCount clock timer
+
+-- ════════════════════════════════════════════════════════════════════
+-- Watchdog Timer
+-- ════════════════════════════════════════════════════════════════════
+
+abbrev Watchdog := Spec.Watchdog
+
+/-- Create a watchdog timer. -/
+def mkWatchdog (clock : Clock) (timeout : Nat) (hp : 0 < timeout) : Watchdog :=
+  Spec.mkWatchdog clock timeout hp
+
+/-- Kick (reset) the watchdog timer. -/
+def watchdogKick (clock : Clock) (wd : Watchdog) : Watchdog :=
+  Spec.watchdogKick clock wd
+
+/-- Check if the watchdog has timed out. -/
+def watchdogExpired (clock : Clock) (wd : Watchdog) : Bool :=
+  Spec.watchdogExpired clock wd
+
+-- ════════════════════════════════════════════════════════════════════
+-- Batch / Utility Operations
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Advance a clock multiple times, returning the final clock. -/
+def advanceN (clock : Clock) (steps : List Nat) : Clock :=
+  steps.foldl Spec.advance clock
+
+/-- Check multiple deadlines for expiry, returning those that have fired. -/
+def expiredDeadlines (clock : Clock) (deadlines : List Deadline) : List Deadline :=
+  deadlines.filter (hasExpired clock ·)
+
+/-- Check multiple deadlines for expiry, returning those still pending. -/
+def pendingDeadlines (clock : Clock) (deadlines : List Deadline) : List Deadline :=
+  deadlines.filter (! hasExpired clock ·)
+
 end Radix.Timer
