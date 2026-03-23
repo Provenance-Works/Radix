@@ -147,4 +147,186 @@ theorem errorIndex?_flipAt_ofNibble (n : Nibble) (idx : Fin 7) :
     errorIndex? (flipAt (ofNibble n) idx) = some idx := by
   fin_cases n <;> fin_cases idx <;> decide
 
+-- ════════════════════════════════════════════════════════════════════
+-- Hamming Weight and Distance
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Convert a `Codeword74` to a list of seven booleans (bit positions 1–7). -/
+def toBitList (c : Codeword74) : List Bool :=
+  [c.p1, c.p2, c.d0, c.p4, c.d1, c.d2, c.d3]
+
+/-- Hamming weight (number of `true` bits) in a boolean list. -/
+def hammingWeight (bits : List Bool) : Nat :=
+  bits.foldl (fun acc b => acc + if b then 1 else 0) 0
+
+/-- Hamming weight of a codeword. -/
+def codewordWeight (c : Codeword74) : Nat :=
+  hammingWeight (toBitList c)
+
+/-- Hamming distance: number of bit positions where two lists differ. -/
+def hammingDist (a b : List Bool) : Nat :=
+  (a.zip b).foldl (fun acc (x, y) => acc + if x != y then 1 else 0) 0
+
+/-- Hamming distance between two codewords. -/
+def codewordDist (c1 c2 : Codeword74) : Nat :=
+  hammingDist (toBitList c1) (toBitList c2)
+
+/-- The all-zero codeword (encoding of nibble 0). -/
+def zeroCW : Codeword74 := ofNibble 0
+
+-- ════════════════════════════════════════════════════════════════════
+-- SECDED: Single Error Correction, Double Error Detection
+-- Extends Hamming(7,4) with an overall parity bit → Hamming(8,4)
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A SECDED codeword: Hamming(7,4) plus an overall parity bit. -/
+structure Codeword84 where
+  inner : Codeword74
+  overallParity : Bool
+  deriving DecidableEq, Repr
+
+/-- Build a SECDED codeword from a nibble (adds overall parity). -/
+def ofNibbleSECDED (n : Nibble) : Codeword84 :=
+  let cw := ofNibble n
+  let bits := toBitList cw
+  let parityBit := hammingWeight bits % 2 = 1
+  { inner := cw, overallParity := parityBit }
+
+/-- Overall parity of a SECDED codeword (all 8 bits including parity bit). -/
+def overallParityCheck (c : Codeword84) : Bool :=
+  (hammingWeight (toBitList c.inner) + if c.overallParity then 1 else 0) % 2 = 0
+
+/-- SECDED error detection result. -/
+inductive SECDEDResult where
+  | noError       : SECDEDResult  -- syndrome=0, parity OK
+  | singleError   : Fin 7 → SECDEDResult  -- syndrome≠0, parity bad → correctable
+  | doubleError   : SECDEDResult  -- syndrome≠0, parity OK → detected but uncorrectable
+  | parityOnly    : SECDEDResult  -- syndrome=0, parity bad → parity bit itself flipped
+  deriving DecidableEq, Repr
+
+/-- Classify a SECDED codeword's error status. -/
+def classifySECDED (c : Codeword84) : SECDEDResult :=
+  let s := syndrome c.inner
+  let pOK := overallParityCheck c
+  match s == 0, pOK with
+  | true,  true  => .noError
+  | false, false => match errorIndex? c.inner with
+                     | some idx => .singleError idx
+                     | none     => .noError  -- shouldn't happen if syndrome ≠ 0
+  | false, true  => .doubleError
+  | true,  false => .parityOnly
+
+/-- Correct a SECDED codeword if a single-bit error is detected. -/
+def correctSECDED (c : Codeword84) : Option Codeword84 :=
+  match classifySECDED c with
+  | .noError => some c
+  | .singleError idx =>
+    let correctedInner := flipAt c.inner idx
+    some { inner := correctedInner, overallParity := !c.overallParity }
+  | .doubleError => none  -- detected but uncorrectable
+  | .parityOnly => some { c with overallParity := !c.overallParity }
+
+-- ════════════════════════════════════════════════════════════════════
+-- Generator and Parity-Check Matrix (as lists of bit vectors)
+-- ════════════════════════════════════════════════════════════════════
+
+/-- The 4×7 generator matrix G for Hamming(7,4) in systematic form.
+    Each row encodes one data bit position. Rows represent d0, d1, d2, d3. -/
+def generatorMatrix : List (List Bool) :=
+  [ [true,  true,  true,  false, false, false, false]  -- d0 → p1, p2, d0
+  , [true,  false, false, true,  true,  false, false]  -- d1 → p1, p4, d1
+  , [false, true,  false, true,  false, true,  false]  -- d2 → p2, p4, d2
+  , [true,  true,  false, true,  false, false, true]   -- d3 → p1, p2, p4, d3
+  ]
+
+/-- The 3×7 parity-check matrix H for Hamming(7,4).
+    Each row represents one syndrome equation. -/
+def parityCheckMatrix : List (List Bool) :=
+  [ [true,  false, true,  false, true,  false, true ]  -- positions 1,3,5,7
+  , [false, true,  true,  false, false, true,  true ]  -- positions 2,3,6,7
+  , [false, false, false, true,  true,  true,  true ]  -- positions 4,5,6,7
+  ]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Theorems
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Encoding and extracting data recovers the nibble (already above),
+    repeated here for completeness as a `Prop`. -/
+theorem roundtrip_ofNibble_toNibble (n : Nibble) :
+    toNibble (ofNibble n) = n := toNibble_ofNibble n
+
+/-- Syndrome of a freshly encoded codeword is always zero. -/
+theorem syndrome_ofNibble (n : Nibble) :
+    syndrome (ofNibble n) = 0 := by
+  fin_cases n <;> decide
+
+/-- A freshly encoded codeword needs no correction. -/
+theorem errorIndex?_ofNibble (n : Nibble) :
+    errorIndex? (ofNibble n) = none := by
+  fin_cases n <;> decide
+
+/-- Flipping the same bit twice recovers the original codeword. -/
+theorem flipAt_flipAt_cancel (c : Codeword74) (idx : Fin 7) :
+    flipAt (flipAt c idx) idx = c := by
+  fin_cases idx <;> simp [flipAt, Bool.not_not]
+
+/-- The zero codeword has weight 0. -/
+theorem weight_zeroCW : codewordWeight zeroCW = 0 := by decide
+
+/-- Distance from any codeword to itself is 0. -/
+theorem dist_self (c : Codeword74) : codewordDist c c = 0 := by
+  simp [codewordDist, hammingDist, toBitList]
+
+set_option maxHeartbeats 800000 in
+/-- Hamming(7,4) has minimum distance 3: every distinct pair of valid codewords
+    differs in at least 3 bit positions. -/
+theorem min_distance_3 (n1 n2 : Nibble) (hne : n1 ≠ n2) :
+    3 ≤ codewordDist (ofNibble n1) (ofNibble n2) := by
+  fin_cases n1 <;> fin_cases n2 <;> simp_all [codewordDist, hammingDist, toBitList,
+    ofNibble, xor3, bitVal]
+
+/-- Hamming weight of a valid codeword is either 0, 3, 4, or 7. -/
+theorem valid_weight_values (n : Nibble) :
+    codewordWeight (ofNibble n) ∈ ({0, 3, 4, 7} : Finset Nat) := by
+  fin_cases n <;> decide
+
+/-- SECDED freshly encoded codewords are classified as noError. -/
+theorem classifySECDED_fresh (n : Nibble) :
+    classifySECDED (ofNibbleSECDED n) = .noError := by
+  fin_cases n <;> decide
+
+/-- SECDED overall parity check passes for freshly encoded codewords. -/
+theorem overallParityCheck_fresh (n : Nibble) :
+    overallParityCheck (ofNibbleSECDED n) = true := by
+  fin_cases n <;> decide
+
+/-- XOR associativity for three booleans. -/
+theorem xor_assoc (a b c : Bool) : xor (xor a b) c = xor a (xor b c) := by
+  cases a <;> cases b <;> cases c <;> decide
+
+/-- XOR commutativity. -/
+theorem xor_comm (a b : Bool) : xor a b = xor b a := by
+  cases a <;> cases b <;> decide
+
+/-- XOR with false is identity. -/
+theorem xor_false (a : Bool) : xor a false = a := by
+  cases a <;> decide
+
+/-- XOR with self is false. -/
+theorem xor_self (a : Bool) : xor a a = false := by
+  cases a <;> decide
+
+/-- bitVal is bounded by 1. -/
+theorem bitVal_le_one (b : Bool) : bitVal b ≤ 1 := by
+  cases b <;> simp [bitVal]
+
+/-- Even parity of 0 over any width is true. -/
+theorem evenParity_zero (w : Nat) : evenParity 0 w = true := by
+  simp [evenParity]
+
+/-- The toBitList of a codeword always has length 7. -/
+theorem toBitList_length (c : Codeword74) : (toBitList c).length = 7 := by
+  simp [toBitList]
+
 end Radix.ECC.Spec
