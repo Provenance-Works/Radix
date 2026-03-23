@@ -39,6 +39,11 @@ def evenParity (n width : Nat) : Bool
 - `correct` repairs any single-bit error addressed by the Hamming syndrome.
 - `evenParity` computes parity over the low `width` bits of a natural number.
 
+### Correction Boundary
+
+- Plain Hamming(7,4) guarantees correction only for clean words and single-bit errors.
+- Multi-bit corruption can map to a different valid codeword after `correct`; callers must not treat `correct` as a general integrity check.
+
 ## Operations (`ECC.Ops`)
 
 Executable helpers over `UInt8` codewords:
@@ -62,6 +67,7 @@ def evenParity (b : UInt8) (width : Nat := 8) : Bool
 - `isCodewordByte` rejects bytes that use the high bit outside the Hamming(7,4) payload.
 - `decode` returns `some` only for low-7-bit inputs whose syndrome is zero; parity-invalid words must be repaired with `correct` before decoding.
 - `syndrome` and `correct` are checked APIs and return `none` for invalid 8-bit inputs.
+- `correct` does not detect all multi-bit errors; if the transport requires multi-bit detection, add an outer checksum/parity layer.
 
 ## Proofs (`ECC.Lemmas`)
 

@@ -65,6 +65,7 @@ def simulateCopy (src dst : ByteArray) (d : Descriptor) : Option ByteArray
 - `isValid_iff_valid`: boolean validation agrees with the specification predicate
 - `bytesMoved_pos`: valid descriptors always move a positive number of bytes
 - `stepCount_pos`: valid descriptors always require at least one visibility step
+- `simulateCopy_eq_some`: successful simulation returns the expected destination splice
 
 ## Examples
 

@@ -34,4 +34,16 @@ theorem stepCount_pos (d : Descriptor) (h : d.valid) :
     0 < stepCount d := by
   simpa [stepCount] using Spec.Descriptor.stepCount_pos d h
 
+/-- Successful simulation returns the executable splice of source bytes into the
+    destination buffer. -/
+theorem simulateCopy_eq_some (src dst : ByteArray) (d : Descriptor)
+    (hvalid : isValid d = true)
+    (hsrc : d.source.endOffset ≤ src.size)
+    (hdst : d.destination.endOffset ≤ dst.size) :
+    simulateCopy src dst d = some
+      (ByteArray.mk (((byteArrayToList dst).take d.destination.start ++
+        ((byteArrayToList src).drop d.source.start).take d.source.size ++
+        (byteArrayToList dst).drop d.destination.endOffset).toArray)) := by
+  simp [simulateCopy, hvalid, hsrc, hdst, byteArrayToList]
+
 end Radix.DMA

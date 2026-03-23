@@ -65,6 +65,7 @@ def simulateCopy (src dst : ByteArray) (d : Descriptor) : Option ByteArray
 - `isValid_iff_valid`: Bool の妥当性判定が仕様 predicate と一致
 - `bytesMoved_pos`: 妥当な descriptor は常に正のバイト数を移動する
 - `stepCount_pos`: 妥当な descriptor は少なくとも 1 つの visibility step を持つ
+- `simulateCopy_eq_some`: シミュレーション成功時の結果が期待される destination splice と一致する
 
 ## 使用例
 

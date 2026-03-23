@@ -39,6 +39,11 @@ def evenParity (n width : Nat) : Bool
 - `correct` は Hamming syndrome が指す単一ビット誤りを修復します。
 - `evenParity` は自然数の下位 `width` ビットに対するパリティを計算します。
 
+### 訂正の境界
+
+- 素の Hamming(7,4) が保証するのは clean word と単一ビット誤りの訂正までです。
+- 多ビット破損では `correct` 後に別の valid codeword へ写ってしまうことがあるため、`correct` を汎用の完全性検査として扱ってはいけません。
+
 ## 操作 (`ECC.Ops`)
 
 `UInt8` codeword 上の実行可能ヘルパーです。
@@ -62,6 +67,7 @@ def evenParity (b : UInt8) (width : Nat := 8) : Bool
 - `isCodewordByte` は Hamming(7,4) payload の外側にある高位ビット付きバイトを拒否します。
 - `decode` は syndrome が 0 の low-7-bit 入力に対してのみ `some` を返し、パリティ不整合のある語は `correct` 後に decode する必要があります。
 - `syndrome` と `correct` は checked API であり、不正な 8 ビット入力には `none` を返します。
+- `correct` はすべての多ビット誤りを検出できません。多ビット検出が必要な場合は外側に checksum か parity 層を追加してください。
 
 ## 証明 (`ECC.Lemmas`)
 
