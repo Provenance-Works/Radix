@@ -101,6 +101,43 @@ theorem gf2_xor_eq_add (a b : GF2Poly) :
     GF2Poly.xor a b = GF2Poly.add a b := by
   simp [GF2Poly.xor]
 
+open Spec in
+/-- GF(2) add distributes over triple: (a + b) + c = a + (b + c). -/
+theorem gf2_add_right_comm (a b c : GF2Poly) :
+    GF2Poly.add (GF2Poly.add a b) c = GF2Poly.add (GF2Poly.add a c) b := by
+  rw [gf2_add_assoc, gf2_add_comm b c, ← gf2_add_assoc]
+
+open Spec in
+/-- GF(2) double negation: (a + b) + b = a. -/
+theorem gf2_add_cancel_right' (a b : GF2Poly) :
+    GF2Poly.add (GF2Poly.add a b) b = a := by
+  cases a; cases b
+  simp [GF2Poly.add, Nat.xor_assoc, Nat.xor_self, Nat.xor_zero]
+
+open Spec in
+/-- GF(2) add/xor equivalence: xor inherits all algebraic properties. -/
+theorem gf2_xor_comm (a b : GF2Poly) :
+    GF2Poly.xor a b = GF2Poly.xor b a := by
+  simp [GF2Poly.xor, gf2_add_comm]
+
+open Spec in
+/-- GF(2) xor is associative. -/
+theorem gf2_xor_assoc (a b c : GF2Poly) :
+    GF2Poly.xor (GF2Poly.xor a b) c = GF2Poly.xor a (GF2Poly.xor b c) := by
+  simp [GF2Poly.xor, gf2_add_assoc]
+
+open Spec in
+/-- GF(2) xor with zero is identity. -/
+theorem gf2_xor_zero (a : GF2Poly) :
+    GF2Poly.xor a GF2Poly.zero = a := by
+  simp [GF2Poly.xor, gf2_add_zero]
+
+open Spec in
+/-- GF(2) xor is self-inverse. -/
+theorem gf2_xor_self (a : GF2Poly) :
+    GF2Poly.xor a a = GF2Poly.zero := by
+  simp [GF2Poly.xor, gf2_add_self]
+
 /-! ## Empty Data CRC
 
 The CRC of empty data is determined entirely by the init and xorOut parameters. -/
@@ -110,5 +147,128 @@ open Spec in
 theorem spec_crc_empty (params : CRCParams) :
     crcCompute params [] = (params.init ^^^ params.xorOut) &&& ((1 <<< params.width) - 1) :=
   Spec.crc_empty params
+
+/-! ## CRC-32 Known-Answer Tests (RFC 3720 / ITU-T V.42)
+
+These theorems verify the implementation against standard test vectors.
+The canonical check string is "123456789" (ASCII), CRC-32 = 0xCBF43926. -/
+
+/-- CRC-32 of an empty byte array is 0x00000000.
+    (init=0xFFFFFFFF XOR xorOut=0xFFFFFFFF = 0) -/
+theorem crc32_empty :
+    CRC32.compute ByteArray.empty = ⟨0⟩ := by native_decide
+
+/-- CRC-16 of an empty byte array is 0x0000.
+    (init=0xFFFF XOR xorOut=0xFFFF = 0) -/
+theorem crc16_empty :
+    CRC16.compute ByteArray.empty = ⟨0⟩ := by native_decide
+
+/-- CRC-32 of the single byte 0x00. -/
+theorem crc32_single_zero :
+    CRC32.compute (ByteArray.mk #[0x00]) = ⟨0xD202EF8D⟩ := by native_decide
+
+/-- CRC-32 of the single byte 0xFF. -/
+theorem crc32_single_ff :
+    CRC32.compute (ByteArray.mk #[0xFF]) = ⟨0xFF000000⟩ := by native_decide
+
+/-- CRC-32 of "123456789" (ASCII 0x31..0x39) equals 0xCBF43926.
+    This is the standard ITU-T V.42 check value. -/
+theorem crc32_check_value :
+    CRC32.compute (ByteArray.mk #[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39])
+      = ⟨0xCBF43926⟩ := by native_decide
+
+/-- CRC-16/CCITT of "123456789" equals 0x906E.
+    Standard check value for CRC-16/CCITT. -/
+theorem crc16_check_value :
+    CRC16.compute (ByteArray.mk #[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39])
+      = ⟨0x906E⟩ := by native_decide
+
+/-! ## Streaming Multi-Chunk Consistency
+
+Processing data in chunks via init/update/finalize produces the same
+result as processing the full data in one shot. -/
+
+/-- CRC-32 two-chunk streaming: splitting "123456789" into "12345" + "6789"
+    produces the same CRC. -/
+theorem crc32_streaming_two_chunks :
+    CRC32.finalize (CRC32.update (CRC32.update CRC32.init
+      (ByteArray.mk #[0x31, 0x32, 0x33, 0x34, 0x35]))
+      (ByteArray.mk #[0x36, 0x37, 0x38, 0x39]))
+    = CRC32.compute (ByteArray.mk #[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39]) := by
+  native_decide
+
+/-- CRC-16 two-chunk streaming consistency. -/
+theorem crc16_streaming_two_chunks :
+    CRC16.finalize (CRC16.update (CRC16.update CRC16.init
+      (ByteArray.mk #[0x31, 0x32, 0x33, 0x34, 0x35]))
+      (ByteArray.mk #[0x36, 0x37, 0x38, 0x39]))
+    = CRC16.compute (ByteArray.mk #[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39]) := by
+  native_decide
+
+/-- CRC-32 byte-at-a-time streaming consistency:
+    update(update(init, [0x31]), [0x32]) = update(init, [0x31, 0x32]). -/
+theorem crc32_streaming_byte_at_a_time :
+    CRC32.update (CRC32.update CRC32.init (ByteArray.mk #[0x31])) (ByteArray.mk #[0x32])
+    = CRC32.update CRC32.init (ByteArray.mk #[0x31, 0x32]) := by native_decide
+
+/-- CRC-32 naive (bit-by-bit) reference matches table-driven for "123456789". -/
+theorem crc32_naive_matches_table :
+    CRC32.computeNaive (ByteArray.mk #[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39])
+    = CRC32.compute (ByteArray.mk #[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39]) := by
+  native_decide
+
+/-- CRC-16 naive reference matches table-driven for "123456789". -/
+theorem crc16_naive_matches_table :
+    CRC16.computeNaive (ByteArray.mk #[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39])
+    = CRC16.compute (ByteArray.mk #[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39]) := by
+  native_decide
+
+/-! ## Table Entry Verification -/
+
+/-- CRC-32 table entry 0 is 0x00000000. -/
+theorem crc32_table_entry_0 : CRC32.table[0]! = 0x00000000 := by native_decide
+
+/-- CRC-32 table entry 255 (0xFF) is 0x2D02EF8D. -/
+theorem crc32_table_entry_255 : CRC32.table[255]! = 0x2D02EF8D := by native_decide
+
+/-- CRC-16 table entry 0 is 0x0000. -/
+theorem crc16_table_entry_0 : CRC16.table[0]! = 0x0000 := by native_decide
+
+/-- CRC-16 table entry 255 is 0x0F78. -/
+theorem crc16_table_entry_255 : CRC16.table[255]! = 0x0F78 := by native_decide
+
+/-- CRC-32 init and finalize cancel: finalize(init) = 0. -/
+theorem crc32_finalize_init :
+    CRC32.finalize CRC32.init = ⟨0⟩ := by native_decide
+
+/-- CRC-16 init and finalize cancel: finalize(init) = 0. -/
+theorem crc16_finalize_init :
+    CRC16.finalize CRC16.init = ⟨0⟩ := by native_decide
+
+/-! ## GF(2) Polynomial Structural Properties -/
+
+open Spec in
+/-- GF(2) zero polynomial has coefficients 0. -/
+theorem gf2_zero_coeffs : GF2Poly.zero.coeffs = 0 := rfl
+
+open Spec in
+/-- GF(2) add preserves structural equality. -/
+theorem gf2_add_left_cancel (a b c : GF2Poly) (h : GF2Poly.add a b = GF2Poly.add a c) :
+    b = c := by
+  have h1 := gf2_add_cancel_left a b
+  have h2 := gf2_add_cancel_left a c
+  rw [h] at h1
+  rw [h1] at h2
+  exact h2
+
+open Spec in
+/-- GF(2) add right cancellation. -/
+theorem gf2_add_right_cancel (a b c : GF2Poly) (h : GF2Poly.add a c = GF2Poly.add b c) :
+    a = b := by
+  have h1 := gf2_add_cancel_right' a c
+  have h2 := gf2_add_cancel_right' b c
+  rw [h] at h1
+  rw [h1] at h2
+  exact h2
 
 end Radix.CRC.Lemmas
