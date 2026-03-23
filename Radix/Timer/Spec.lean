@@ -156,4 +156,167 @@ theorem later_deadlineTick_ge_right (a b : Deadline) :
   by_cases h : a.deadlineTick ≤ b.deadlineTick <;> simp [h]
   omega
 
+-- ════════════════════════════════════════════════════════════════════
+-- Frequency and Unit Conversion
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Tick frequency in Hz (ticks per second). -/
+structure Frequency where
+  hz : Nat
+  pos : 0 < hz
+  deriving Repr
+
+/-- Convert seconds to ticks at the given frequency. -/
+def secondsToTicks (freq : Frequency) (seconds : Nat) : Nat :=
+  seconds * freq.hz
+
+/-- Convert milliseconds to ticks at the given frequency (rounds down). -/
+def millisToTicks (freq : Frequency) (millis : Nat) : Nat :=
+  millis * freq.hz / 1000
+
+/-- Convert ticks to seconds at the given frequency (rounds down). -/
+def ticksToSeconds (freq : Frequency) (ticks : Nat) : Nat :=
+  ticks / freq.hz
+
+/-- Convert ticks to milliseconds at the given frequency (rounds down). -/
+def ticksToMillis (freq : Frequency) (ticks : Nat) : Nat :=
+  ticks * 1000 / freq.hz
+
+-- ════════════════════════════════════════════════════════════════════
+-- Interval Timer (Periodic)
+-- ════════════════════════════════════════════════════════════════════
+
+/-- An interval timer that fires periodically. -/
+structure IntervalTimer where
+  period : Nat
+  nextTick : Nat
+  periodPos : 0 < period
+  deriving Repr
+
+/-- Create an interval timer starting at the given clock. -/
+def mkInterval (clock : Clock) (period : Nat) (hp : 0 < period) : IntervalTimer :=
+  { period := period
+  , nextTick := clock.ticks + period
+  , periodPos := hp
+  }
+
+/-- Check if the interval timer has fired. -/
+def intervalFired (clock : Clock) (timer : IntervalTimer) : Bool :=
+  timer.nextTick ≤ clock.ticks
+
+/-- Reset the interval timer to the next period. -/
+def intervalReset (timer : IntervalTimer) : IntervalTimer :=
+  { timer with nextTick := timer.nextTick + timer.period }
+
+/-- Number of times the interval timer has fired since its nextTick. -/
+def intervalFireCount (clock : Clock) (timer : IntervalTimer) : Nat :=
+  if timer.nextTick ≤ clock.ticks then
+    (clock.ticks - timer.nextTick) / timer.period + 1
+  else 0
+
+-- ════════════════════════════════════════════════════════════════════
+-- Watchdog Timer
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A watchdog timer that must be "kicked" periodically to prevent timeout. -/
+structure Watchdog where
+  timeout : Nat
+  deadline : Deadline
+  timeoutPos : 0 < timeout
+  deriving Repr
+
+/-- Create a watchdog timer. -/
+def mkWatchdog (clock : Clock) (timeout : Nat) (hp : 0 < timeout) : Watchdog :=
+  { timeout := timeout
+  , deadline := deadlineAfter clock timeout
+  , timeoutPos := hp
+  }
+
+/-- Kick (reset) the watchdog timer, pushing the deadline forward. -/
+def watchdogKick (clock : Clock) (wd : Watchdog) : Watchdog :=
+  { wd with deadline := deadlineAfter clock wd.timeout }
+
+/-- Check if the watchdog has timed out. -/
+def watchdogExpired (clock : Clock) (wd : Watchdog) : Bool :=
+  wd.deadline.deadlineTick ≤ clock.ticks
+
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Clock Theorems
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Monotonicity is reflexive. -/
+theorem monotonic_refl (clock : Clock) : Monotonic clock clock := by
+  simp [Monotonic]
+
+/-- Monotonicity is transitive. -/
+theorem monotonic_trans (a b c : Clock) (hab : Monotonic a b) (hbc : Monotonic b c) :
+    Monotonic a c := by
+  simp [Monotonic] at *
+  omega
+
+/-- Advancing by zero is identity. -/
+theorem advance_zero (clock : Clock) : advance clock 0 = clock := by
+  simp [advance]
+
+/-- Double advance equals a single advance of the sum. -/
+theorem advance_advance (clock : Clock) (d1 d2 : Nat) :
+    advance (advance clock d1) d2 = advance clock (d1 + d2) := by
+  simp [advance, Nat.add_assoc]
+
+/-- Elapsed ticks from clock to itself is zero. -/
+theorem elapsed_self (clock : Clock) : elapsed clock clock = 0 := by
+  simp [elapsed]
+
+/-- Elapsed ticks after advancing equals the delta. -/
+theorem elapsed_advance (clock : Clock) (delta : Nat) :
+    elapsed clock (advance clock delta) = delta := by
+  simp [elapsed, advance]
+
+/-- Seconds-to-ticks round-trips with ticks-to-seconds at exact multiples. -/
+theorem ticksToSeconds_secondsToTicks (freq : Frequency) (s : Nat) :
+    ticksToSeconds freq (secondsToTicks freq s) = s := by
+  simp [ticksToSeconds, secondsToTicks]
+  exact Nat.mul_div_cancel s freq.pos
+
+/-- A newly created interval timer has not yet fired. -/
+theorem mkInterval_not_fired (clock : Clock) (period : Nat) (hp : 0 < period) :
+    intervalFired clock (mkInterval clock period hp) = false := by
+  simp [intervalFired, mkInterval]
+  omega
+
+/-- A newly created watchdog has not expired. -/
+theorem mkWatchdog_not_expired (clock : Clock) (timeout : Nat) (hp : 0 < timeout) :
+    watchdogExpired clock (mkWatchdog clock timeout hp) = false := by
+  simp [watchdogExpired, mkWatchdog, deadlineAfter]
+  omega
+
+/-- Kicking the watchdog pushes back the deadline. -/
+theorem watchdogKick_deadline (clock : Clock) (wd : Watchdog) :
+    (watchdogKick clock wd).deadline = deadlineAfter clock wd.timeout := by
+  simp [watchdogKick]
+
+/-- Sooner is commutative. -/
+theorem sooner_comm (a b : Deadline) :
+    (sooner a b).deadlineTick = (sooner b a).deadlineTick := by
+  unfold sooner
+  by_cases h : a.deadlineTick ≤ b.deadlineTick <;>
+  by_cases h2 : b.deadlineTick ≤ a.deadlineTick <;> simp [h, h2] <;> omega
+
+/-- Later is commutative. -/
+theorem later_comm (a b : Deadline) :
+    (later a b).deadlineTick = (later b a).deadlineTick := by
+  unfold later
+  by_cases h : a.deadlineTick ≤ b.deadlineTick <;>
+  by_cases h2 : b.deadlineTick ≤ a.deadlineTick <;> simp [h, h2] <;> omega
+
+/-- Remaining plus overdue equals the absolute tick difference. -/
+theorem remaining_add_overdue (clock : Clock) (deadline : Deadline) :
+    remaining clock deadline + overdue clock deadline =
+    if deadline.deadlineTick ≤ clock.ticks then clock.ticks - deadline.deadlineTick
+    else deadline.deadlineTick - clock.ticks := by
+  simp [remaining, overdue]
+  by_cases h : deadline.deadlineTick ≤ clock.ticks
+  · simp [h]
+  · simp [h]; omega
+
 end Radix.Timer.Spec
