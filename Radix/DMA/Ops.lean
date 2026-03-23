@@ -122,4 +122,66 @@ def simulateCopy (src dst : ByteArray) (d : Descriptor) : Option ByteArray :=
   else
     none
 
+-- ════════════════════════════════════════════════════════════════════
+-- Alignment Checking
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Check whether a region satisfies the given alignment. -/
+def isAligned (r : Radix.Memory.Spec.Region) (align : Nat) : Bool :=
+  decide (Spec.isAligned r align)
+
+/-- Check whether both source and destination are aligned. -/
+def isDescriptorAligned (d : Descriptor) (align : Nat) : Bool :=
+  isAligned d.source align && isAligned d.destination align
+
+-- ════════════════════════════════════════════════════════════════════
+-- Scatter-Gather Chain Operations
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Validate an entire chain. -/
+def isChainValid (chain : List Descriptor) : Bool :=
+  chain.all (fun d => isValid d)
+
+/-- Total bytes in a chain. -/
+def chainTotalBytes (chain : List Descriptor) : Nat :=
+  Spec.chainTotalBytes chain
+
+/-- Check that all descriptors in a chain satisfy alignment. -/
+def isChainAligned (chain : List Descriptor) (align : Nat) : Bool :=
+  chain.all (fun d => isDescriptorAligned d align)
+
+/-- Simulate a chain of DMA copies applied sequentially. -/
+def simulateChain (src dst : ByteArray) (chain : List Descriptor) : Option ByteArray :=
+  chain.foldlM (fun currentDst d => simulateCopy src currentDst d) dst
+
+/-- Count total transfer steps across a chain. -/
+def chainStepCount (chain : List Descriptor) : Nat :=
+  chain.foldl (fun acc d => acc + stepCount d) 0
+
+/-- Collect all source regions in a chain. -/
+def chainSourceRegions (chain : List Descriptor) : List Radix.Memory.Spec.Region :=
+  chain.map (·.source)
+
+/-- Collect all destination regions in a chain. -/
+def chainDestinationRegions (chain : List Descriptor) : List Radix.Memory.Spec.Region :=
+  chain.map (·.destination)
+
+/-- Create a simple mem-to-mem descriptor. -/
+def mkMemToMem (srcStart dstStart size : Nat) : Descriptor :=
+  { source := { start := srcStart, size := size }
+  , destination := { start := dstStart, size := size }
+  , order := .relaxed
+  , coherence := .coherent
+  , atomicity := .whole
+  }
+
+/-- Create an aligned burst descriptor. -/
+def mkBurstTransfer (srcStart dstStart size burstSize : Nat) : Descriptor :=
+  { source := { start := srcStart, size := size }
+  , destination := { start := dstStart, size := size }
+  , order := .relaxed
+  , coherence := .coherent
+  , atomicity := .burst burstSize
+  }
+
 end Radix.DMA
