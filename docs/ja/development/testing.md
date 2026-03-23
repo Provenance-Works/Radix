@@ -76,10 +76,10 @@ lake exe test && lake exe proptest && lake exe comptest && lake exe examples
 | **CRC** | CRC-32/CRC-16 の既知ベクタ、ストリーミング API の一貫性 |
 | **MemoryPool** | Bump pool の割り当て/リセットと slab pool の割り当て/解放安全性 |
 | **UTF8** | スカラ構築、バイト長クラス、ラウンドトリップ復号、不正列の拒否 |
-| **ECC** | Hamming エンコード/デコード、パリティ検査、シンドローム検出、単一ビット訂正 |
-| **DMA** | ディスクリプタ妥当性、burst ステップ数、チェック付き領域コピーシミュレーション |
-| **Timer** | 単調 tick、期限、残り時間の飽和、期限切れ判定 |
-| **ProofAutomation** | `radix_decide` と `radix_omega` の代表 goal に対する smoke test |
+| **ECC** | Hamming エンコード/デコード、パリティ検査、シンドローム検出、error index/status 分類、単一ビット訂正 |
+| **DMA** | ディスクリプタ妥当性、burst geometry、段階的可視化ステップ、チェック付き領域コピーシミュレーション |
+| **Timer** | 単調 tick、期限、remaining/overdue の飽和、deadline algebra、budget 判定 |
+| **ProofAutomation** | `radix_decide`、`radix_omega`、`radix_simp`、`radix_finish` の smoke test |
 
 ### テストパターン
 
@@ -170,9 +170,9 @@ private def testUInt8 : IO Unit := do
 | `Binary.Lemmas` | フォーマット性質、writePaddingサイズ、parse_padding_ok |
 | `Binary.Leb128.Lemmas` | LEB128ラウンドトリップ（全4バリアント）、サイズ上限 |
 | `UTF8.Lemmas` | エンコード長の一致、エンコード済みスカラの well-formedness |
-| `ECC.Lemmas` | Hamming の encode 後 decode と単一ビット訂正の正しさ |
-| `DMA.Lemmas` | ディスクリプタ妥当性の同値、転送バイト数、ステップ数の正値性 |
-| `Timer.Lemmas` | 単調 tick、期限切れ後に残時間が 0 になる性質 |
+| `ECC.Lemmas` | Hamming の encode 後 decode、誤り分類、単一ビット訂正の正しさ |
+| `DMA.Lemmas` | ディスクリプタ妥当性の同値、simulation 前提、staged copy の正しさ |
+| `Timer.Lemmas` | 単調 tick、overdue/remaining の振る舞い、deadline 延長の性質 |
 | `Concurrency.Lemmas` | オーダリング証明、CAS正しさ、線形化可能性、DRF |
 | `BareMetal.Lemmas` | 領域性質、スタートアップバリデーション、アライメント、GCフリー |
 

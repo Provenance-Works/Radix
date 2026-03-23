@@ -68,6 +68,22 @@ def expired (clock : Clock) (deadline : Deadline) : Prop :=
 def remaining (clock : Clock) (deadline : Deadline) : Nat :=
   deadline.deadlineTick - clock.ticks
 
+/-- Time that has passed since a deadline, saturating at zero before expiry. -/
+def overdue (clock : Clock) (deadline : Deadline) : Nat :=
+  clock.ticks - deadline.deadlineTick
+
+/-- Extend a deadline by a further number of ticks. -/
+def extend (deadline : Deadline) (delta : Nat) : Deadline :=
+  ⟨deadline.deadlineTick + delta⟩
+
+/-- The earlier of two deadlines. -/
+def sooner (a b : Deadline) : Deadline :=
+  if a.deadlineTick ≤ b.deadlineTick then a else b
+
+/-- The later of two deadlines. -/
+def later (a b : Deadline) : Deadline :=
+  if a.deadlineTick ≤ b.deadlineTick then b else a
+
 theorem advance_monotonic (clock : Clock) (delta : Nat) :
     Monotonic clock (advance clock delta) := by
   simp [Monotonic, advance]
@@ -94,6 +110,50 @@ theorem expired_of_remaining_zero (clock : Clock) (deadline : Deadline)
     (h : remaining clock deadline = 0) :
     expired clock deadline := by
   simp [expired, remaining] at *
+  omega
+
+theorem overdue_zero_of_not_expired (clock : Clock) (deadline : Deadline)
+    (h : clock.ticks ≤ deadline.deadlineTick) :
+    overdue clock deadline = 0 := by
+  simp [overdue]
+  omega
+
+theorem overdue_pos_of_expired (clock : Clock) (deadline : Deadline)
+    (h : deadline.deadlineTick < clock.ticks) :
+    0 < overdue clock deadline := by
+  simp [overdue]
+  omega
+
+theorem extend_not_earlier (deadline : Deadline) (delta : Nat) :
+    deadline.deadlineTick ≤ (extend deadline delta).deadlineTick := by
+  simp [extend]
+
+theorem sooner_deadlineTick_le_left (a b : Deadline) :
+    (sooner a b).deadlineTick ≤ a.deadlineTick := by
+  unfold sooner
+  by_cases h : a.deadlineTick ≤ b.deadlineTick
+  · simp [h]
+  · simp [h]
+    omega
+
+theorem sooner_deadlineTick_le_right (a b : Deadline) :
+    (sooner a b).deadlineTick ≤ b.deadlineTick := by
+  unfold sooner
+  by_cases h : a.deadlineTick ≤ b.deadlineTick
+  · simp [h]
+  · simp [h]
+
+theorem later_deadlineTick_ge_left (a b : Deadline) :
+    a.deadlineTick ≤ (later a b).deadlineTick := by
+  unfold later
+  by_cases h : a.deadlineTick ≤ b.deadlineTick
+  · simp [h]
+  · simp [h]
+
+theorem later_deadlineTick_ge_right (a b : Deadline) :
+    b.deadlineTick ≤ (later a b).deadlineTick := by
+  unfold later
+  by_cases h : a.deadlineTick ≤ b.deadlineTick <;> simp [h]
   omega
 
 end Radix.Timer.Spec

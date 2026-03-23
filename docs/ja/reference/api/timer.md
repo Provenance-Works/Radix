@@ -24,6 +24,10 @@ def Monotonic (before after : Clock) : Prop
 def deadlineAfter (clock : Clock) (timeout : Nat) : Deadline
 def expired (clock : Clock) (deadline : Deadline) : Prop
 def remaining (clock : Clock) (deadline : Deadline) : Nat
+def overdue (clock : Clock) (deadline : Deadline) : Nat
+def extend (deadline : Deadline) (delta : Nat) : Deadline
+def sooner (a b : Deadline) : Deadline
+def later (a b : Deadline) : Deadline
 ```
 
 ## 操作 (`Timer.Ops`)
@@ -38,6 +42,11 @@ def tick (clock : Clock) (delta : Nat := 1) : Clock
 def after (clock : Clock) (timeout : Nat) : Deadline
 def hasExpired (clock : Clock) (deadline : Deadline) : Bool
 def remaining (clock : Clock) (deadline : Deadline) : Nat
+def overdue (clock : Clock) (deadline : Deadline) : Nat
+def extend (deadline : Deadline) (delta : Nat) : Deadline
+def sooner (a b : Deadline) : Deadline
+def later (a b : Deadline) : Deadline
+def expiresWithin (clock : Clock) (deadline : Deadline) (budget : Nat) : Bool
 def elapsed (start finish : Clock) : Nat
 def elapsed? (start finish : Clock) : Option Nat
 ```
@@ -48,6 +57,9 @@ def elapsed? (start finish : Clock) : Option Nat
 - `elapsed` は飽和ヘルパーで、逆順の観測は `0` に潰れます。
 - `elapsed?` は逆順の観測を `none` で拒否します。
 - `remaining` は deadline を過ぎると 0 に飽和します。
+- `overdue` は期限前では 0 に飽和し、期限超過後に増加します。
+- `extend`、`sooner`、`later` は scheduler 的な deadline algebra を与えます。
+- `expiresWithin` は飽和 `remaining` の上に立つ budget 判定です。
 - `hasExpired` は仕様層 `expired` predicate の Bool 版です。
 
 ## 証明 (`Timer.Lemmas`)
@@ -59,6 +71,9 @@ def elapsed? (start finish : Clock) : Option Nat
 - `expired_of_remaining_zero`: 残時間 0 なら期限切れ
 - `tick_monotonic`: 操作層の tick でも単調性が保たれる
 - `after_not_expired`: 正の timeout は即座には期限切れにならない
+- `overdue_zero_of_not_hasExpired`: 生きている deadline は overdue ではない
+- `extend_not_earlier`: deadline の延長で期限が早まることはない
+- `expiresWithin_remaining`: どの deadline も正確な残時間 budget 内では必ず期限切れになる
 
 ## 使用例
 
@@ -69,7 +84,11 @@ def demo : Nat :=
   let start := Radix.Timer.zero
   let deadline := Radix.Timer.after start 10
   let mid := Radix.Timer.tick start 4
-  Radix.Timer.remaining mid deadline
+  let late := Radix.Timer.tick start 13
+  if Radix.Timer.expiresWithin mid deadline 6 then
+    Radix.Timer.overdue late deadline
+  else
+    Radix.Timer.remaining mid deadline
 ```
 
 ## 関連ドキュメント

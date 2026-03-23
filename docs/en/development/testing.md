@@ -76,10 +76,10 @@ Covers all 18 modules with concrete test values:
 | **CRC** | CRC-32/CRC-16 known vectors, streaming update/finalize consistency |
 | **MemoryPool** | Bump pool allocation/reset and slab pool allocation/free safety |
 | **UTF8** | Scalar construction, byte-length classes, round-trip decoding, malformed sequence rejection |
-| **ECC** | Hamming encode/decode, parity checks, syndrome detection, single-bit correction |
-| **DMA** | Descriptor validity, burst step counts, checked region copy simulation |
-| **Timer** | Monotonic ticking, deadlines, remaining time saturation, expiry behavior |
-| **ProofAutomation** | `radix_decide` and `radix_omega` smoke tests against representative goals |
+| **ECC** | Hamming encode/decode, parity checks, syndrome detection, error-index/status classification, single-bit correction |
+| **DMA** | Descriptor validity, burst geometry, staged visibility steps, checked region copy simulation |
+| **Timer** | Monotonic ticking, deadlines, remaining/overdue saturation, deadline algebra, expiry budgets |
+| **ProofAutomation** | `radix_decide`, `radix_omega`, `radix_simp`, and `radix_finish` smoke tests |
 
 ### Test Pattern
 
@@ -170,9 +170,9 @@ Formal proofs are verified at compile time by Lean 4's kernel. They provide the 
 | `Binary.Lemmas` | Format properties, writePadding size, parse_padding_ok |
 | `Binary.Leb128.Lemmas` | LEB128 round-trips (all 4 variants), size bounds |
 | `UTF8.Lemmas` | Encoded length agreement, well-formedness of encoded scalars |
-| `ECC.Lemmas` | Hamming decode-after-encode and single-bit correction correctness |
-| `DMA.Lemmas` | Descriptor validity equivalence, bytes moved, step-count positivity |
-| `Timer.Lemmas` | Monotonic ticking, remaining time collapse after expiry |
+| `ECC.Lemmas` | Hamming decode-after-encode, error classification, and single-bit correction correctness |
+| `DMA.Lemmas` | Descriptor validity equivalence, simulation preconditions, staged-copy correctness |
+| `Timer.Lemmas` | Monotonic ticking, overdue/remaining behavior, deadline-extension properties |
 | `Concurrency.Lemmas` | Ordering proofs, CAS correctness, linearizability, DRF |
 | `BareMetal.Lemmas` | Region properties, startup validation, alignment, GC-free |
 

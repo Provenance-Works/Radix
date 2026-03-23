@@ -28,6 +28,7 @@ def xor3 (a b c : Bool) : Bool
 def toNibble (c : Codeword74) : Nibble
 def ofNibble (n : Nibble) : Codeword74
 def syndrome (c : Codeword74) : Nat
+def errorIndex? (c : Codeword74) : Option (Fin 7)
 def flipAt (c : Codeword74) (idx : Fin 7) : Codeword74
 def correct (c : Codeword74) : Codeword74
 def evenParity (n width : Nat) : Bool
@@ -52,6 +53,10 @@ Executable helpers over `UInt8` codewords:
 abbrev Nibble := Spec.Nibble
 abbrev Codeword74 := Spec.Codeword74
 
+inductive Status where
+  | clean
+  | corrected (idx : Fin 7)
+
 def toByte (c : Codeword74) : UInt8
 def isCodewordByte (b : UInt8) : Bool
 def fromByte? (b : UInt8) : Option Codeword74
@@ -59,22 +64,30 @@ def encodeNibble (n : Nibble) : UInt8
 def encodeByte? (b : UInt8) : Option UInt8
 def decode (b : UInt8) : Option UInt8
 def syndrome (b : UInt8) : Option Nat
+def errorIndex? (b : UInt8) : Option (Fin 7)
 def check (b : UInt8) : Bool
+def status? (b : UInt8) : Option Status
 def correct (b : UInt8) : Option UInt8
+def decodeAfterCorrect (b : UInt8) : Option UInt8
 def evenParity (b : UInt8) (width : Nat := 8) : Bool
 ```
 
 - `isCodewordByte` rejects bytes that use the high bit outside the Hamming(7,4) payload.
 - `decode` returns `some` only for low-7-bit inputs whose syndrome is zero; parity-invalid words must be repaired with `correct` before decoding.
-- `syndrome` and `correct` are checked APIs and return `none` for invalid 8-bit inputs.
+- `syndrome`, `errorIndex?`, `status?`, and `correct` are checked APIs and return `none` for invalid 8-bit inputs.
+- `status?` distinguishes already-clean words from single-bit-repairable words, while `decodeAfterCorrect` gives the common decode-after-repair path directly.
 - `correct` does not detect all multi-bit errors; if the transport requires multi-bit detection, add an outer checksum/parity layer.
 
 ## Proofs (`ECC.Lemmas`)
 
 - `toNibble_ofNibble`: spec-level encoding followed by extraction recovers the original nibble
 - `toNibble_correct_single_bit`: correcting any one flipped bit recovers the original nibble
+- `errorIndex?_eq_none_iff_syndrome_zero`: clean codewords have no correction index
+- `errorIndex?_flipAt_ofNibble`: single-bit corruption is classified at the flipped bit
 - `decode_encodeNibble`: executable decode after encode returns the original payload bits
+- `status?_encodeNibble` / `status?_single_bit`: executable classification matches clean vs corrected codewords
 - `decode_correct_single_bit`: executable correction preserves the nibble represented by the codeword
+- `decodeAfterCorrect_single_bit`: decode-after-correct succeeds for any single-bit corruption
 
 ## Examples
 
@@ -85,7 +98,7 @@ def demo : Option UInt8 :=
   let nibble : Radix.ECC.Nibble := ⟨0xB, by decide⟩
   let encoded := Radix.ECC.encodeNibble nibble
   let corrupted := encoded ^^^ 0x04
-  Radix.ECC.correct corrupted
+  Radix.ECC.decodeAfterCorrect corrupted
 ```
 
 ## Related Documents

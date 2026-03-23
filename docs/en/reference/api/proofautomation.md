@@ -12,6 +12,8 @@ Provides lightweight tactic macros for common proof patterns that appear through
 ```lean
 syntax "radix_decide" : tactic
 syntax "radix_omega" : tactic
+syntax "radix_simp" : tactic
+syntax "radix_finish" : tactic
 ```
 
 ### `radix_decide`
@@ -39,6 +41,33 @@ first
 
 Use it for order transitivity, zero-lower-bound goals, and arithmetic side conditions that become Presburger after simplification.
 
+### `radix_simp`
+
+Expands to a simplification-first chain:
+
+```lean
+first | simp | simp_all | aesop | exact (by decide)
+```
+
+Use it when the goal should disappear after local rewriting, branch reduction, or hypothesis propagation.
+
+### `radix_finish`
+
+Expands to proof-producing closing branches only, so it never stops on a partial simplification:
+
+```lean
+first
+  | exact (by try simp at *; omega)
+  | exact Nat.zero_le _
+  | exact Nat.le_refl _
+  | exact Nat.le_trans ‹_› ‹_›
+  | exact (by simp at *; decide)
+  | exact (by aesop)
+  | exact (by decide)
+```
+
+Use it at the end of short proofs where the remaining goal could be arithmetic, simplification-driven, or purely decidable.
+
 ## Examples
 
 ```lean
@@ -55,6 +84,14 @@ example (a b c : Nat) (h1 : a ≤ b) (h2 : b ≤ c) : a ≤ c := by
 
 example (a : Nat) : 0 ≤ a := by
   radix_omega
+
+example : (if True then (6 : Nat) else 0) = 6 := by
+  radix_simp
+
+example : 2 ≤ 6 := by
+  have h1 : 2 ≤ 4 := by decide
+  have h2 : 4 ≤ 6 := by decide
+  radix_finish
 ```
 
 ## Related Documents

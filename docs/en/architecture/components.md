@@ -39,7 +39,7 @@ graph TD
         BareMetal["BareMetal<br/>platform model<br/>linker + startup + GC-free"]
     end
     subgraph "Meta Proof Support"
-        ProofAutomation["ProofAutomation<br/>tactic macros<br/>radix_decide + radix_omega"]
+        ProofAutomation["ProofAutomation<br/>tactic macros<br/>radix_decide + radix_omega + radix_simp + radix_finish"]
     end
     Bit --> Word
     Bytes --> Word
@@ -252,7 +252,7 @@ graph TD
 
 | Submodule | Layer | Description |
 |-----------|-------|-------------|
-| `ProofAutomation` | Meta | `radix_decide` and `radix_omega` tactic macros for common Radix proof obligations |
+| `ProofAutomation` | Meta | `radix_decide`, `radix_omega`, `radix_simp`, and `radix_finish` tactic macros for common Radix proof obligations |
 
 ## Related Documents
 

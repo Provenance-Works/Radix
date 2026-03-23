@@ -86,11 +86,51 @@ instance (d : Descriptor) : Decidable d.valid :=
 def Descriptor.bytesMoved (d : Descriptor) : Nat :=
   d.source.size
 
+/-- Number of bytes made visible by each transfer step. -/
+def Descriptor.burstBytes (d : Descriptor) : Nat :=
+  match d.atomicity with
+  | .whole => d.source.size
+  | .burst bytes => bytes
+
+/-- Byte offset from the start of the transfer at a given step. -/
+def Descriptor.stepOffset (d : Descriptor) (step : Nat) : Nat :=
+  step * d.burstBytes
+
+/-- Number of bytes covered by a particular visibility step. The value
+    saturates to zero once the step offset moves past the transfer size. -/
+def Descriptor.stepByteCount (d : Descriptor) (step : Nat) : Nat :=
+  min d.burstBytes (d.bytesMoved - d.stepOffset step)
+
+/-- Source chunk visible at a particular step. -/
+def Descriptor.sourceChunk (d : Descriptor) (step : Nat) : Region :=
+  { start := d.source.start + d.stepOffset step
+  , size := d.stepByteCount step
+  }
+
+/-- Destination chunk visible at a particular step. -/
+def Descriptor.destinationChunk (d : Descriptor) (step : Nat) : Region :=
+  { start := d.destination.start + d.stepOffset step
+  , size := d.stepByteCount step
+  }
+
 /-- Number of visibility steps required to complete the transfer. -/
 def Descriptor.stepCount (d : Descriptor) : Nat :=
   match d.atomicity with
   | .whole => 1
   | .burst bytes => (d.source.size + bytes - 1) / bytes
+
+theorem Descriptor.stepByteCount_le_burstBytes (d : Descriptor) (step : Nat) :
+    d.stepByteCount step ≤ d.burstBytes := by
+  unfold Descriptor.stepByteCount
+  exact Nat.min_le_left _ _
+
+theorem Descriptor.sourceChunk_size_eq (d : Descriptor) (step : Nat) :
+    (d.sourceChunk step).size = d.stepByteCount step := by
+  rfl
+
+theorem Descriptor.destinationChunk_size_eq (d : Descriptor) (step : Nat) :
+    (d.destinationChunk step).size = d.stepByteCount step := by
+  rfl
 
 theorem Descriptor.stepCount_pos (d : Descriptor) (h : d.valid) :
     0 < d.stepCount := by

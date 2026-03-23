@@ -16,11 +16,35 @@ def runECCTests : IO Nat := do
   let encoded := Radix.ECC.encodeNibble nibble
   assert (Radix.ECC.decode encoded == (some (0x0B : UInt8))) "decode(encode)"
   assert (Radix.ECC.check encoded) "encoded word parity"
+  assert (Radix.ECC.status? encoded == some .clean) "encoded word classified as clean"
+  assert (Radix.ECC.errorIndex? encoded == none) "clean codeword has no error index"
+  assert (Radix.ECC.encodeByte? 0x0B == some encoded) "encodeByte? accepts low nibble"
+  assert (Radix.ECC.encodeByte? 0xF0 == none) "encodeByte? rejects wide byte"
 
-  for mask in ([0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40] : List UInt8) do
+  for (mask, expectedIdx) in ([
+      ((0x01 : UInt8), 0),
+      ((0x02 : UInt8), 1),
+      ((0x04 : UInt8), 2),
+      ((0x08 : UInt8), 3),
+      ((0x10 : UInt8), 4),
+      ((0x20 : UInt8), 5),
+      ((0x40 : UInt8), 6)
+    ] : List (UInt8 × Nat)) do
     let corrupted := encoded ^^^ mask
     assert (Radix.ECC.check corrupted == false) s!"single-bit corruption detected: {mask}"
     assert (Radix.ECC.decode corrupted == none) s!"single-bit corruption rejected by decode: {mask}"
+    match Radix.ECC.errorIndex? corrupted with
+    | some idx =>
+      assert (idx.val == expectedIdx) s!"syndrome classified error bit: {mask}"
+    | none =>
+      assert false s!"single-bit corruption should produce an error index: {mask}"
+    match Radix.ECC.status? corrupted with
+    | some (.corrected idx) =>
+      assert (idx.val == expectedIdx) s!"status records corrected index: {mask}"
+    | _ =>
+      assert false s!"single-bit corruption should be classified as corrected: {mask}"
+    assert (Radix.ECC.decodeAfterCorrect corrupted == (some (0x0B : UInt8)))
+      s!"decodeAfterCorrect repairs single-bit corruption: {mask}"
     match (Radix.ECC.correct corrupted : Option UInt8) with
     | some corrected =>
       assert (Radix.ECC.decode corrected == (some (0x0B : UInt8))) s!"single-bit correction: {mask}"

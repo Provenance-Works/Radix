@@ -34,7 +34,7 @@ graph TD
         BareMetal["BareMetal<br/>プラットフォームモデル<br/>リンカー、スタートアップ、GCFree"]
     end
     subgraph "メタレベル証明支援"
-        ProofAutomation["ProofAutomation<br/>タクティクマクロ<br/>radix_decide + radix_omega"]
+        ProofAutomation["ProofAutomation<br/>タクティクマクロ<br/>radix_decide + radix_omega + radix_simp + radix_finish"]
     end
     Bit --> Word
     Bytes --> Word
@@ -247,7 +247,7 @@ graph TD
 
 | サブモジュール | レイヤー | 説明 |
 |-----------|-------|-------------|
-| `ProofAutomation` | Meta | Radix の典型的な証明義務向け `radix_decide` / `radix_omega` タクティクマクロ |
+| `ProofAutomation` | Meta | Radix の典型的な証明義務向け `radix_decide` / `radix_omega` / `radix_simp` / `radix_finish` タクティクマクロ |
 
 ## 関連ドキュメント
 

@@ -17,6 +17,12 @@ namespace Radix.ECC
 abbrev Nibble := Spec.Nibble
 abbrev Codeword74 := Spec.Codeword74
 
+/-- The observable status of a received Hamming(7,4) word. -/
+inductive Status where
+  | clean
+  | corrected (idx : Fin 7)
+  deriving DecidableEq, Repr
+
 /-- Low-level codewords are stored in the low seven bits of a byte. -/
 def isCodewordByte (b : UInt8) : Bool :=
   b.toNat < 0x80
@@ -78,16 +84,33 @@ def decode (b : UInt8) : Option UInt8 :=
 def syndrome (b : UInt8) : Option Nat :=
   (fromByte? b).map Spec.syndrome
 
+/-- Recover the bit position indicated by the syndrome, if any. -/
+def errorIndex? (b : UInt8) : Option (Fin 7) :=
+  (fromByte? b).bind Radix.ECC.Spec.errorIndex?
+
 /-- Check whether the received codeword satisfies all parity equations. -/
 def check (b : UInt8) : Bool :=
   match syndrome b with
   | some s => s == 0
   | none => false
 
+/-- Classify whether a codeword is already clean or requires a single-bit correction. -/
+def status? (b : UInt8) : Option Status :=
+  match fromByte? b with
+  | none => none
+  | some codeword =>
+  some <| match Radix.ECC.Spec.errorIndex? codeword with
+      | none => .clean
+      | some idx => .corrected idx
+
 /-- Correct a single-bit error in a received codeword. -/
 def correct (b : UInt8) : Option UInt8 :=
   (fromByte? b).map fun codeword =>
     toByte (Spec.correct codeword)
+
+/-- Decode a codeword after applying single-bit correction when possible. -/
+def decodeAfterCorrect (b : UInt8) : Option UInt8 :=
+  (correct b).bind decode
 
 /-- Compute even parity over the low `width` bits. -/
 def evenParity (b : UInt8) (width : Nat := 8) : Bool :=

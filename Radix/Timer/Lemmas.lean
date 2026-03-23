@@ -27,16 +27,16 @@ theorem elapsed_tick (clock : Clock) (delta : Nat) :
 
 /-- Checked elapsed time agrees with ticking on monotone observations. -/
 theorem elapsed?_tick (clock : Clock) (delta : Nat) :
-    elapsed? clock (tick clock delta) = some delta := by
-  simpa [elapsed?, elapsed, tick, Spec.elapsed, Spec.advance, Spec.Monotonic] using
-    Spec.elapsed?_eq_some_of_monotonic clock (Spec.advance clock delta)
+    Radix.Timer.elapsed? clock (tick clock delta) = some delta := by
+  simpa [Radix.Timer.elapsed?, elapsed, tick, Spec.elapsed, Spec.advance, Spec.Monotonic] using
+    Radix.Timer.Spec.elapsed?_eq_some_of_monotonic clock (Spec.advance clock delta)
       (Spec.advance_monotonic clock delta)
 
 /-- Checked elapsed time rejects reversed observations. -/
 theorem elapsed?_none_of_reverse (start finish : Clock)
     (h : finish.ticks < start.ticks) :
-    elapsed? start finish = none := by
-  apply Spec.elapsed?_eq_none_of_not_monotonic
+    Radix.Timer.elapsed? start finish = none := by
+  apply Radix.Timer.Spec.elapsed?_eq_none_of_not_monotonic
   simp [Spec.Monotonic]
   omega
 
@@ -64,5 +64,41 @@ theorem after_zero_expired (clock : Clock) :
 theorem remaining_tick_after (clock : Clock) (timeout : Nat) :
     remaining (tick clock timeout) (after clock timeout) = 0 := by
   simp [remaining, tick, after, Spec.remaining, Spec.advance, Spec.deadlineAfter]
+
+/-- Non-expired deadlines are not overdue. -/
+theorem overdue_zero_of_not_hasExpired (clock : Clock) (deadline : Deadline)
+    (h : hasExpired clock deadline = false) :
+    Radix.Timer.overdue clock deadline = 0 := by
+  have hle : clock.ticks ≤ deadline.deadlineTick := by
+    simp [hasExpired] at h
+    omega
+  simpa [Radix.Timer.overdue] using Radix.Timer.Spec.overdue_zero_of_not_expired clock deadline hle
+
+/-- Extending a deadline never moves it earlier. -/
+theorem extend_not_earlier (deadline : Deadline) (delta : Nat) :
+    deadline.deadlineTick ≤ (Radix.Timer.extend deadline delta).deadlineTick := by
+  simpa [Radix.Timer.extend] using Radix.Timer.Spec.extend_not_earlier deadline delta
+
+/-- Any deadline expires within its exact remaining budget. -/
+theorem expiresWithin_remaining (clock : Clock) (deadline : Deadline) :
+    Radix.Timer.expiresWithin clock deadline (remaining clock deadline) = true := by
+  simp [Radix.Timer.expiresWithin]
+
+/-- Expired deadlines are always within any non-negative budget. -/
+theorem expiresWithin_of_hasExpired (clock : Clock) (deadline : Deadline) (budget : Nat)
+    (h : hasExpired clock deadline = true) :
+    Radix.Timer.expiresWithin clock deadline budget = true := by
+  have hrem : remaining clock deadline = 0 := remaining_zero_of_hasExpired clock deadline h
+  simp [Radix.Timer.expiresWithin, hrem]
+
+/-- The earlier deadline is no later than either input. -/
+theorem sooner_le_left (a b : Deadline) :
+    (Radix.Timer.sooner a b).deadlineTick ≤ a.deadlineTick := by
+  simpa [Radix.Timer.sooner] using Radix.Timer.Spec.sooner_deadlineTick_le_left a b
+
+/-- The later deadline is at least as late as either input. -/
+theorem later_ge_right (a b : Deadline) :
+    b.deadlineTick ≤ (Radix.Timer.later a b).deadlineTick := by
+  simpa [Radix.Timer.later] using Radix.Timer.Spec.later_deadlineTick_ge_right a b
 
 end Radix.Timer

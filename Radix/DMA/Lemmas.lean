@@ -23,6 +23,25 @@ theorem isValid_iff_valid (d : Descriptor) :
     simp [isValid, Spec.Descriptor.valid, Spec.atomicityValid, Spec.fenceOrderSufficient,
       Bool.and_eq_true, and_assoc, and_left_comm, and_comm]
 
+/-- Simulation preconditions are exactly boolean validity plus buffer bounds. -/
+theorem canSimulate_eq_true_iff (src dst : ByteArray) (d : Descriptor) :
+    Radix.DMA.canSimulate src dst d = true ↔
+      d.valid ∧ d.source.endOffset ≤ src.size ∧ d.destination.endOffset ≤ dst.size := by
+  unfold Radix.DMA.canSimulate
+  constructor
+  · intro h
+    rw [Bool.and_eq_true] at h
+    rcases h with ⟨hleft, hdst⟩
+    rw [Bool.and_eq_true] at hleft
+    rcases hleft with ⟨hvalid, hsrc⟩
+    rcases (isValid_iff_valid d).mp hvalid with hspec
+    exact ⟨hspec, by simpa using hsrc, by simpa using hdst⟩
+  · rintro ⟨hvalid, hsrc, hdst⟩
+    rw [Bool.and_eq_true]
+    refine ⟨?_, by simpa using hdst⟩
+    rw [Bool.and_eq_true]
+    exact ⟨(isValid_iff_valid d).mpr hvalid, by simpa using hsrc⟩
+
 /-- Valid DMA descriptors always move a positive number of bytes. -/
 theorem bytesMoved_pos (d : Descriptor) (h : d.valid) :
     0 < bytesMoved d := by
@@ -34,16 +53,32 @@ theorem stepCount_pos (d : Descriptor) (h : d.valid) :
     0 < stepCount d := by
   simpa [stepCount] using Spec.Descriptor.stepCount_pos d h
 
+/-- Successful step simulation returns the executable splice for the step chunk. -/
+theorem stepCopy_eq_some (src dst : ByteArray) (d : Descriptor) (step : Nat)
+    (hcan : Radix.DMA.canSimulate src dst d = true)
+    (hstep : step < stepCount d) :
+    Radix.DMA.stepCopy src dst d step = some
+      (ByteArray.mk (((byteArrayToList dst).take (Radix.DMA.destinationChunk d step).start ++
+        ((byteArrayToList src).drop (Radix.DMA.sourceChunk d step).start).take (Radix.DMA.sourceChunk d step).size ++
+        (byteArrayToList dst).drop (Radix.DMA.destinationChunk d step).endOffset).toArray)) := by
+        rw [Radix.DMA.stepCopy, if_pos hcan]
+        simp [hstep, byteArrayToList, Radix.DMA.sourceChunk, Radix.DMA.destinationChunk]
+
 /-- Successful simulation returns the executable splice of source bytes into the
     destination buffer. -/
 theorem simulateCopy_eq_some (src dst : ByteArray) (d : Descriptor)
-    (hvalid : isValid d = true)
-    (hsrc : d.source.endOffset ≤ src.size)
-    (hdst : d.destination.endOffset ≤ dst.size) :
-    simulateCopy src dst d = some
+    (hvalid : Radix.DMA.canSimulate src dst d = true) :
+    Radix.DMA.simulateCopy src dst d = some
       (ByteArray.mk (((byteArrayToList dst).take d.destination.start ++
         ((byteArrayToList src).drop d.source.start).take d.source.size ++
         (byteArrayToList dst).drop d.destination.endOffset).toArray)) := by
-  simp [simulateCopy, hvalid, hsrc, hdst, byteArrayToList]
+  have hspec : d.valid ∧ d.source.endOffset ≤ src.size ∧ d.destination.endOffset ≤ dst.size :=
+    (canSimulate_eq_true_iff src dst d).mp hvalid
+  have hisValid : isValid d = true := (isValid_iff_valid d).mpr hspec.1
+  have hsrc : decide (d.source.endOffset ≤ src.size) = true := by
+    simpa using hspec.2.1
+  have hdst : decide (d.destination.endOffset ≤ dst.size) = true := by
+    simpa using hspec.2.2
+  simp [Radix.DMA.simulateCopy, Radix.DMA.canSimulate, hisValid, hsrc, hdst, byteArrayToList]
 
 end Radix.DMA

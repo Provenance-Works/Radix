@@ -85,6 +85,26 @@ def syndrome4 (c : Codeword74) : Bool :=
 def syndrome (c : Codeword74) : Nat :=
   bitVal (syndrome1 c) + 2 * bitVal (syndrome2 c) + 4 * bitVal (syndrome4 c)
 
+/-- The corrected bit index indicated by the syndrome, if any. -/
+def errorIndex? (c : Codeword74) : Option (Fin 7) :=
+  let s := syndrome c
+  if hs : s = 0 then
+    none
+  else
+    some ⟨s - 1, by
+      have hs1 : bitVal (syndrome1 c) ≤ 1 := by
+        cases syndrome1 c <;> simp [bitVal]
+      have hs2 : bitVal (syndrome2 c) ≤ 1 := by
+        cases syndrome2 c <;> simp [bitVal]
+      have hs4 : bitVal (syndrome4 c) ≤ 1 := by
+        cases syndrome4 c <;> simp [bitVal]
+      have hle : s ≤ 7 := by
+        unfold s syndrome
+        omega
+      have hpos : 0 < s := by
+        omega
+      omega⟩
+
 /-- Flip one of the seven Hamming(7,4) bits, addressed from 0 to 6. -/
 def flipAt (c : Codeword74) (idx : Fin 7) : Codeword74 :=
   match idx.val with
@@ -98,15 +118,9 @@ def flipAt (c : Codeword74) (idx : Fin 7) : Codeword74 :=
 
 /-- Correct a single-bit error, if present. -/
 def correct (c : Codeword74) : Codeword74 :=
-  match syndrome c with
-  | 0 => c
-  | 1 => flipAt c ⟨0, by decide⟩
-  | 2 => flipAt c ⟨1, by decide⟩
-  | 3 => flipAt c ⟨2, by decide⟩
-  | 4 => flipAt c ⟨3, by decide⟩
-  | 5 => flipAt c ⟨4, by decide⟩
-  | 6 => flipAt c ⟨5, by decide⟩
-  | _ => flipAt c ⟨6, by decide⟩
+  match errorIndex? c with
+  | none => c
+  | some idx => flipAt c idx
 
 /-- Parity bit for the low `width` bits of a natural number. -/
 def evenParity (n width : Nat) : Bool :=
@@ -120,6 +134,17 @@ theorem toNibble_ofNibble (n : Nibble) :
 /-- Correcting a single flipped bit recovers the original nibble. -/
 theorem toNibble_correct_single_bit (n : Nibble) (idx : Fin 7) :
     toNibble (correct (flipAt (ofNibble n) idx)) = n := by
+  fin_cases n <;> fin_cases idx <;> decide
+
+/-- Error-index classification is empty exactly for clean codewords. -/
+theorem errorIndex?_eq_none_iff_syndrome_zero (c : Codeword74) :
+    errorIndex? c = none ↔ syndrome c = 0 := by
+  unfold errorIndex?
+  by_cases hs : syndrome c = 0 <;> simp [hs]
+
+/-- A single flipped bit is classified at the flipped location. -/
+theorem errorIndex?_flipAt_ofNibble (n : Nibble) (idx : Fin 7) :
+    errorIndex? (flipAt (ofNibble n) idx) = some idx := by
   fin_cases n <;> fin_cases idx <;> decide
 
 end Radix.ECC.Spec
