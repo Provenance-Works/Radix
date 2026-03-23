@@ -14,7 +14,7 @@ def runDMATests : IO Nat := do
 
   let valid : Radix.DMA.Descriptor :=
     { source := { start := 0, size := 3 }
-    , destination := { start := 4, size := 3 }
+    , destination := { start := 0, size := 3 }
     , order := .seqCst
     , coherence := .nonCoherent
     , atomicity := .whole
@@ -26,7 +26,7 @@ def runDMATests : IO Nat := do
   let dst := ByteArray.mk #[0, 0, 0, 0, 0, 0, 0]
   match Radix.DMA.simulateCopy src dst valid with
   | some bytes =>
-    assert (bytes.toList == [0, 0, 0, 0, 10, 20, 30]) "simulate copy"
+    assert (bytes.toList == [10, 20, 30, 0, 0, 0, 0]) "simulate copy"
   | none => assert false "simulate copy failed"
 
   let burst : Radix.DMA.Descriptor :=
@@ -37,5 +37,11 @@ def runDMATests : IO Nat := do
   let invalid : Radix.DMA.Descriptor :=
     { valid with order := .release }
   assert (!Radix.DMA.isValid invalid) "non-coherent transfer needs seqCst"
+
+  let outOfBounds : Radix.DMA.Descriptor :=
+    { valid with destination := { start := 5, size := 3 }, coherence := .coherent }
+  match Radix.DMA.simulateCopy src dst outOfBounds with
+  | none => assert true "out-of-bounds destination rejected"
+  | some _ => assert false "out-of-bounds destination should fail"
 
   c.get

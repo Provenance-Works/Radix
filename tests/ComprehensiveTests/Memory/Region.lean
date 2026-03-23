@@ -29,4 +29,13 @@ def runMemoryRegionTests : IO Nat := do
   let diff := Radix.Memory.Spec.Region.difference a b
   assert (diff == [{ start := 10, size := 4 }]) "difference left remainder"
 
+  let emptyInter := Radix.Memory.Spec.Region.intersection a { start := 30, size := 2 }
+  assert (emptyInter == Radix.Memory.Spec.Region.empty) "disjoint intersection canonical empty"
+
+  let emptyDiff := Radix.Memory.Spec.Region.difference Radix.Memory.Spec.Region.empty a
+  assert (emptyDiff == []) "empty left difference"
+
+  let selfDiff := Radix.Memory.Spec.Region.difference a a
+  assert (selfDiff == []) "self difference empty"
+
   c.get

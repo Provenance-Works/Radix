@@ -1770,17 +1770,19 @@ private def testECCProperties : IO Unit := do
     let (rng', v) := rng.nextUInt8; rng := rng'
     let nibble : Radix.ECC.Nibble := ⟨v.toNat % 16, by omega⟩
     let encoded := Radix.ECC.encodeNibble nibble
-    assert (Radix.ECC.decode encoded == nibble.val.toUInt8)
+    assert (Radix.ECC.decode encoded == some nibble.val.toUInt8)
       s!"ECC decode(encode): {nibble.val}"
     let corrupted := encoded ^^^ 0x01
-    assert (Radix.ECC.decode (Radix.ECC.correct corrupted) == nibble.val.toUInt8)
+    assert ((Radix.ECC.correct corrupted).bind Radix.ECC.decode == some nibble.val.toUInt8)
       s!"ECC single-bit correction: {nibble.val}"
+    assert (Radix.ECC.decode (encoded ||| 0x80) == none)
+      s!"ECC reject high-bit input: {nibble.val}"
 
 private def testDMAProperties : IO Unit := do
   IO.println "  DMA properties..."
   let valid : Radix.DMA.Descriptor :=
     { source := { start := 0, size := 4 }
-    , destination := { start := 4, size := 4 }
+    , destination := { start := 0, size := 4 }
     , order := .seqCst
     , coherence := .nonCoherent
     , atomicity := .burst 2
@@ -1799,6 +1801,11 @@ private def testRegionAlgebraProperties : IO Unit := do
     let a : Radix.Memory.Spec.Region := { start := s0, size := len0 + 1 }
     let b : Radix.Memory.Spec.Region := { start := s1, size := len1 + 1 }
     let inter := Radix.Memory.Spec.Region.intersection a b
+    if !decide (Radix.Memory.Spec.Region.intersects a b) then
+      assert (inter == Radix.Memory.Spec.Region.empty)
+        s!"disjoint intersection canonical empty: {reprStr a} {reprStr b}"
+    else
+      pure ()
     if (Radix.Memory.Spec.Region.union? a b).isSome || inter.size > 0 then
       assert (Radix.Memory.Spec.Region.contains a inter)
         s!"intersection contained in left: {reprStr a} {reprStr b}"

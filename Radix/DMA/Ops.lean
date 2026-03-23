@@ -28,7 +28,6 @@ def byteArrayToList (bytes : ByteArray) : List UInt8 :=
 def isValid (d : Descriptor) : Bool :=
   (d.source.size == d.destination.size)
     && decide (0 < d.source.size)
-    && decide (Radix.Memory.Spec.Region.disjoint d.source d.destination)
     && (match d.atomicity with
       | .whole => true
       | .burst bytes => decide (0 < bytes ∧ bytes ≤ d.source.size))

@@ -35,9 +35,11 @@ def Descriptor.stepCount (d : Descriptor) : Nat
 ### 妥当性ルール
 
 - source / destination は等しい正のサイズでなければなりません。
-- 2 領域は互いに disjoint である必要があります。
 - burst atomicity は正の chunk size で、かつ領域サイズ以下である必要があります。
 - non-coherent 転送では `seqCst` ordering が必要です。
+
+実行層のシミュレータは source / destination の offset を別々の buffer に対する
+相対位置として解釈するため、2 つの region descriptor が重なっていても許容されます。
 
 ## 操作 (`DMA.Ops`)
 

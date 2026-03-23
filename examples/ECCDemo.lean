@@ -11,10 +11,14 @@ def main : IO Unit := do
   let nibble : Radix.ECC.Nibble := ⟨0xD, by decide⟩
   let encoded := Radix.ECC.encodeNibble nibble
   let corrupted := encoded ^^^ 0x20
-  let corrected := Radix.ECC.correct corrupted
   IO.println s!"  Encoded:   {encoded.toNat}"
   IO.println s!"  Corrupted: {corrupted.toNat}"
   IO.println s!"  Syndrome:  {Radix.ECC.syndrome corrupted}"
-  IO.println s!"  Decoded:   {Radix.ECC.decode corrected}"
+  match Radix.ECC.correct corrupted with
+  | some corrected =>
+      IO.println s!"  Corrected: {corrected.toNat}"
+      IO.println s!"  Decoded:   {Radix.ECC.decode corrected}"
+  | none =>
+      throw (IO.userError "received byte is not a valid 7-bit codeword")
 
 end Examples.ECCDemo

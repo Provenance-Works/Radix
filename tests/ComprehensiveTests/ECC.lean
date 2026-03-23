@@ -14,13 +14,18 @@ def runECCTests : IO Nat := do
 
   let nibble : Radix.ECC.Nibble := ⟨0xB, by decide⟩
   let encoded := Radix.ECC.encodeNibble nibble
-  assert (Radix.ECC.decode encoded == 0x0B) "decode(encode)"
+  assert (Radix.ECC.decode encoded == some 0x0B) "decode(encode)"
   assert (Radix.ECC.check encoded) "encoded word parity"
 
   let corrupted := encoded ^^^ 0x04
   assert (Radix.ECC.check corrupted == false) "single-bit corruption detected"
   let corrected := Radix.ECC.correct corrupted
-  assert (Radix.ECC.decode corrected == 0x0B) "single-bit correction"
+  assert (Option.bind corrected Radix.ECC.decode == some 0x0B) "single-bit correction"
+
+  let invalid : UInt8 := 0x80
+  assert (!Radix.ECC.check invalid) "reject high-bit invalid word"
+  assert (Radix.ECC.decode invalid == none) "decode invalid word"
+  assert (Radix.ECC.correct invalid == none) "correct invalid word"
 
   assert (Radix.ECC.evenParity 0x00) "zero has even parity"
   assert (!Radix.ECC.evenParity 0x01) "one has odd parity"

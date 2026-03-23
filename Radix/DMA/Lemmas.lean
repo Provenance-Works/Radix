@@ -26,7 +26,7 @@ theorem isValid_iff_valid (d : Descriptor) :
 /-- Valid DMA descriptors always move a positive number of bytes. -/
 theorem bytesMoved_pos (d : Descriptor) (h : d.valid) :
     0 < bytesMoved d := by
-  rcases h with ⟨_, hsize, _, _, _⟩
+  rcases h with ⟨_, hsize, _, _⟩
   simpa [bytesMoved] using hsize
 
 /-- Valid DMA descriptors require at least one visibility step. -/

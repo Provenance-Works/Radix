@@ -98,7 +98,7 @@ def intersection (a b : Region) : Region :=
   if start < finish then
     ⟨start, finish - start⟩
   else
-    ⟨start, 0⟩
+    empty
 
 /-- Exact interval union, defined only when the result remains a single interval. -/
 def union? (a b : Region) : Option Region :=
@@ -107,24 +107,26 @@ def union? (a b : Region) : Option Region :=
 /-- Set difference of `a \ b`, represented as up to two residual intervals. -/
 def difference (a b : Region) : List Region :=
   let inter := intersection a b
-  if inter.size = 0 then
-    [a]
-  else
-    let left : Option Region :=
-      if a.start < inter.start then
-        some ⟨a.start, inter.start - a.start⟩
-      else
-        none
-    let right : Option Region :=
-      if inter.endOffset < a.endOffset then
-        some ⟨inter.endOffset, a.endOffset - inter.endOffset⟩
-      else
-        none
-    match left, right with
-    | some l, some r => [l, r]
-    | some l, none => [l]
-    | none, some r => [r]
-    | none, none => []
+  let rawPieces :=
+    if inter.size = 0 then
+      [a]
+    else
+      let left : Option Region :=
+        if a.start < inter.start then
+          some ⟨a.start, inter.start - a.start⟩
+        else
+          none
+      let right : Option Region :=
+        if inter.endOffset < a.endOffset then
+          some ⟨inter.endOffset, a.endOffset - inter.endOffset⟩
+        else
+          none
+      match left, right with
+      | some l, some r => [l, r]
+      | some l, none => [l]
+      | none, some r => [r]
+      | none, none => []
+  rawPieces.filter fun piece => decide (0 < piece.size)
 
 end Region
 

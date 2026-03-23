@@ -35,9 +35,11 @@ def Descriptor.stepCount (d : Descriptor) : Nat
 ### Validity Rules
 
 - Source and destination regions must have equal positive sizes.
-- The two regions must be disjoint.
 - Burst atomicity must use a positive chunk size no larger than the region size.
 - Non-coherent transfers require `seqCst` ordering.
+
+The executable simulator interprets source and destination offsets relative to
+separate buffers, so overlap between the two region descriptors is allowed.
 
 ## Operations (`DMA.Ops`)
 

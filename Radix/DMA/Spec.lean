@@ -65,11 +65,12 @@ instance (d : Descriptor) : Decidable (atomicityValid d) := by
   cases d.atomicity <;> infer_instance
 
 /-- A descriptor is valid when it copies a positive number of bytes between
-    equally sized disjoint regions and satisfies the coherence contract. -/
+    equally sized regions and satisfies the coherence contract. The
+    source and destination offsets are interpreted relative to separate
+    buffers in the executable simulator. -/
 def Descriptor.valid (d : Descriptor) : Prop :=
   d.source.size = d.destination.size
   ∧ 0 < d.source.size
-  ∧ Region.disjoint d.source d.destination
   ∧ atomicityValid d
   ∧ fenceOrderSufficient d
 
@@ -78,7 +79,6 @@ instance (d : Descriptor) : Decidable d.valid :=
     (Decidable
       (d.source.size = d.destination.size
         ∧ 0 < d.source.size
-        ∧ Region.disjoint d.source d.destination
         ∧ atomicityValid d
         ∧ fenceOrderSufficient d))
 
@@ -94,7 +94,7 @@ def Descriptor.stepCount (d : Descriptor) : Nat :=
 
 theorem Descriptor.stepCount_pos (d : Descriptor) (h : d.valid) :
     0 < d.stepCount := by
-  rcases h with ⟨_, hsize, _, hatomic, _⟩
+  rcases h with ⟨_, hsize, hatomic, _⟩
   cases hAtomicity : d.atomicity with
   | whole =>
       simp [Descriptor.stepCount, hAtomicity]

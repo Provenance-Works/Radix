@@ -119,9 +119,9 @@ def isAligned (addr align : Nat) : Prop
 ### Region Algebra Notes
 
 - `span` returns the smallest interval containing both input regions.
-- `intersection` returns a zero-length region at the overlap boundary when the inputs do not overlap.
+- `intersection` returns the canonical `Region.empty` when the inputs do not overlap.
 - `union?` succeeds only when two regions overlap or are exactly adjacent.
-- `difference` returns zero, one, or two residual regions because subtracting one interval from another can split the source.
+- `difference` returns zero, one, or two non-empty residual regions because subtracting one interval from another can split the source.
 
 ## Proofs (`Memory.Lemmas`)
 

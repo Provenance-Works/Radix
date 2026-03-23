@@ -48,15 +48,19 @@ abbrev Nibble := Spec.Nibble
 abbrev Codeword74 := Spec.Codeword74
 
 def toByte (c : Codeword74) : UInt8
-def fromByte (b : UInt8) : Codeword74
+def isCodewordByte (b : UInt8) : Bool
+def fromByte? (b : UInt8) : Option Codeword74
 def encodeNibble (n : Nibble) : UInt8
 def encodeByte? (b : UInt8) : Option UInt8
-def decode (b : UInt8) : UInt8
-def syndrome (b : UInt8) : Nat
+def decode (b : UInt8) : Option UInt8
+def syndrome (b : UInt8) : Option Nat
 def check (b : UInt8) : Bool
-def correct (b : UInt8) : UInt8
+def correct (b : UInt8) : Option UInt8
 def evenParity (b : UInt8) (width : Nat := 8) : Bool
 ```
+
+- `isCodewordByte` rejects bytes that use the high bit outside the Hamming(7,4) payload.
+- `decode`, `syndrome`, and `correct` are checked APIs and return `none` for invalid 8-bit inputs.
 
 ## Proofs (`ECC.Lemmas`)
 
@@ -70,7 +74,7 @@ def evenParity (b : UInt8) (width : Nat := 8) : Bool
 ```lean
 import Radix.ECC
 
-def demo : UInt8 :=
+def demo : Option UInt8 :=
   let nibble : Radix.ECC.Nibble := ⟨0xB, by decide⟩
   let encoded := Radix.ECC.encodeNibble nibble
   let corrupted := encoded ^^^ 0x04
