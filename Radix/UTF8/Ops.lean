@@ -28,7 +28,7 @@ export Spec.Scalar (ofNat? replacement byteCount)
 
 /-- Convert a `ByteArray` to a list of bytes in order. -/
 def byteArrayToList (bytes : ByteArray) : List UInt8 :=
-  bytes.toList
+  List.ofFn fun i : Fin bytes.size => bytes[i]
 
 /-- Encode a single scalar to a `ByteArray`. -/
 def encodeScalar (s : Scalar) : ByteArray :=

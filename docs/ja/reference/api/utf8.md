@@ -64,8 +64,13 @@ def Scalar.byteCount (s : Scalar) : Nat
 
 - `encode_length_eq_byteCount`: 仕様層のエンコード長が scalar の長さクラスと一致
 - `wellFormed_encode`: `encode` が生成した列は常に well-formed UTF-8
+- `decodeNext_encode`: 1 個の scalar の正準エンコードを decode すると同じ scalar に戻る
+- `decodeAll_encodeAll`: 仕様層の decode after encode が元の scalar list を返す
 - `encodedLength_eq_spec`: 実行層の encoded length が仕様と一致
+- `decodeBytes_encodeScalars`: 実行層の decode after encode が元の scalar list を返す
+- `scalarCount_encodeScalars`: 実行層の scalar count がエンコードした list 長と一致
 - `isWellFormed_encodeScalar`: 操作層エンコードは常にデコーダに受理される
+- `isWellFormed_encodeScalars`: 操作層の scalar sequence 全体も常にデコーダに受理される
 
 ## 使用例
 

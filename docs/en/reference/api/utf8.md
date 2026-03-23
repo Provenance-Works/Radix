@@ -64,8 +64,13 @@ def Scalar.byteCount (s : Scalar) : Nat
 
 - `encode_length_eq_byteCount`: spec-level encoding length matches the scalar length class
 - `wellFormed_encode`: any value produced by `encode` is well-formed UTF-8
+- `decodeNext_encode`: decoding the canonical encoding of one scalar returns the same scalar
+- `decodeAll_encodeAll`: spec-level decode after encode returns the original scalar list
 - `encodedLength_eq_spec`: executable encoded length agrees with the spec
+- `decodeBytes_encodeScalars`: operation-layer decode after encode returns the original scalar list
+- `scalarCount_encodeScalars`: operation-layer scalar counting matches the encoded list length
 - `isWellFormed_encodeScalar`: operation-layer encodings are always accepted by the decoder
+- `isWellFormed_encodeScalars`: full operation-layer scalar sequences are always accepted by the decoder
 
 ## Examples
 

@@ -25,11 +25,13 @@ def runUTF8Tests : IO Nat := do
   let twoByte ← UTF8Test.scalar 0x00A2
   let threeByte ← UTF8Test.scalar 0x20AC
   let fourByte ← UTF8Test.scalar 0x1F642
+  let maxScalar ← UTF8Test.scalar 0x10FFFF
 
   assert (Radix.UTF8.encodedLength ascii == 1) "ASCII length"
   assert (Radix.UTF8.encodedLength twoByte == 2) "2-byte length"
   assert (Radix.UTF8.encodedLength threeByte == 3) "3-byte length"
   assert (Radix.UTF8.encodedLength fourByte == 4) "4-byte length"
+  assert (Radix.UTF8.encodedLength maxScalar == 4) "max scalar length"
 
   let encoded := Radix.UTF8.encodeScalars [ascii, twoByte, threeByte, fourByte]
   assert (Radix.UTF8.isWellFormed encoded) "encoded scalars well formed"
@@ -38,9 +40,20 @@ def runUTF8Tests : IO Nat := do
     assert (scalars.map (·.val) == [0x41, 0x00A2, 0x20AC, 0x1F642]) "decode encoded scalars"
   | none => assert false "decode encoded scalars failed"
 
+  let boundaryScalars := [ascii, (← UTF8Test.scalar 0x7F), (← UTF8Test.scalar 0x80), (← UTF8Test.scalar 0x7FF), (← UTF8Test.scalar 0x800), (← UTF8Test.scalar 0xD7FF), (← UTF8Test.scalar 0xE000), (← UTF8Test.scalar 0xFFFF), (← UTF8Test.scalar 0x10000), maxScalar]
+  let boundaryEncoded := Radix.UTF8.encodeScalars boundaryScalars
+  match Radix.UTF8.decodeBytes? boundaryEncoded with
+  | some scalars =>
+    assert (scalars.map (·.val) == boundaryScalars.map (·.val)) "boundary scalar round-trip"
+  | none => assert false "boundary scalar round-trip failed"
+
+  assert (Radix.UTF8.scalarCount? boundaryEncoded == some boundaryScalars.length) "scalar count round-trip"
+
   let malformed1 := ByteArray.mk #[0xC0, 0xAF]
   let malformed2 := ByteArray.mk #[0xED, 0xA0, 0x80]
+  let malformed3 := ByteArray.mk #[0xF0, 0x9F, 0x99]
   assert (!Radix.UTF8.isWellFormed malformed1) "reject overlong"
   assert (!Radix.UTF8.isWellFormed malformed2) "reject surrogate"
+  assert (!Radix.UTF8.isWellFormed malformed3) "reject truncated four-byte sequence"
 
   c.get
