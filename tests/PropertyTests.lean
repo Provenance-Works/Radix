@@ -1859,6 +1859,16 @@ private def testDMAProperties : IO Unit := do
 
 private def testRegionAlgebraProperties : IO Unit := do
   IO.println "  Region algebra properties..."
+  let zeroInside : Radix.Memory.Spec.Region := { start := 12, size := 0 }
+  let covering : Radix.Memory.Spec.Region := { start := 10, size := 6 }
+  assert (!decide (Radix.Memory.Spec.Region.intersects zeroInside covering))
+    "zero-sized region does not intersect covering region"
+  assert (Radix.Memory.Spec.Region.union? zeroInside covering == some covering)
+    "union with empty left region returns right operand"
+  assert (Radix.Memory.Spec.Region.union? covering zeroInside == some covering)
+    "union with empty right region returns left operand"
+  assert (Radix.Memory.Spec.Region.difference covering zeroInside == [covering])
+    "difference by empty region leaves source unchanged"
   let mut rng := PRNG.new 800
   for _ in [:numIter] do
     let (rng', s0) := rng.nextNat 128; rng := rng'

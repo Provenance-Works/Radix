@@ -43,4 +43,10 @@ def runMemoryRegionTests : IO Nat := do
   let split := Radix.Memory.Spec.Region.difference { start := 10, size := 10 } { start := 13, size := 2 }
   assert (split == [{ start := 10, size := 3 }, { start := 15, size := 5 }]) "difference can split into two pieces"
 
+  let zeroInside : Radix.Memory.Spec.Region := { start := 12, size := 0 }
+  assert (!decide (Radix.Memory.Spec.Region.intersects zeroInside a)) "zero-sized region does not intersect"
+  assert (Radix.Memory.Spec.Region.union? zeroInside a == some a) "empty left union returns right"
+  assert (Radix.Memory.Spec.Region.union? a zeroInside == some a) "empty right union returns left"
+  assert (Radix.Memory.Spec.Region.difference a zeroInside == [a]) "difference by empty region preserves source"
+
   c.get

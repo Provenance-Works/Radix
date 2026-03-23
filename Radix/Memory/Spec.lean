@@ -42,7 +42,7 @@ namespace Region
 
 /-- Whether two regions overlap at any byte. -/
 def intersects (a b : Region) : Prop :=
-  a.start < b.endOffset ∧ b.start < a.endOffset
+  0 < a.size ∧ 0 < b.size ∧ a.start < b.endOffset ∧ b.start < a.endOffset
 
 instance (a b : Region) : Decidable (intersects a b) :=
   inferInstanceAs (Decidable (_ ∧ _))
@@ -100,9 +100,17 @@ def intersection (a b : Region) : Region :=
   else
     empty
 
-/-- Exact interval union, defined only when the result remains a single interval. -/
+/-- Exact interval union, defined only when the result remains a single interval.
+    Empty regions are neutral and return the other operand. -/
 def union? (a b : Region) : Option Region :=
-  if mergeable a b then some (span a b) else none
+  if a.size = 0 then
+    some b
+  else if b.size = 0 then
+    some a
+  else if mergeable a b then
+    some (span a b)
+  else
+    none
 
 /-- Set difference of `a \ b`, represented as up to two residual intervals. -/
 def difference (a b : Region) : List Region :=

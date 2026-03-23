@@ -93,8 +93,8 @@ theorem Spec.Region.disjoint_comm (a b : Spec.Region) :
 open Spec in
 theorem Spec.Region.intersects_comm (a b : Spec.Region) :
     Spec.Region.intersects a b ↔ Spec.Region.intersects b a := by
-  simp [Spec.Region.intersects, Spec.Region.endOffset]
-  constructor <;> intro h <;> omega
+  unfold Spec.Region.intersects
+  tauto
 
 open Spec in
 theorem Spec.Region.adjacent_comm (a b : Spec.Region) :
@@ -183,9 +183,27 @@ theorem Spec.Region.intersection_comm (a b : Spec.Region) :
 
 open Spec in
 theorem Spec.Region.union?_isSome_iff_mergeable (a b : Spec.Region) :
-    (Spec.Region.union? a b).isSome = true ↔ Spec.Region.mergeable a b := by
-  unfold Spec.Region.union?
-  by_cases h : Spec.Region.mergeable a b <;> simp [h]
+    (Spec.Region.union? a b).isSome = true ↔
+      a.size = 0 ∨ b.size = 0 ∨ Spec.Region.mergeable a b := by
+  by_cases ha : a.size = 0
+  · constructor
+    · intro _
+      exact Or.inl ha
+    · intro _
+      unfold Spec.Region.union?
+      rw [if_pos ha]
+      rfl
+  · by_cases hb : b.size = 0
+    · constructor
+      · intro _
+        exact Or.inr (Or.inl hb)
+      · intro _
+        unfold Spec.Region.union?
+        rw [if_neg ha, if_pos hb]
+        rfl
+    · by_cases hm : Spec.Region.mergeable a b
+      · simp [Spec.Region.union?, ha, hb, hm]
+      · simp [Spec.Region.union?, ha, hb, hm]
 
 open Spec in
 theorem Spec.Region.span_least_upper_bound (a b c : Spec.Region)
