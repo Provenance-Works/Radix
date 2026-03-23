@@ -319,4 +319,80 @@ theorem remaining_add_overdue (clock : Clock) (deadline : Deadline) :
   · simp [h]
   · simp [h]; omega
 
+-- ════════════════════════════════════════════════════════════════════
+-- Deadline Algebra
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Extending a deadline by zero is identity. -/
+theorem extend_zero (d : Deadline) : extend d 0 = d := by
+  simp [extend]
+
+/-- Extending twice equals extending by the sum. -/
+theorem extend_extend (d : Deadline) (a b : Nat) :
+    extend (extend d a) b = extend d (a + b) := by
+  simp [extend, Nat.add_assoc]
+
+/-- A deadline created after a clock cannot be expired at that clock. -/
+theorem not_expired_deadlineAfter (clock : Clock) (timeout : Nat) (h : 0 < timeout) :
+    ¬expired clock (deadlineAfter clock timeout) := by
+  simp [expired, deadlineAfter]; omega
+
+/-- Sooner is idempotent. -/
+theorem sooner_self (d : Deadline) : sooner d d = d := by
+  simp [sooner]
+
+/-- Later is idempotent. -/
+theorem later_self (d : Deadline) : later d d = d := by
+  simp [later]
+
+/-- Sooner of a and b is always ≤ later of a and b. -/
+theorem sooner_le_later (a b : Deadline) :
+    (sooner a b).deadlineTick ≤ (later a b).deadlineTick := by
+  unfold sooner later
+  by_cases h : a.deadlineTick ≤ b.deadlineTick
+  · simp [h]
+  · simp [h]; omega
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Zero seconds converts to zero ticks. -/
+theorem secondsToTicks_zero (freq : Frequency) : secondsToTicks freq 0 = 0 := by
+  simp [secondsToTicks]
+
+/-- Zero ticks converts to zero seconds. -/
+theorem ticksToSeconds_zero (freq : Frequency) : ticksToSeconds freq 0 = 0 := by
+  simp [ticksToSeconds]
+
+/-- Seconds to ticks is monotonic. -/
+theorem secondsToTicks_mono (freq : Frequency) (a b : Nat) (h : a ≤ b) :
+    secondsToTicks freq a ≤ secondsToTicks freq b := by
+  simp [secondsToTicks]
+  exact Nat.mul_le_mul_right freq.hz h
+
+/-- TicksToSeconds is monotonic. -/
+theorem ticksToSeconds_mono (freq : Frequency) (a b : Nat) (h : a ≤ b) :
+    ticksToSeconds freq a ≤ ticksToSeconds freq b := by
+  simp [ticksToSeconds]
+  exact Nat.div_le_div_right h
+
+-- ════════════════════════════════════════════════════════════════════
+-- Interval Timer Extended Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- An unfired interval timer has zero fire count. -/
+theorem intervalFireCount_zero_of_not_fired (clock : Clock) (timer : IntervalTimer)
+    (h : intervalFired clock timer = false) :
+    intervalFireCount clock timer = 0 := by
+  simp [intervalFired] at h
+  simp [intervalFireCount, h]
+
+/-- Resetting an interval timer pushes nextTick by one period. -/
+theorem intervalReset_nextTick (timer : IntervalTimer) :
+    (intervalReset timer).nextTick = timer.nextTick + timer.period := by
+  simp [intervalReset]
+
+/-- Resetting preserves the period. -/
+theorem intervalReset_period (timer : IntervalTimer) :
+    (intervalReset timer).period = timer.period := by
+  simp [intervalReset]
+
 end Radix.Timer.Spec
