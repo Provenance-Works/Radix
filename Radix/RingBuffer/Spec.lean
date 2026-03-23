@@ -155,4 +155,120 @@ theorem push_full (s : RingBufferState) (val : UInt8) (hfull : s.isFull) :
     RingBufferState.pushSpec s val = none := by
   simp [RingBufferState.pushSpec, hfull]
 
+-- ════════════════════════════════════════════════════════════════════
+-- Count and Capacity Theorems
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Empty buffer has count 0. -/
+theorem empty_count (cap : Nat) : (RingBufferState.empty cap).count = 0 := by
+  simp [RingBufferState.empty, RingBufferState.count]
+
+/-- Push increases count by 1. -/
+theorem push_count (s : RingBufferState) (val : UInt8) (hnf : ¬s.isFull) :
+    ∀ s', RingBufferState.pushSpec s val = some s' → s'.count = s.count + 1 := by
+  intro s' h
+  unfold RingBufferState.pushSpec at h
+  simp [hnf] at h
+  subst h
+  simp [RingBufferState.count]
+
+/-- Pop decreases count by 1. -/
+theorem pop_count (s : RingBufferState) :
+    ∀ v s', RingBufferState.popSpec s = some (v, s') → s'.count + 1 = s.count := by
+  intro v s' h
+  unfold RingBufferState.popSpec at h
+  match hc : s.contents with
+  | [] => simp [hc] at h
+  | hd :: tl =>
+    simp [hc] at h
+    obtain ⟨rfl, rfl⟩ := h
+    simp [RingBufferState.count, hc]
+
+/-- After push, the buffer is not empty. -/
+theorem push_not_empty (s : RingBufferState) (val : UInt8) (hnf : ¬s.isFull) :
+    ∀ s', RingBufferState.pushSpec s val = some s' → ¬s'.isEmpty := by
+  intro s' h
+  unfold RingBufferState.pushSpec at h
+  simp [hnf] at h
+  subst h
+  unfold RingBufferState.isEmpty
+  simp
+
+/-- Peek on non-empty buffer returns the front element. -/
+theorem peek_front (s : RingBufferState) (hd : UInt8) (tl : List UInt8)
+    (hc : s.contents = hd :: tl) :
+    RingBufferState.peekSpec s = some hd := by
+  simp [RingBufferState.peekSpec, hc]
+
+/-- Peek and pop agree on the returned value. -/
+theorem peek_pop_agree (s : RingBufferState) :
+    ∀ v s', RingBufferState.popSpec s = some (v, s') →
+    RingBufferState.peekSpec s = some v := by
+  intro v s' h
+  unfold RingBufferState.popSpec at h
+  match hc : s.contents with
+  | [] => simp [hc] at h
+  | hd :: tl =>
+    simp [hc] at h
+    obtain ⟨rfl, rfl⟩ := h
+    simp [RingBufferState.peekSpec, hc]
+
+/-- Push does not change the capacity. -/
+theorem push_capacity (s : RingBufferState) (val : UInt8) (hnf : ¬s.isFull) :
+    ∀ s', RingBufferState.pushSpec s val = some s' → s'.capacity = s.capacity := by
+  intro s' h
+  unfold RingBufferState.pushSpec at h
+  simp [hnf] at h
+  subst h; rfl
+
+/-- Pop does not change the capacity. -/
+theorem pop_capacity (s : RingBufferState) :
+    ∀ v s', RingBufferState.popSpec s = some (v, s') → s'.capacity = s.capacity := by
+  intro v s' h
+  unfold RingBufferState.popSpec at h
+  match hc : s.contents with
+  | [] => simp [hc] at h
+  | hd :: tl =>
+    simp [hc] at h
+    obtain ⟨rfl, rfl⟩ := h; rfl
+
+-- ════════════════════════════════════════════════════════════════════
+-- FIFO Ordering and Round-Trip Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Push then pop on an empty buffer returns the pushed value. -/
+theorem push_pop_roundtrip (cap : Nat) (val : UInt8) (hcap : 0 < cap) :
+    ∃ s', RingBufferState.pushSpec (RingBufferState.empty cap) val = some s' ∧
+    RingBufferState.popSpec s' = some (val, RingBufferState.empty cap) := by
+  refine ⟨{ contents := [val], capacity := cap }, ?_, ?_⟩
+  · simp [RingBufferState.pushSpec, RingBufferState.empty, RingBufferState.isFull,
+          RingBufferState.count]
+    omega
+  · simp [RingBufferState.popSpec, RingBufferState.empty]
+
+/-- Two pushes then two pops returns values in FIFO order. -/
+theorem push_push_pop_pop_fifo (cap : Nat) (v1 v2 : UInt8) (_ : 2 ≤ cap) :
+    let s0 := RingBufferState.empty cap
+    let _s1 := { s0 with contents := [v1] }
+    let s2 := { s0 with contents := [v1, v2] }
+    RingBufferState.popSpec s2 = some (v1, { s0 with contents := [v2] }) := by
+  simp [RingBufferState.popSpec]
+
+/-- Peek does not change the buffer state. -/
+theorem peek_idempotent (s : RingBufferState) :
+    RingBufferState.peekSpec s = s.contents.head? := by
+  rfl
+
+/-- Full buffer has count = capacity. -/
+theorem isFull_iff_count_eq (s : RingBufferState) :
+    s.isFull ↔ s.count = s.capacity := by
+  rfl
+
+/-- Empty buffer has count = 0. -/
+theorem isEmpty_iff_count_zero (s : RingBufferState) :
+    s.isEmpty ↔ s.count = 0 := by
+  constructor
+  · intro h; unfold RingBufferState.isEmpty at h; simp [RingBufferState.count, h]
+  · intro h; unfold RingBufferState.isEmpty; simp [RingBufferState.count] at h; exact h
+
 end Radix.RingBuffer.Spec
