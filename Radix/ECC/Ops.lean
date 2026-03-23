@@ -116,4 +116,81 @@ def decodeAfterCorrect (b : UInt8) : Option UInt8 :=
 def evenParity (b : UInt8) (width : Nat := 8) : Bool :=
   Spec.evenParity b.toNat width
 
+-- ════════════════════════════════════════════════════════════════════
+-- Hamming Weight / Distance (executable)
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Hamming weight (popcount) of a byte's low `width` bits. -/
+def popcount (b : UInt8) (width : Nat := 8) : Nat :=
+  (List.range width).foldl (fun acc i => acc + if (b.toNat / (2 ^ i)) % 2 = 1 then 1 else 0) 0
+
+/-- Hamming distance between two bytes (in their low `width` bits). -/
+def byteHammingDist (a b : UInt8) (width : Nat := 8) : Nat :=
+  popcount (a ^^^ b) width
+
+/-- Convert a `Codeword74` to a list of its seven bits. -/
+def toBitList (c : Codeword74) : List Bool := Spec.toBitList c
+
+/-- Hamming weight of a codeword (number of set bits). -/
+def codewordWeight (c : Codeword74) : Nat := Spec.codewordWeight c
+
+/-- Hamming distance between two codewords. -/
+def codewordDist (c1 c2 : Codeword74) : Nat := Spec.codewordDist c1 c2
+
+-- ════════════════════════════════════════════════════════════════════
+-- SECDED Operations
+-- ════════════════════════════════════════════════════════════════════
+
+/-- SECDED error classification result. -/
+abbrev SECDEDResult := Spec.SECDEDResult
+
+/-- Encode a nibble as a SECDED codeword (8-bit). -/
+def encodeNibbleSECDED (n : Nibble) : Spec.Codeword84 :=
+  Spec.ofNibbleSECDED n
+
+/-- Classify a SECDED codeword's error status. -/
+def classifySECDED (c : Spec.Codeword84) : SECDEDResult :=
+  Spec.classifySECDED c
+
+/-- Correct a SECDED codeword if possible. -/
+def correctSECDED (c : Spec.Codeword84) : Option Spec.Codeword84 :=
+  Spec.correctSECDED c
+
+-- ════════════════════════════════════════════════════════════════════
+-- Batch Operations
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Encode a list of nibbles into their Hamming(7,4) byte representations. -/
+def encodeNibbles (ns : List Nibble) : List UInt8 :=
+  ns.map encodeNibble
+
+/-- Decode a list of encoded bytes back to nibble values. -/
+def decodeNibbles (bs : List UInt8) : List (Option UInt8) :=
+  bs.map decode
+
+/-- Correct a list of received codeword bytes. -/
+def correctAll (bs : List UInt8) : List (Option UInt8) :=
+  bs.map correct
+
+/-- Decode all bytes after applying correction. -/
+def decodeAllAfterCorrect (bs : List UInt8) : List (Option UInt8) :=
+  bs.map decodeAfterCorrect
+
+/-- Count the number of error-free codewords in a list. -/
+def countClean (bs : List UInt8) : Nat :=
+  bs.foldl (fun acc b => acc + if check b then 1 else 0) 0
+
+/-- Count the number of corrected codewords in a list. -/
+def countCorrected (bs : List UInt8) : Nat :=
+  bs.foldl (fun acc b =>
+    acc + match status? b with
+          | some (.corrected _) => 1
+          | _ => 0) 0
+
+/-- Compute error rate as (errors, total) pair. -/
+def errorRate (bs : List UInt8) : Nat × Nat :=
+  let total := bs.length
+  let clean := countClean bs
+  (total - clean, total)
+
 end Radix.ECC
