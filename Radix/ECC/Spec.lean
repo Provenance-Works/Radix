@@ -329,4 +329,83 @@ theorem evenParity_zero (w : Nat) : evenParity 0 w = true := by
 theorem toBitList_length (c : Codeword74) : (toBitList c).length = 7 := by
   simp [toBitList]
 
+-- ════════════════════════════════════════════════════════════════════
+-- Syndrome Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Syndrome is bounded by 7 (3-bit value). -/
+theorem syndrome_le_7 (c : Codeword74) : syndrome c ≤ 7 := by
+  unfold syndrome
+  have h1 : bitVal (syndrome1 c) ≤ 1 := bitVal_le_one _
+  have h2 : bitVal (syndrome2 c) ≤ 1 := bitVal_le_one _
+  have h4 : bitVal (syndrome4 c) ≤ 1 := bitVal_le_one _
+  omega
+
+/-- Correct always produces a codeword with syndrome zero. -/
+theorem syndrome_correct (n : Nibble) (idx : Fin 7) :
+    syndrome (correct (flipAt (ofNibble n) idx)) = 0 := by
+  fin_cases n <;> fin_cases idx <;> decide
+
+/-- Syndrome of double-flipped codeword (same bit) is zero. -/
+theorem syndrome_double_flip (n : Nibble) (idx : Fin 7) :
+    syndrome (flipAt (flipAt (ofNibble n) idx) idx) = 0 := by
+  fin_cases n <;> fin_cases idx <;> decide
+
+-- ════════════════════════════════════════════════════════════════════
+-- Hamming Distance Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Hamming distance between valid codewords is symmetric. -/
+theorem codewordDist_comm (n1 n2 : Nibble) :
+    codewordDist (ofNibble n1) (ofNibble n2) =
+    codewordDist (ofNibble n2) (ofNibble n1) := by
+  fin_cases n1 <;> fin_cases n2 <;> decide
+
+/-- Hamming distance from a codeword to itself is always zero. -/
+theorem codewordDist_self_any (c : Codeword74) : codewordDist c c = 0 :=
+  dist_self c
+
+/-- Codeword weight of allFalse (0x00) is 0. -/
+theorem weight_allFalse :
+    codewordWeight { p1 := false, p2 := false, d0 := false, p4 := false,
+                     d1 := false, d2 := false, d3 := false } = 0 := by decide
+
+/-- Codeword weight of allTrue (0x7F) is 7. -/
+theorem weight_allTrue :
+    codewordWeight { p1 := true, p2 := true, d0 := true, p4 := true,
+                     d1 := true, d2 := true, d3 := true } = 7 := by decide
+
+-- ════════════════════════════════════════════════════════════════════
+-- SECDED Extended Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- SECDED correction recovers original data for single-bit inner errors. -/
+theorem correctSECDED_single_inner (n : Nibble) (idx : Fin 7) :
+    ∃ c', correctSECDED
+      { inner := flipAt (ofNibble n) idx
+        overallParity := (ofNibbleSECDED n).overallParity } = some c' ∧
+      toNibble c'.inner = n := by
+  fin_cases n <;> fin_cases idx <;> decide
+
+/-- SECDED detects double-bit errors (adjacent bits 0 and 1). -/
+theorem classifySECDED_double_error_01 (n : Nibble) :
+    classifySECDED
+      { inner := flipAt (flipAt (ofNibble n) 0) 1
+        overallParity := (ofNibbleSECDED n).overallParity } = .doubleError := by
+  fin_cases n <;> decide
+
+/-- Generator matrix has exactly 4 rows. -/
+theorem generatorMatrix_rows : generatorMatrix.length = 4 := by decide
+
+/-- Parity-check matrix has exactly 3 rows. -/
+theorem parityCheckMatrix_rows : parityCheckMatrix.length = 3 := by decide
+
+/-- Each row of the generator matrix has 7 columns. -/
+theorem generatorMatrix_cols :
+    ∀ row ∈ generatorMatrix, row.length = 7 := by decide
+
+/-- Each row of the parity-check matrix has 7 columns. -/
+theorem parityCheckMatrix_cols :
+    ∀ row ∈ parityCheckMatrix, row.length = 7 := by decide
+
 end Radix.ECC.Spec
