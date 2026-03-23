@@ -51,4 +51,60 @@ def runTimerTests : IO Nat := do
   assert (Radix.Timer.elapsed earlier reversed == 0) "elapsed saturates on reversed clocks"
   assert (Radix.Timer.elapsed? earlier reversed == none) "checked elapsed rejects reversed clocks"
 
+  -- ── Frequency / Unit Conversion ──
+  let freq1k : Radix.Timer.Frequency := ⟨1000, by omega⟩
+  assert (Radix.Timer.secondsToTicks freq1k 3 == 3000) "secondsToTicks 3s @ 1kHz"
+  assert (Radix.Timer.secondsToTicks freq1k 0 == 0) "secondsToTicks zero"
+  assert (Radix.Timer.millisToTicks freq1k 500 == 500) "millisToTicks 500ms @ 1kHz"
+  assert (Radix.Timer.millisToTicks freq1k 0 == 0) "millisToTicks zero"
+  assert (Radix.Timer.ticksToSeconds freq1k 5000 == 5) "ticksToSeconds 5000 @ 1kHz"
+  assert (Radix.Timer.ticksToSeconds freq1k 0 == 0) "ticksToSeconds zero"
+  assert (Radix.Timer.ticksToMillis freq1k 3000 == 3000) "ticksToMillis 3000 @ 1kHz"
+  assert (Radix.Timer.ticksToMillis freq1k 0 == 0) "ticksToMillis zero"
+  -- Round-trip: seconds → ticks → seconds
+  assert (Radix.Timer.ticksToSeconds freq1k (Radix.Timer.secondsToTicks freq1k 42) == 42)
+    "secondsToTicks/ticksToSeconds round-trip"
+
+  -- ── Interval Timer ──
+  let timer := Radix.Timer.mkInterval clock 10 (by omega)
+  assert (Radix.Timer.intervalFired clock timer == false) "interval timer not fired initially"
+  assert (Radix.Timer.intervalFireCount clock timer == 0) "interval fire count is 0 initially"
+  let atFire := Radix.Timer.tick clock 10
+  assert (Radix.Timer.intervalFired atFire timer == true) "interval timer fired at boundary"
+  assert (Radix.Timer.intervalFireCount atFire timer == 1) "interval fire count 1 at boundary"
+  let afterFire := Radix.Timer.tick clock 25
+  assert (Radix.Timer.intervalFired afterFire timer == true) "interval timer still fired after boundary"
+  assert (Radix.Timer.intervalFireCount afterFire timer == 2) "interval fire count 2 at 25 ticks"
+  let resetTimer := Radix.Timer.intervalReset timer
+  assert (Radix.Timer.intervalFired atFire resetTimer == false) "reset interval timer not fired at original boundary"
+  assert (resetTimer.nextTick == 20) "reset interval timer nextTick"
+
+  -- ── Watchdog Timer ──
+  let wd := Radix.Timer.mkWatchdog clock 100 (by omega)
+  assert (Radix.Timer.watchdogExpired clock wd == false) "new watchdog not expired"
+  let wdClock50 := Radix.Timer.tick clock 50
+  assert (Radix.Timer.watchdogExpired wdClock50 wd == false) "watchdog alive at half"
+  let wdClockExpired := Radix.Timer.tick clock 100
+  assert (Radix.Timer.watchdogExpired wdClockExpired wd == true) "watchdog expired at boundary"
+  let kicked := Radix.Timer.watchdogKick wdClock50 wd
+  assert (Radix.Timer.watchdogExpired wdClock50 kicked == false) "kicked watchdog not expired"
+  assert (Radix.Timer.watchdogExpired wdClockExpired kicked == false)
+    "kicked watchdog still alive at original expiry"
+  let wdClockLate := Radix.Timer.tick clock 150
+  assert (Radix.Timer.watchdogExpired wdClockLate kicked == true)
+    "kicked watchdog expired at new deadline"
+
+  -- ── Batch Operations ──
+  let advancedClock := Radix.Timer.advanceN clock [10, 20, 30]
+  assert (Radix.Timer.now advancedClock == 60) "advanceN sums steps"
+  assert (Radix.Timer.now (Radix.Timer.advanceN clock []) == 0) "advanceN empty is identity"
+  let d1 := Radix.Timer.after clock 5
+  let d2 := Radix.Timer.after clock 15
+  let d3 := Radix.Timer.after clock 25
+  let allDeadlines := [d1, d2, d3]
+  let expiredList := Radix.Timer.expiredDeadlines (Radix.Timer.tick clock 10) allDeadlines
+  assert (expiredList.length == 1) "expiredDeadlines returns 1 expired"
+  let pendingList := Radix.Timer.pendingDeadlines (Radix.Timer.tick clock 10) allDeadlines
+  assert (pendingList.length == 2) "pendingDeadlines returns 2 pending"
+
   c.get
