@@ -24,11 +24,23 @@ namespace Radix.UTF8
 
 abbrev Scalar := Spec.Scalar
 
-export Spec.Scalar (ofNat? replacement byteCount)
+export Spec.Scalar (ofNat? replacement null maxScalar byteCount)
+export Spec (ByteClass classifyByte isLeadByte isAsciiByte isContinuationByte
+             sequenceLength bom hasBOM isOverlong IsScalar IsAscii IsBMP
+             IsSurrogate IsHighSurrogate IsLowSurrogate IsNoncharacter
+             IsSupplementary)
+
+-- ════════════════════════════════════════════════════════════════════
+-- ByteArray Conversions
+-- ════════════════════════════════════════════════════════════════════
 
 /-- Convert a `ByteArray` to a list of bytes in order. -/
 def byteArrayToList (bytes : ByteArray) : List UInt8 :=
   bytes.data.toList
+
+/-- Convert a byte list to a `ByteArray`. -/
+def listToByteArray (bytes : List UInt8) : ByteArray :=
+  ByteArray.mk bytes.toArray
 
 /-- Encode a single scalar to a `ByteArray`. -/
 def encodeScalar (s : Scalar) : ByteArray :=
@@ -38,6 +50,14 @@ def encodeScalar (s : Scalar) : ByteArray :=
 def encodeScalars (scalars : List Scalar) : ByteArray :=
   ByteArray.mk (Spec.encodeAll scalars).toArray
 
+/-- Encode a scalar to a byte list. -/
+def encodeToList (s : Scalar) : List UInt8 :=
+  Spec.encode s
+
+/-- Encode a list of scalars to a byte list. -/
+def encodeAllToList (scalars : List Scalar) : List UInt8 :=
+  Spec.encodeAll scalars
+
 /-- Decode the first UTF-8 scalar from a byte array. -/
 def decodeNextBytes? (bytes : ByteArray) : Option (Scalar × Nat) :=
   Spec.decodeNext? (byteArrayToList bytes)
@@ -46,9 +66,25 @@ def decodeNextBytes? (bytes : ByteArray) : Option (Scalar × Nat) :=
 def decodeBytes? (bytes : ByteArray) : Option (List Scalar) :=
   Spec.decodeAll? (byteArrayToList bytes)
 
+/-- Decode a byte list into Unicode scalars. -/
+def decodeList? (bytes : List UInt8) : Option (List Scalar) :=
+  Spec.decodeAll? bytes
+
+/-- Decode a byte array with U+FFFD replacement for invalid sequences. -/
+def decodeBytesReplacing (bytes : ByteArray) : List Scalar :=
+  Spec.decodeAllReplacing (byteArrayToList bytes)
+
+/-- Decode a byte list with U+FFFD replacement for invalid sequences. -/
+def decodeListReplacing (bytes : List UInt8) : List Scalar :=
+  Spec.decodeAllReplacing bytes
+
 /-- Check whether a byte array is well-formed UTF-8. -/
 def isWellFormed (bytes : ByteArray) : Bool :=
   (decodeBytes? bytes).isSome
+
+/-- Check whether a byte list is well-formed UTF-8. -/
+def isWellFormedList (bytes : List UInt8) : Bool :=
+  (decodeList? bytes).isSome
 
 /-- Number of bytes produced by encoding a scalar. -/
 def encodedLength (s : Scalar) : Nat :=
@@ -57,5 +93,79 @@ def encodedLength (s : Scalar) : Nat :=
 /-- Number of scalars decoded from a byte array, if well-formed. -/
 def scalarCount? (bytes : ByteArray) : Option Nat :=
   (decodeBytes? bytes).map List.length
+
+/-- Number of scalars decoded from a byte list, if well-formed. -/
+def scalarCountList? (bytes : List UInt8) : Option Nat :=
+  (decodeList? bytes).map List.length
+
+-- ════════════════════════════════════════════════════════════════════
+-- Byte Classification
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Classify each byte in a byte array. -/
+def classifyBytes (bytes : ByteArray) : List Spec.ByteClass :=
+  (byteArrayToList bytes).map Spec.classifyByte
+
+/-- Count the number of continuation bytes in a byte array. -/
+def countContinuation (bytes : ByteArray) : Nat :=
+  Spec.countContinuation (byteArrayToList bytes)
+
+/-- Count the number of lead bytes in a byte array (scalar count estimate). -/
+def countLeadBytes (bytes : ByteArray) : Nat :=
+  Spec.countLeadBytes (byteArrayToList bytes)
+
+/-- Check whether all bytes in a byte array are ASCII. -/
+def allAscii (bytes : ByteArray) : Bool :=
+  Spec.allAscii (byteArrayToList bytes)
+
+-- ════════════════════════════════════════════════════════════════════
+-- BOM Handling
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Check whether a byte array starts with a UTF-8 BOM. -/
+def hasByteOrderMark (bytes : ByteArray) : Bool :=
+  Spec.hasBOM (byteArrayToList bytes)
+
+/-- Strip a leading UTF-8 BOM from a byte array, if present. -/
+def stripByteOrderMark (bytes : ByteArray) : ByteArray :=
+  listToByteArray (Spec.stripBOM (byteArrayToList bytes))
+
+-- ════════════════════════════════════════════════════════════════════
+-- Scalar Queries
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Get the scalar value of a scalar as a natural number. -/
+def scalarValue (s : Scalar) : Nat := s.val
+
+/-- Whether a scalar is in the ASCII range. -/
+def scalarIsAscii (s : Scalar) : Bool := Spec.Scalar.isAscii s
+
+/-- Whether a scalar is in the BMP. -/
+def scalarIsBMP (s : Scalar) : Bool := Spec.Scalar.isBMP s
+
+/-- Whether a scalar is supplementary. -/
+def scalarIsSupplementary (s : Scalar) : Bool := Spec.Scalar.isSupplementary s
+
+/-- Whether a scalar is a noncharacter. -/
+def scalarIsNoncharacter (s : Scalar) : Bool := Spec.Scalar.isNoncharacter s
+
+/-- Which Unicode plane a scalar belongs to (0–16). -/
+def scalarPlane (s : Scalar) : Nat := Spec.Scalar.plane s
+
+/-- Total byte length needed to encode a list of scalars. -/
+def totalByteLength (scalars : List Scalar) : Nat :=
+  Spec.encodedByteLength scalars
+
+-- ════════════════════════════════════════════════════════════════════
+-- String Interop
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Convert a list of scalars to their code point values. -/
+def scalarsToNats (scalars : List Scalar) : List Nat :=
+  scalars.map (·.val)
+
+/-- Attempt to convert a list of natural numbers to scalars. -/
+def natsToScalars? (ns : List Nat) : Option (List Scalar) :=
+  ns.mapM Spec.Scalar.ofNat?
 
 end Radix.UTF8
