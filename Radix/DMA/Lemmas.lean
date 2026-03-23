@@ -81,4 +81,61 @@ theorem simulateCopy_eq_some (src dst : ByteArray) (d : Descriptor)
     simpa using hspec.2.2
   simp [Radix.DMA.simulateCopy, Radix.DMA.canSimulate, hisValid, hsrc, hdst, byteArrayToList]
 
+-- ════════════════════════════════════════════════════════════════════
+-- Alignment Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Alignment check agrees with the spec predicate. -/
+theorem isAligned_iff (r : Radix.Memory.Spec.Region) (align : Nat) :
+    Radix.DMA.isAligned r align = true ↔ Spec.isAligned r align := by
+  simp [Radix.DMA.isAligned]
+
+/-- Descriptor alignment check agrees with the spec predicate. -/
+theorem isDescriptorAligned_iff (d : Descriptor) (align : Nat) :
+    isDescriptorAligned d align = true ↔ d.isAligned align := by
+  simp [isDescriptorAligned, Radix.DMA.isAligned, Spec.Descriptor.isAligned,
+        Bool.and_eq_true]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Chain Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+/-- An empty chain is always valid. -/
+theorem isChainValid_nil : isChainValid [] = true := by
+  simp [isChainValid]
+
+/-- An empty chain has zero total bytes. -/
+theorem chainTotalBytes_nil : chainTotalBytes [] = 0 := by
+  simp [chainTotalBytes, Spec.chainTotalBytes]
+
+/-- An empty chain has zero steps. -/
+theorem chainStepCount_nil : chainStepCount [] = 0 := by
+  simp [chainStepCount]
+
+/-- Simple memory-to-memory descriptor is valid when size > 0. -/
+theorem mkMemToMem_valid (srcStart dstStart size : Nat) (hpos : 0 < size) :
+    (mkMemToMem srcStart dstStart size).valid := by
+  simp [mkMemToMem, Spec.Descriptor.valid, Spec.atomicityValid, Spec.fenceOrderSufficient, hpos]
+
+/-- A whole-atomicity descriptor has exactly 1 step. -/
+theorem stepCount_whole (d : Descriptor) (hw : d.atomicity = .whole) :
+    stepCount d = 1 := by
+  simp [stepCount, hw]
+
+/-- Burst transfer with burstSize = size has exactly 1 step. -/
+theorem stepCount_burst_eq_size (d : Descriptor) (hb : d.atomicity = .burst d.source.size)
+    (hpos : 0 < d.source.size) :
+    stepCount d = 1 := by
+  simp [stepCount, hb]
+  exact Nat.div_eq_of_lt_le (by omega) (by omega)
+
+/-- Chain source/destination regions lists have length equal to chain length. -/
+theorem chainSourceRegions_length (chain : List Descriptor) :
+    (chainSourceRegions chain).length = chain.length := by
+  simp [chainSourceRegions]
+
+theorem chainDestinationRegions_length (chain : List Descriptor) :
+    (chainDestinationRegions chain).length = chain.length := by
+  simp [chainDestinationRegions]
+
 end Radix.DMA
