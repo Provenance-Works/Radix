@@ -165,4 +165,127 @@ theorem zeros_test (n idx : Nat) :
 theorem empty_popcount :
     (BitmapState.zeros 0).popcount = 0 := zeros_popcount 0
 
+-- ════════════════════════════════════════════════════════════════════
+-- Size Preservation
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Set preserves the bitmap size. -/
+theorem set_size (bm : BitmapState) (idx : Nat) :
+    (bm.set idx).size = bm.size := by
+  unfold BitmapState.set
+  split <;> rfl
+
+/-- Clear preserves the bitmap size. -/
+theorem clear_size (bm : BitmapState) (idx : Nat) :
+    (bm.clear idx).size = bm.size := by
+  unfold BitmapState.clear
+  split <;> rfl
+
+/-- Toggle preserves the bitmap size. -/
+theorem toggle_size (bm : BitmapState) (idx : Nat) :
+    (bm.toggle idx).size = bm.size := by
+  unfold BitmapState.toggle
+  split <;> rfl
+
+-- ════════════════════════════════════════════════════════════════════
+-- Idempotence and Absorption
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Set is idempotent. -/
+theorem set_set_same (bm : BitmapState) (idx : Nat) (h : idx < bm.size) :
+    (bm.set idx).set idx = bm.set idx := by
+  unfold BitmapState.set; simp [h]
+
+/-- Clear is idempotent. -/
+theorem clear_clear_same (bm : BitmapState) (idx : Nat) (h : idx < bm.size) :
+    (bm.clear idx).clear idx = bm.clear idx := by
+  unfold BitmapState.clear; simp [h]
+
+/-- Set then clear at the same index equals clear. -/
+theorem set_clear_same (bm : BitmapState) (idx : Nat) (h : idx < bm.size) :
+    (bm.set idx).clear idx = bm.clear idx := by
+  unfold BitmapState.set BitmapState.clear
+  simp [h]
+  congr 1; funext i
+  by_cases hi : i = idx <;> simp_all
+
+/-- Clear then set at the same index equals set. -/
+theorem clear_set_same (bm : BitmapState) (idx : Nat) (h : idx < bm.size) :
+    (bm.clear idx).set idx = bm.set idx := by
+  unfold BitmapState.clear BitmapState.set
+  simp [h]
+  congr 1; funext i
+  by_cases hi : i = idx <;> simp_all
+
+-- ════════════════════════════════════════════════════════════════════
+-- Toggle Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Toggle at index `i` does not affect test at index `j ≠ i`. -/
+theorem toggle_test_ne (bm : BitmapState) (i j : Nat) (hi : i < bm.size) (hne : i ≠ j) :
+    (bm.toggle i).test j = bm.test j := by
+  unfold BitmapState.test BitmapState.toggle
+  simp [hi]
+  congr 1
+  simp [show j ≠ i from Ne.symm hne]
+
+/-- Toggle flips the bit value. -/
+theorem toggle_test_eq (bm : BitmapState) (idx : Nat) (h : idx < bm.size) :
+    (bm.toggle idx).test idx = !(bm.test idx) := by
+  unfold BitmapState.test BitmapState.toggle
+  simp [h, beq_iff_eq]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Ones Bitmap Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Test on ones returns true for valid indices. -/
+theorem ones_test (n idx : Nat) (h : idx < n) :
+    (BitmapState.ones n).test idx = true := by
+  simp [BitmapState.ones, BitmapState.test, h]
+
+/-- Test on ones returns false for out-of-range indices. -/
+theorem ones_test_out (n idx : Nat) (h : ¬idx < n) :
+    (BitmapState.ones n).test idx = false := by
+  simp [BitmapState.ones, BitmapState.test, h]
+
+/-- Ones bitmap has popcount equal to its size. -/
+theorem ones_popcount (n : Nat) :
+    (BitmapState.ones n).popcount = n := by
+  simp [BitmapState.ones, BitmapState.popcount]
+  suffices ∀ m acc, m ≤ n →
+      BitmapState.popcount.go { size := n, getBit := fun i => decide (i < n) } m acc = acc + m by
+    have := this n 0 (Nat.le_refl n)
+    simpa using this
+  intro m
+  induction m with
+  | zero => intro acc _; rfl
+  | succ k ih =>
+    intro acc hle
+    simp [BitmapState.popcount.go]
+    have : n - 1 - k < n := by omega
+    simp [this]
+    rw [ih (acc + 1) (by omega)]
+    omega
+
+/-- Out-of-range test always returns false. -/
+theorem test_out_of_range (bm : BitmapState) (idx : Nat) (h : ¬idx < bm.size) :
+    bm.test idx = false := by
+  simp [BitmapState.test, h]
+
+/-- Set on out-of-range index is a no-op. -/
+theorem set_out_of_range (bm : BitmapState) (idx : Nat) (h : ¬idx < bm.size) :
+    bm.set idx = bm := by
+  simp [BitmapState.set, h]
+
+/-- Clear on out-of-range index is a no-op. -/
+theorem clear_out_of_range (bm : BitmapState) (idx : Nat) (h : ¬idx < bm.size) :
+    bm.clear idx = bm := by
+  simp [BitmapState.clear, h]
+
+/-- Toggle on out-of-range index is a no-op. -/
+theorem toggle_out_of_range (bm : BitmapState) (idx : Nat) (h : ¬idx < bm.size) :
+    bm.toggle idx = bm := by
+  simp [BitmapState.toggle, h]
+
 end Radix.Bitmap.Spec
