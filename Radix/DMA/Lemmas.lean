@@ -138,4 +138,95 @@ theorem chainDestinationRegions_length (chain : List Descriptor) :
     (chainDestinationRegions chain).length = chain.length := by
   simp [chainDestinationRegions]
 
+-- ════════════════════════════════════════════════════════════════════
+-- Layer 2 / Layer 3 Agreement
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Layer 2 `bytesMoved` agrees with the Spec definition. -/
+theorem bytesMoved_eq_spec (d : Descriptor) :
+    bytesMoved d = d.bytesMoved := by
+  rfl
+
+/-- Layer 2 `stepCount` agrees with the Spec definition. -/
+theorem stepCount_eq_spec (d : Descriptor) :
+    stepCount d = d.stepCount := by
+  rfl
+
+-- ════════════════════════════════════════════════════════════════════
+-- Chain Bridge Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+private theorem foldl_stepCount_shift (l : List Descriptor) (a b : Nat) :
+    l.foldl (fun acc d => acc + stepCount d) (a + b) =
+    a + l.foldl (fun acc d => acc + stepCount d) b := by
+  induction l generalizing b with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl]
+    rw [show a + b + stepCount x = a + (b + stepCount x) from by omega]
+    exact ih (b + stepCount x)
+
+/-- Chain step count distributes over cons. -/
+theorem ops_chainStepCount_cons (d : Descriptor) (rest : List Descriptor) :
+    chainStepCount (d :: rest) = stepCount d + chainStepCount rest := by
+  simp only [chainStepCount, List.foldl, Nat.zero_add]
+  rw [show stepCount d = stepCount d + 0 from by omega]
+  exact foldl_stepCount_shift rest (stepCount d) 0
+
+/-- Chain validity implies every element is valid. -/
+theorem ops_isChainValid_forall (chain : List Descriptor)
+    (h : isChainValid chain = true) (d : Descriptor) (hd : d ∈ chain) :
+    isValid d = true := by
+  simp [isChainValid] at h
+  exact h d hd
+
+/-- A single-element chain is valid iff the descriptor is valid. -/
+theorem ops_isChainValid_singleton (d : Descriptor) :
+    isChainValid [d] = isValid d := by
+  simp [isChainValid]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Constructor Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+/-- mkBurstTransfer produces a valid descriptor when size and burst
+    parameters are positive and burst ≤ size. -/
+theorem mkBurstTransfer_valid (srcStart dstStart size burstSize : Nat)
+    (hsize : 0 < size) (hburst : 0 < burstSize) (hle : burstSize ≤ size) :
+    (Radix.DMA.mkBurstTransfer srcStart dstStart size burstSize).valid := by
+  simp [Radix.DMA.mkBurstTransfer, Spec.Descriptor.valid, Spec.atomicityValid,
+        Spec.fenceOrderSufficient, hsize, hburst, hle]
+
+/-- mkMemToMem creates a whole-atomicity descriptor. -/
+theorem mkMemToMem_atomicity (srcStart dstStart size : Nat) :
+    (Radix.DMA.mkMemToMem srcStart dstStart size).atomicity = .whole := by
+  rfl
+
+/-- mkMemToMem produces exactly 1 step. -/
+theorem mkMemToMem_stepCount (srcStart dstStart size : Nat) :
+    stepCount (Radix.DMA.mkMemToMem srcStart dstStart size) = 1 := by
+  rfl
+
+-- ════════════════════════════════════════════════════════════════════
+-- Completion Bridge Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A valid descriptor that has completed all steps has zero remaining bytes
+    (Layer 2 bridge to Spec.bytesRemaining_zero_of_complete). -/
+theorem bytesRemaining_zero (d : Descriptor) (steps : Nat)
+    (hvalid : d.valid) (hcomplete : Spec.Descriptor.stepCount d ≤ steps) :
+    Spec.Descriptor.bytesRemaining d steps = 0 := by
+  exact Spec.Descriptor.bytesRemaining_zero_of_complete d steps hvalid.2.2.1 hcomplete
+
+/-- Bytes completed is monotonically nondecreasing with steps. -/
+theorem bytesCompleted_mono (d : Descriptor) (s1 s2 : Nat) (h : s1 ≤ s2) :
+    Spec.Descriptor.bytesCompleted d s1 ≤ Spec.Descriptor.bytesCompleted d s2 := by
+  simp only [Spec.Descriptor.bytesCompleted]
+  exact min_le_min_right _ (Nat.mul_le_mul_right _ h)
+
+/-- Simulation of an empty chain is the identity on the destination buffer. -/
+theorem simulateChain_nil (src dst : ByteArray) :
+    simulateChain src dst [] = some dst := by
+  simp [simulateChain]
+
 end Radix.DMA
