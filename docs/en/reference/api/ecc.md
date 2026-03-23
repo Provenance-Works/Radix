@@ -60,7 +60,8 @@ def evenParity (b : UInt8) (width : Nat := 8) : Bool
 ```
 
 - `isCodewordByte` rejects bytes that use the high bit outside the Hamming(7,4) payload.
-- `decode`, `syndrome`, and `correct` are checked APIs and return `none` for invalid 8-bit inputs.
+- `decode` returns `some` only for low-7-bit inputs whose syndrome is zero; parity-invalid words must be repaired with `correct` before decoding.
+- `syndrome` and `correct` are checked APIs and return `none` for invalid 8-bit inputs.
 
 ## Proofs (`ECC.Lemmas`)
 

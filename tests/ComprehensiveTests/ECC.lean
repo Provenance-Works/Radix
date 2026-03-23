@@ -20,6 +20,7 @@ def runECCTests : IO Nat := do
   for mask in ([0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40] : List UInt8) do
     let corrupted := encoded ^^^ mask
     assert (Radix.ECC.check corrupted == false) s!"single-bit corruption detected: {mask}"
+    assert (Radix.ECC.decode corrupted == none) s!"single-bit corruption rejected by decode: {mask}"
     match (Radix.ECC.correct corrupted : Option UInt8) with
     | some corrected =>
       assert (Radix.ECC.decode corrected == (some (0x0B : UInt8))) s!"single-bit correction: {mask}"

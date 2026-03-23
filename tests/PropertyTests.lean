@@ -1802,6 +1802,8 @@ private def testECCProperties : IO Unit := do
     assert (Radix.ECC.check encoded) s!"ECC parity holds: {nibble.val}"
     for mask in bitMasks do
       let corrupted := encoded ^^^ mask
+      assert (Radix.ECC.decode corrupted == none)
+        s!"ECC decode rejects parity-invalid word: {nibble.val} mask={mask.toNat}"
       match (Radix.ECC.correct corrupted : Option UInt8) with
       | some corrected =>
         assert (Radix.ECC.decode corrected == (some (nibble.val.toUInt8 : UInt8)))

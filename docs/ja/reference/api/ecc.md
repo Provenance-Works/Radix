@@ -60,7 +60,8 @@ def evenParity (b : UInt8) (width : Nat := 8) : Bool
 ```
 
 - `isCodewordByte` は Hamming(7,4) payload の外側にある高位ビット付きバイトを拒否します。
-- `decode`、`syndrome`、`correct` は checked API であり、不正な 8 ビット入力には `none` を返します。
+- `decode` は syndrome が 0 の low-7-bit 入力に対してのみ `some` を返し、パリティ不整合のある語は `correct` 後に decode する必要があります。
+- `syndrome` と `correct` は checked API であり、不正な 8 ビット入力には `none` を返します。
 
 ## 証明 (`ECC.Lemmas`)
 

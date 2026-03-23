@@ -63,10 +63,16 @@ def encodeByte? (b : UInt8) : Option UInt8 :=
   else
     none
 
-/-- Decode a Hamming(7,4) codeword into the represented nibble. -/
+/-- Decode a parity-valid Hamming(7,4) codeword into the represented nibble. -/
 def decode (b : UInt8) : Option UInt8 :=
-  (fromByte? b).map fun codeword =>
-    (Spec.toNibble codeword).val.toUInt8
+  match fromByte? b with
+  | some codeword =>
+    if Spec.syndrome codeword == 0 then
+      some (Spec.toNibble codeword).val.toUInt8
+    else
+      none
+  | none =>
+    none
 
 /-- Compute the Hamming syndrome for a received codeword. -/
 def syndrome (b : UInt8) : Option Nat :=
