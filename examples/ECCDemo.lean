@@ -14,7 +14,7 @@ def main : IO Unit := do
   IO.println s!"  Encoded:   {encoded.toNat}"
   IO.println s!"  Corrupted: {corrupted.toNat}"
   IO.println s!"  Syndrome:  {Radix.ECC.syndrome corrupted}"
-  match Radix.ECC.correct corrupted with
+  match (Radix.ECC.correct corrupted : Option UInt8) with
   | some corrected =>
       IO.println s!"  Corrected: {corrected.toNat}"
       IO.println s!"  Decoded:   {Radix.ECC.decode corrected}"
