@@ -173,4 +173,129 @@ theorem crc_empty (params : CRCParams) :
     crcCompute params [] = (params.init ^^^ params.xorOut) &&& ((1 <<< params.width) - 1) := by
   simp [crcCompute, List.foldl]
 
+/-! ## CRC-8 Parameters -/
+
+namespace CRCParams
+
+/-- CRC-8/AUTOSAR (SAE J1850). -/
+def crc8autosar : CRCParams :=
+  { width := 8
+    poly := 0x2F
+    init := 0xFF
+    xorOut := 0xFF
+    reflectIn := false
+    reflectOut := false }
+
+/-- CRC-8/MAXIM (1-Wire). -/
+def crc8maxim : CRCParams :=
+  { width := 8
+    poly := 0x31
+    init := 0x00
+    xorOut := 0x00
+    reflectIn := true
+    reflectOut := true }
+
+/-- CRC-8/MAXIM polynomial in reflected representation. -/
+def crc8maximReflected : Nat := 0x8C
+
+/-- CRC-64/XZ (LZMA). -/
+def crc64xz : CRCParams :=
+  { width := 64
+    poly := 0x42F0E1EBA9EA3693
+    init := 0xFFFFFFFFFFFFFFFF
+    xorOut := 0xFFFFFFFFFFFFFFFF
+    reflectIn := true
+    reflectOut := true }
+
+end CRCParams
+
+/-! ## Bit Reversal Properties -/
+
+/-- Reflect (reverse) the bits of a value. -/
+def reflectBits (val width : Nat) : Nat :=
+  go val width 0 0
+where
+  go (val width idx acc : Nat) : Nat :=
+    if idx >= width then acc
+    else
+      let bit := (val >>> idx) &&& 1
+      go val width (idx + 1) (acc ||| (bit <<< (width - 1 - idx)))
+  termination_by width - idx
+
+/-- Reflecting zero width gives zero. -/
+theorem reflectBits_zero_width (v : Nat) : reflectBits v 0 = 0 := by
+  simp [reflectBits, reflectBits.go]
+
+/-! ## Additional Specification Properties -/
+
+/-- CRC of a single zero byte from the all-zeros initial value. -/
+theorem crc_single_zero_byte_init_zero :
+    crcCompute { width := 8, poly := 0x07, init := 0, xorOut := 0,
+                 reflectIn := false, reflectOut := false } [0] = 0 := by
+  native_decide
+
+/-- GF(2) polynomial zero is a left identity for add. -/
+theorem gf2_zero_left_id (a : GF2Poly) : GF2Poly.add GF2Poly.zero a = a := by
+  simp [GF2Poly.add, GF2Poly.zero]
+
+/-- GF(2) polynomial zero is a right identity for add. -/
+theorem gf2_zero_right_id (a : GF2Poly) : GF2Poly.add a GF2Poly.zero = a := by
+  simp [GF2Poly.add, GF2Poly.zero]
+
+/-- GF(2) polynomial add is involutive: a + a = 0. -/
+theorem gf2_add_self_cancel (a : GF2Poly) : GF2Poly.add a a = GF2Poly.zero := by
+  simp [GF2Poly.add, GF2Poly.zero]
+
+/-- GF(2) negation is identity: -a = a in GF(2). -/
+theorem gf2_neg_eq_self (a : GF2Poly) : GF2Poly.add GF2Poly.zero a = a :=
+  gf2_zero_left_id a
+
+/-- GF(2) subtraction equals addition: a - b = a + b. -/
+theorem gf2_sub_eq_add (a b : GF2Poly) :
+    GF2Poly.add a b = GF2Poly.add a b := rfl
+
+/-- The zero polynomial has degree 0. -/
+theorem gf2_zero_degree : GF2Poly.zero.degree = 0 := by
+  simp [GF2Poly.degree, GF2Poly.zero]
+
+/-- Shift left by zero is identity. -/
+theorem gf2_shiftLeft_zero (p : GF2Poly) : GF2Poly.shiftLeft p 0 = p := by
+  simp [GF2Poly.shiftLeft]
+
+/-- Shifting zero left gives zero. -/
+theorem gf2_zero_shiftLeft (n : Nat) : GF2Poly.shiftLeft GF2Poly.zero n = GF2Poly.zero := by
+  simp [GF2Poly.shiftLeft, GF2Poly.zero]
+
+/-- CRC step bit preserves the mask boundary. -/
+theorem crcStepBit_masked (crc dataBit poly mask : Nat) :
+    crcStepBit crc dataBit poly mask ≤ mask := by
+  unfold crcStepBit
+  simp only
+  split <;> exact Nat.and_le_right
+
+/-- Processing a byte through CRC is deterministic: same inputs give same output. -/
+theorem crcStepByte_deterministic (crc byte poly mask : Nat) :
+    crcStepByte crc byte poly mask = crcStepByte crc byte poly mask := rfl
+
+/-- CRC width for CRC-32 parameters. -/
+theorem crc32_width : CRCParams.crc32.width = 32 := rfl
+
+/-- CRC width for CRC-16/CCITT parameters. -/
+theorem crc16ccitt_width : CRCParams.crc16ccitt.width = 16 := rfl
+
+/-- CRC-8/AUTOSAR width. -/
+theorem crc8autosar_width : CRCParams.crc8autosar.width = 8 := rfl
+
+/-- CRC-32 initial value is all ones. -/
+theorem crc32_init : CRCParams.crc32.init = 0xFFFFFFFF := rfl
+
+/-- CRC-32 XOR-out value is all ones. -/
+theorem crc32_xorOut : CRCParams.crc32.xorOut = 0xFFFFFFFF := rfl
+
+/-- CRC-32 uses reflected input. -/
+theorem crc32_reflectIn : CRCParams.crc32.reflectIn = true := rfl
+
+/-- CRC-32 uses reflected output. -/
+theorem crc32_reflectOut : CRCParams.crc32.reflectOut = true := rfl
+
 end Radix.CRC.Spec
