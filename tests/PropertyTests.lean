@@ -90,6 +90,16 @@ def PRNG.nextUInt64 (rng : PRNG) : PRNG × UInt64 :=
 /-- Number of random iterations per property test. -/
 private def numIter : Nat := 500
 
+private def assertUTF8RoundTrip (n : Nat) : IO Unit := do
+  match Radix.UTF8.ofNat? n with
+  | some scalar =>
+    let encoded := Radix.UTF8.encodeScalar scalar
+    assert (Radix.UTF8.isWellFormed encoded) s!"UTF8 scalar well formed: {n}"
+    match Radix.UTF8.decodeBytes? encoded with
+    | some [decoded] => assert (decoded.val == n) s!"UTF8 round-trip: {n}"
+    | _ => assert false s!"UTF8 round-trip decode failed: {n}"
+  | none => assert false s!"UTF8 scalar constructor failed: {n}"
+
 /-! ================================================================ -/
 /-! ## UInt8 Property Tests                                          -/
 /-! ================================================================ -/
@@ -1752,31 +1762,57 @@ private def testNumericTypeclassProperties : IO Unit := do
 
 private def testUTF8Properties : IO Unit := do
   IO.println "  UTF8 properties..."
-  let asciiVals := [0x00, 0x24, 0x41, 0x7F]
-  for n in asciiVals do
-    match Radix.UTF8.ofNat? n with
-    | some scalar =>
-      let encoded := Radix.UTF8.encodeScalar scalar
-      assert (Radix.UTF8.isWellFormed encoded) s!"UTF8 scalar well formed: {n}"
-      match Radix.UTF8.decodeBytes? encoded with
-      | some [decoded] => assert (decoded.val == n) s!"UTF8 round-trip: {n}"
-      | _ => assert false s!"UTF8 round-trip decode failed: {n}"
-    | none => assert false s!"UTF8 scalar constructor failed: {n}"
+  let boundaryVals := [0x00, 0x24, 0x41, 0x7F, 0x80, 0x7FF, 0x800, 0xD7FF, 0xE000, 0xFFFF, 0x10000, 0x10FFFF]
+  for n in boundaryVals do
+    assertUTF8RoundTrip n
+
+  let mut rng := PRNG.new 600
+  for _ in [:numIter] do
+    let (rng', bucket) := rng.nextNat 5; rng := rng'
+    let (rng', offset) :=
+      match bucket with
+      | 0 => rng.nextNat 0x80
+      | 1 => rng.nextNat (0x800 - 0x80)
+      | 2 => rng.nextNat (0xD800 - 0x800)
+      | 3 => rng.nextNat (0x10000 - 0xE000)
+      | _ => rng.nextNat (0x110000 - 0x10000)
+    rng := rng'
+    let scalarNat :=
+      match bucket with
+      | 0 => offset
+      | 1 => 0x80 + offset
+      | 2 => 0x800 + offset
+      | 3 => 0xE000 + offset
+      | _ => 0x10000 + offset
+    assertUTF8RoundTrip scalarNat
+
+  assert (Radix.UTF8.ofNat? 0xD800 == none) "UTF8 surrogate lower bound rejected"
+  assert (Radix.UTF8.ofNat? 0xDFFF == none) "UTF8 surrogate upper bound rejected"
 
 private def testECCProperties : IO Unit := do
   IO.println "  ECC properties..."
   let mut rng := PRNG.new 700
+  let bitMasks : List UInt8 := [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40]
   for _ in [:numIter] do
     let (rng', v) := rng.nextUInt8; rng := rng'
     let nibble : Radix.ECC.Nibble := ⟨v.toNat % 16, by omega⟩
     let encoded := Radix.ECC.encodeNibble nibble
-    assert (Radix.ECC.decode encoded == some nibble.val.toUInt8)
+    assert (Radix.ECC.decode encoded == (some (nibble.val.toUInt8 : UInt8)))
       s!"ECC decode(encode): {nibble.val}"
-    let corrupted := encoded ^^^ 0x01
-    assert ((Radix.ECC.correct corrupted).bind Radix.ECC.decode == some nibble.val.toUInt8)
-      s!"ECC single-bit correction: {nibble.val}"
-    assert (Radix.ECC.decode (encoded ||| 0x80) == none)
-      s!"ECC reject high-bit input: {nibble.val}"
+    assert (Radix.ECC.check encoded) s!"ECC parity holds: {nibble.val}"
+    for mask in bitMasks do
+      let corrupted := encoded ^^^ mask
+      match (Radix.ECC.correct corrupted : Option UInt8) with
+      | some corrected =>
+        assert (Radix.ECC.decode corrected == (some (nibble.val.toUInt8 : UInt8)))
+          s!"ECC single-bit correction: {nibble.val} mask={mask.toNat}"
+        assert (Radix.ECC.check corrected)
+          s!"ECC corrected parity holds: {nibble.val} mask={mask.toNat}"
+      | none =>
+        assert false s!"ECC correction unexpectedly failed: {nibble.val} mask={mask.toNat}"
+    match (Radix.ECC.decode (encoded ||| 0x80) : Option UInt8) with
+    | none => pure ()
+    | some _ => assert false s!"ECC reject high-bit input: {nibble.val}"
 
 private def testDMAProperties : IO Unit := do
   IO.println "  DMA properties..."
@@ -1790,6 +1826,37 @@ private def testDMAProperties : IO Unit := do
   assert (Radix.DMA.isValid valid) "DMA valid descriptor"
   assert (Radix.DMA.stepCount valid == 2) "DMA burst step count"
 
+  let src := ByteArray.mk ((List.range 32).map (fun n => ((n * 7 + 3) % 256).toUInt8)).toArray
+  let dst := ByteArray.mk ((List.replicate 32 (0 : UInt8))).toArray
+  let mut rng := PRNG.new 801
+  for _ in [:numIter] do
+    let (rng', srcStart) := rng.nextNat 24; rng := rng'
+    let (rng', dstStart) := rng.nextNat 24; rng := rng'
+    let (rng', len0) := rng.nextNat 8; rng := rng'
+    let len := len0 + 1
+    let descriptor : Radix.DMA.Descriptor :=
+      { source := { start := srcStart, size := len }
+      , destination := { start := dstStart, size := len }
+      , order := .seqCst
+      , coherence := .nonCoherent
+      , atomicity := .burst (Nat.min len 4)
+      }
+    assert (Radix.DMA.isValid descriptor) s!"DMA random descriptor valid: {srcStart},{dstStart},{len}"
+    match Radix.DMA.simulateCopy src dst descriptor with
+    | some bytes =>
+      let srcList := src.toList
+      let dstList := dst.toList
+      let copied := (srcList.drop srcStart).take len
+      let expected := dstList.take dstStart ++ copied ++ dstList.drop (dstStart + len)
+      assert (bytes.size == dst.size) s!"DMA preserves destination size: {srcStart},{dstStart},{len}"
+      assert (bytes.toList == expected) s!"DMA copies exact slice: {srcStart},{dstStart},{len}"
+    | none => assert false s!"DMA simulation failed: {srcStart},{dstStart},{len}"
+
+  let invalidBurst : Radix.DMA.Descriptor := { valid with atomicity := .burst 0, coherence := .coherent }
+  assert (!Radix.DMA.isValid invalidBurst) "DMA rejects zero-sized burst"
+  let invalidOrder : Radix.DMA.Descriptor := { valid with order := .acquire }
+  assert (!Radix.DMA.isValid invalidOrder) "DMA rejects non-seqCst non-coherent order"
+
 private def testRegionAlgebraProperties : IO Unit := do
   IO.println "  Region algebra properties..."
   let mut rng := PRNG.new 800
@@ -1801,6 +1868,7 @@ private def testRegionAlgebraProperties : IO Unit := do
     let a : Radix.Memory.Spec.Region := { start := s0, size := len0 + 1 }
     let b : Radix.Memory.Spec.Region := { start := s1, size := len1 + 1 }
     let inter := Radix.Memory.Spec.Region.intersection a b
+    let diff := Radix.Memory.Spec.Region.difference a b
     if !decide (Radix.Memory.Spec.Region.intersects a b) then
       assert (inter == Radix.Memory.Spec.Region.empty)
         s!"disjoint intersection canonical empty: {reprStr a} {reprStr b}"
@@ -1813,10 +1881,20 @@ private def testRegionAlgebraProperties : IO Unit := do
         s!"intersection contained in right: {reprStr a} {reprStr b}"
     else
       pure ()
+    assert (diff.length ≤ 2) s!"difference bounded pieces: {reprStr a} {reprStr b}"
+    for piece in diff do
+      assert (Radix.Memory.Spec.Region.contains a piece)
+        s!"difference piece contained in left: {reprStr a} {reprStr piece}"
+      assert (decide (0 < piece.size))
+        s!"difference piece non-empty: {reprStr piece}"
+      assert (Radix.Memory.Spec.Region.disjoint piece b)
+        s!"difference piece disjoint from right: {reprStr piece} {reprStr b}"
 
 private def testTimerProperties : IO Unit := do
   IO.println "  Timer properties..."
   let mut rng := PRNG.new 900
+  assert (Radix.Timer.hasExpired Radix.Timer.zero (Radix.Timer.after Radix.Timer.zero 0))
+    "zero-timeout deadline expires immediately"
   for _ in [:numIter] do
     let (rng', startTicks) := rng.nextNat 1000; rng := rng'
     let (rng', delta) := rng.nextNat 100; rng := rng'
@@ -1825,8 +1903,15 @@ private def testTimerProperties : IO Unit := do
     assert (Radix.Timer.elapsed start finish == delta)
       s!"timer elapsed: {startTicks} {delta}"
     let deadline := Radix.Timer.after start (delta + 1)
+    assert (Radix.Timer.remaining finish deadline == 1)
+      s!"deadline remaining before expiry: {startTicks} {delta}"
     assert (Radix.Timer.hasExpired finish deadline == false)
       s!"deadline still future: {startTicks} {delta}"
+    let exact := Radix.Timer.tick start (delta + 1)
+    assert (Radix.Timer.hasExpired exact deadline)
+      s!"deadline expires exactly on boundary: {startTicks} {delta}"
+    assert (Radix.Timer.remaining exact deadline == 0)
+      s!"remaining saturates at expiry: {startTicks} {delta}"
 
 /-! ================================================================ -/
 /-! ## Main Entry Point                                              -/

@@ -27,6 +27,7 @@ def runDMATests : IO Nat := do
   match Radix.DMA.simulateCopy src dst valid with
   | some bytes =>
     assert (bytes.toList == [10, 20, 30, 0, 0, 0, 0]) "simulate copy"
+    assert (bytes.size == dst.size) "simulate copy preserves destination size"
   | none => assert false "simulate copy failed"
 
   let burst : Radix.DMA.Descriptor :=
@@ -34,9 +35,20 @@ def runDMATests : IO Nat := do
   assert (Radix.DMA.isValid burst) "burst descriptor valid"
   assert (Radix.DMA.stepCount burst == 2) "burst step count"
 
+  let shifted : Radix.DMA.Descriptor :=
+    { valid with source := { start := 2, size := 3 }, destination := { start := 3, size := 3 }, coherence := .coherent }
+  match Radix.DMA.simulateCopy src dst shifted with
+  | some bytes =>
+    assert (bytes.toList == [0, 0, 0, 30, 40, 50, 0]) "simulate copy with offsets"
+  | none => assert false "simulate copy with offsets failed"
+
   let invalid : Radix.DMA.Descriptor :=
     { valid with order := .release }
   assert (!Radix.DMA.isValid invalid) "non-coherent transfer needs seqCst"
+
+  let invalidBurst : Radix.DMA.Descriptor :=
+    { valid with atomicity := .burst 0, coherence := .coherent }
+  assert (!Radix.DMA.isValid invalidBurst) "zero-sized burst invalid"
 
   let outOfBounds : Radix.DMA.Descriptor :=
     { valid with destination := { start := 5, size := 3 }, coherence := .coherent }

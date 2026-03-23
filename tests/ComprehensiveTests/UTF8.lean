@@ -40,6 +40,12 @@ def runUTF8Tests : IO Nat := do
     assert (scalars.map (·.val) == [0x41, 0x00A2, 0x20AC, 0x1F642]) "decode encoded scalars"
   | none => assert false "decode encoded scalars failed"
 
+  match Radix.UTF8.decodeNextBytes? (Radix.UTF8.encodeScalar fourByte) with
+  | some (decoded, consumed) =>
+    assert (decoded.val == 0x1F642) "decodeNext returns scalar"
+    assert (consumed == 4) "decodeNext consumed four bytes"
+  | none => assert false "decodeNext four-byte scalar failed"
+
   let boundaryScalars := [ascii, (← UTF8Test.scalar 0x7F), (← UTF8Test.scalar 0x80), (← UTF8Test.scalar 0x7FF), (← UTF8Test.scalar 0x800), (← UTF8Test.scalar 0xD7FF), (← UTF8Test.scalar 0xE000), (← UTF8Test.scalar 0xFFFF), (← UTF8Test.scalar 0x10000), maxScalar]
   let boundaryEncoded := Radix.UTF8.encodeScalars boundaryScalars
   match Radix.UTF8.decodeBytes? boundaryEncoded with
@@ -55,5 +61,6 @@ def runUTF8Tests : IO Nat := do
   assert (!Radix.UTF8.isWellFormed malformed1) "reject overlong"
   assert (!Radix.UTF8.isWellFormed malformed2) "reject surrogate"
   assert (!Radix.UTF8.isWellFormed malformed3) "reject truncated four-byte sequence"
+  assert (Radix.UTF8.ofNat? 0xD800 == none) "reject surrogate constructor"
 
   c.get
