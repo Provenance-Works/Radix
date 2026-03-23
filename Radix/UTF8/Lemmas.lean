@@ -234,9 +234,7 @@ theorem encodedLength_eq_spec (s : Scalar) :
 theorem decodeBytes_encodeScalars (scalars : List Scalar) :
     decodeBytes? (encodeScalars scalars) = some scalars := by
   have hList : byteArrayToList (encodeScalars scalars) = Spec.encodeAll scalars := by
-    unfold byteArrayToList encodeScalars
-    convert (show List.ofFn (fun i : Fin (Spec.encodeAll scalars).length => (Spec.encodeAll scalars).toArray[i]) = Spec.encodeAll scalars by
-      simp) using 1
+    simp [byteArrayToList, encodeScalars]
   simp [decodeBytes?, hList, decodeAll_encodeAll]
 
 /-- Operation-layer scalar counting matches the encoded input list. -/
