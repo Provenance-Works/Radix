@@ -185,7 +185,7 @@ axiom trust_<name> (params : Types) : Prop
 | `encodeS64` / `decodeS64` | `Binary.Leb128.Lemmas` |
 | `toBigEndian` / `fromBigEndian` | `Bytes.Lemmas` |
 | `toLittleEndian` / `fromLittleEndian` | `Bytes.Lemmas` |
-| `serializeFormat` / `parseFormat` | `Binary.Spec` で仕様化 |
+| `serializeFormat` / `parseFormatExact` | `Binary.Spec` で仕様化。ヘッダ prefix 用には `parsePrefix` を使う |
 | `toBitVec` / `fromBitVec` | `Word.Lemmas.BitVec` |
 
 ## 関連ドキュメント
