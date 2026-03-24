@@ -40,40 +40,63 @@ open Radix.System
 
 /-! ## Read Operations -/
 
+private def checkReadable (fd : FD) : Except SysError Unit :=
+  if fd.mode.canRead then
+    .ok ()
+  else
+    .error (.permissionDenied "file descriptor is not open for reading")
+
+private def checkWritable (fd : FD) : Except SysError Unit :=
+  if fd.mode.canWrite then
+    .ok ()
+  else
+    .error (.permissionDenied "file descriptor is not open for writing")
+
 /-- Read up to `count` bytes from a file descriptor.
     Returns a `ByteArray` of length ≤ `count`.
     Returns empty `ByteArray` at EOF. -/
 def sysRead (fd : FD) (count : USize) : IO (Except SysError ByteArray) :=
-  liftIO (fd.handle.read count)
+  match checkReadable fd with
+  | .error e => pure (.error e)
+  | .ok () => liftIO (fd.handle.read count)
 
 /-- Read a single line (up to and including newline) from a file descriptor.
     Returns an empty string at EOF. -/
 def sysReadLine (fd : FD) : IO (Except SysError String) :=
-  liftIO (fd.handle.getLine)
+  match checkReadable fd with
+  | .error e => pure (.error e)
+  | .ok () => liftIO (fd.handle.getLine)
 
 /-- Read all remaining bytes from the current position to EOF. -/
 def sysReadAll (fd : FD) : IO (Except SysError ByteArray) :=
-  liftIO (do
-    let mut result := ByteArray.empty
-    let mut done := false
-    while !done do
-      let chunk ← fd.handle.read 4096
-      if chunk.isEmpty then
-        done := true
-      else
-        result := result ++ chunk
-    return result)
+  match checkReadable fd with
+  | .error e => pure (.error e)
+  | .ok () =>
+    liftIO (do
+      let mut result := ByteArray.empty
+      let mut done := false
+      while !done do
+        let chunk ← fd.handle.read 4096
+        if chunk.isEmpty then
+          done := true
+        else
+          result := result ++ chunk
+      return result)
 
 /-! ## Write Operations -/
 
 /-- Write a byte array to a file descriptor.
     Writes all bytes (Lean 4's `IO.FS.Handle.write` is total). -/
 def sysWrite (fd : FD) (data : ByteArray) : IO (Except SysError Unit) :=
-  liftIO (fd.handle.write data)
+  match checkWritable fd with
+  | .error e => pure (.error e)
+  | .ok () => liftIO (fd.handle.write data)
 
 /-- Write a string (as UTF-8) to a file descriptor. -/
 def sysWriteString (fd : FD) (s : String) : IO (Except SysError Unit) :=
-  liftIO (fd.handle.putStr s)
+  match checkWritable fd with
+  | .error e => pure (.error e)
+  | .ok () => liftIO (fd.handle.putStr s)
 
 /-! ## Seek Operations -/
 
@@ -98,11 +121,11 @@ def sysSeek (fd : FD) (mode : Spec.SeekMode) (offset : Int)
     | .cur   =>
       -- POSIX SEEK_CUR: relative skip forward only
       if offset < 0 then
-        throw (.userError "sysSeek: negative SEEK_CUR not supported without FFI (C-001)")
+        throw (.unsupportedOperation 0 "sysSeek: negative SEEK_CUR not supported without FFI (C-001)")
       skipBytes fd.handle offset.toNat
     | .end_  =>
       -- SEEK_END not supported without lseek FFI
-      throw (.userError "sysSeek: SEEK_END not supported without FFI (C-001)"))
+      throw (.unsupportedOperation 0 "sysSeek: SEEK_END not supported without FFI (C-001)"))
 where
   /-- Skip `n` bytes by reading and discarding in 4096-byte chunks. O(1) memory. -/
   skipBytes (h : IO.FS.Handle) (n : Nat) : IO Unit := do
