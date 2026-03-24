@@ -301,4 +301,23 @@ theorem spec_writePost_preserves_bytesRead (infoPre infoPost : OpenFileState)
     infoPost.bytesRead = infoPre.bytesRead :=
   Spec.writePost_preserves_bytesRead infoPre infoPost count actual h
 
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+/-- readOnly can read. -/
+example : FileAccessMode.readOnly.canRead = true := by rfl
+
+/-- readOnly cannot write. -/
+example : FileAccessMode.readOnly.canWrite = false := by rfl
+
+/-- writeOnly can write. -/
+example : FileAccessMode.writeOnly.canWrite = true := by rfl
+
+/-- writeOnly cannot read. -/
+example : FileAccessMode.writeOnly.canRead = false := by rfl
+
+/-- Closing a closed file is an invalid step. -/
+example : Spec.validStep .closed .close = false := by rfl
+
 end Radix.System

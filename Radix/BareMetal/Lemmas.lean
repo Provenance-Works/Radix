@@ -280,4 +280,29 @@ theorem alignDown_of_aligned (addr align : Nat) (hA : align > 0)
   rw [h] at heq; simp at heq
   rw [Nat.mul_comm]; exact heq
 
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+/-- x86_64 word size is 64 bits. -/
+example : Platform.x86_64.wordBits = 64 := by rfl
+
+/-- aarch64 word size is 64 bits. -/
+example : Platform.aarch64.wordBits = 64 := by rfl
+
+/-- riscv64 word size is 64 bits. -/
+example : Platform.riscv64.wordBits = 64 := by rfl
+
+/-- x86_64 natural alignment is 8. -/
+example : Platform.x86_64.naturalAlign = 8 := by rfl
+
+/-- alignDown 16 4 = 16. -/
+example : alignDown 16 4 = 16 := by native_decide
+
+/-- alignDown 17 4 = 16. -/
+example : alignDown 17 4 = 16 := by native_decide
+
+/-- alignDown 19 4 = 16. -/
+example : alignDown 19 4 = 16 := by native_decide
+
 end Radix.BareMetal
