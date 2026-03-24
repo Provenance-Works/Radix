@@ -14,6 +14,15 @@ private def scalar (n : Nat) : IO Radix.UTF8.Scalar := do
   | some s => pure s
   | none => throw (IO.userError s!"invalid scalar {n}")
 
+private def byteArray (bytes : List UInt8) : ByteArray :=
+  ByteArray.mk bytes.toArray
+
+private def scalarValues (scalars : List Radix.UTF8.Scalar) : List Nat :=
+  scalars.map (·.val)
+
+private def replacementValue : Nat :=
+  Radix.UTF8.replacement.val
+
 end UTF8Test
 
 def runUTF8Tests : IO Nat := do
@@ -97,5 +106,122 @@ def runUTF8Tests : IO Nat := do
   -- ── Byte classification ──
   let classes := Radix.UTF8.classifyBytes (ByteArray.mk #[0x41, 0xC2, 0xA2, 0x80])
   assert (classes.length == 4) "classifyBytes length"
+
+  -- RFC 3629 examples and boundary syntax.
+  let rfcExample1 := UTF8Test.byteArray [0x41, 0xE2, 0x89, 0xA2, 0xCE, 0x91, 0x2E]
+  match Radix.UTF8.decodeBytes? rfcExample1 with
+  | some scalars =>
+    assert (UTF8Test.scalarValues scalars == [0x41, 0x2262, 0x0391, 0x2E])
+      "RFC 3629 example 1 decodes"
+  | none => assert false "RFC 3629 example 1 rejected"
+
+  let rfcExampleKorean := UTF8Test.byteArray [0xED, 0x95, 0x9C, 0xEA, 0xB5, 0xAD, 0xEC, 0x96, 0xB4]
+  match Radix.UTF8.decodeBytes? rfcExampleKorean with
+  | some scalars =>
+    assert (UTF8Test.scalarValues scalars == [0xD55C, 0xAD6D, 0xC5B4])
+      "RFC 3629 Korean example decodes"
+  | none => assert false "RFC 3629 Korean example rejected"
+
+  let rfcExampleJapanese := UTF8Test.byteArray [0xE6, 0x97, 0xA5, 0xE6, 0x9C, 0xAC, 0xE8, 0xAA, 0x9E]
+  match Radix.UTF8.decodeBytes? rfcExampleJapanese with
+  | some scalars =>
+    assert (UTF8Test.scalarValues scalars == [0x65E5, 0x672C, 0x8A9E])
+      "RFC 3629 Japanese example decodes"
+  | none => assert false "RFC 3629 Japanese example rejected"
+
+  let rfcExampleBOM := UTF8Test.byteArray [0xEF, 0xBB, 0xBF, 0xF0, 0xA3, 0x8E, 0xB4]
+  assert (Radix.UTF8.hasByteOrderMark rfcExampleBOM) "RFC 3629 BOM detected"
+  match Radix.UTF8.decodeBytes? (Radix.UTF8.stripByteOrderMark rfcExampleBOM) with
+  | some scalars =>
+    assert (UTF8Test.scalarValues scalars == [0x233B4])
+      "RFC 3629 BOM stripping preserves payload"
+  | none => assert false "RFC 3629 BOM payload rejected"
+
+  let rfcValidBoundaries : List (List UInt8) :=
+    [ [0x00]
+    , [0x7F]
+    , [0xC2, 0x80]
+    , [0xDF, 0xBF]
+    , [0xE0, 0xA0, 0x80]
+    , [0xED, 0x9F, 0xBF]
+    , [0xEE, 0x80, 0x80]
+    , [0xEF, 0xBF, 0xBF]
+    , [0xF0, 0x90, 0x80, 0x80]
+    , [0xF4, 0x8F, 0xBF, 0xBF]
+    ]
+  for bytes in rfcValidBoundaries do
+    assert (Radix.UTF8.Spec.validateUTF8 bytes) s!"RFC boundary accepted: {bytes}"
+    assert (Radix.UTF8.isWellFormedList bytes) s!"Ops accepts RFC boundary: {bytes}"
+
+  let rfcInvalidBoundaries : List (List UInt8) :=
+    [ [0x80]
+    , [0xBF]
+    , [0xC0, 0x80]
+    , [0xC1, 0xBF]
+    , [0xE0, 0x80, 0x80]
+    , [0xE0, 0x9F, 0xBF]
+    , [0xED, 0xA0, 0x80]
+    , [0xED, 0xBF, 0xBF]
+    , [0xF0, 0x80, 0x80, 0x80]
+    , [0xF0, 0x8F, 0xBF, 0xBF]
+    , [0xF4, 0x90, 0x80, 0x80]
+    , [0xF5, 0x80, 0x80, 0x80]
+    , [0xFE]
+    , [0xFF]
+    ]
+  for bytes in rfcInvalidBoundaries do
+    assert (!Radix.UTF8.Spec.validateUTF8 bytes) s!"RFC boundary rejected: {bytes}"
+    assert (!Radix.UTF8.isWellFormedList bytes) s!"Ops rejects RFC boundary: {bytes}"
+
+  -- Markus Kuhn UTF-8 stress cases: replacement and re-synchronization.
+  let unexpectedContinuation := UTF8Test.byteArray [0x80, 0x22]
+  assert (!Radix.UTF8.isWellFormed unexpectedContinuation) "unexpected continuation rejected"
+  assert (Radix.UTF8.scalarsToNats (Radix.UTF8.decodeBytesReplacing unexpectedContinuation) ==
+    [UTF8Test.replacementValue, 0x22]) "unexpected continuation resyncs at quote"
+
+  let lonelyStart := UTF8Test.byteArray [0xE0, 0x22]
+  assert (!Radix.UTF8.isWellFormed lonelyStart) "lonely start byte rejected"
+  assert (Radix.UTF8.scalarsToNats (Radix.UTF8.decodeBytesReplacing lonelyStart) ==
+    [UTF8Test.replacementValue, 0x22]) "lonely start byte resyncs at quote"
+
+  let impossibleBytes := UTF8Test.byteArray [0xFE, 0xFF, 0x22]
+  assert (!Radix.UTF8.isWellFormed impossibleBytes) "impossible bytes rejected"
+  assert (Radix.UTF8.scalarsToNats (Radix.UTF8.decodeBytesReplacing impossibleBytes) ==
+    [UTF8Test.replacementValue, UTF8Test.replacementValue, 0x22])
+    "impossible bytes produce one replacement per byte"
+
+  let overlongSlash2 := UTF8Test.byteArray [0xC0, 0xAF, 0x22]
+  assert (!Radix.UTF8.isWellFormed overlongSlash2) "overlong slash 2-byte rejected"
+  assert (Radix.UTF8.scalarsToNats (Radix.UTF8.decodeBytesReplacing overlongSlash2) ==
+    [UTF8Test.replacementValue, UTF8Test.replacementValue, 0x22])
+    "overlong slash 2-byte resyncs after invalid bytes"
+
+  let overlongSlash3 := UTF8Test.byteArray [0xE0, 0x80, 0xAF, 0x22]
+  assert (!Radix.UTF8.isWellFormed overlongSlash3) "overlong slash 3-byte rejected"
+  assert (Radix.UTF8.scalarsToNats (Radix.UTF8.decodeBytesReplacing overlongSlash3) ==
+    [UTF8Test.replacementValue, UTF8Test.replacementValue, UTF8Test.replacementValue, 0x22])
+    "overlong slash 3-byte resyncs after invalid bytes"
+
+  let overlongSlash4 := UTF8Test.byteArray [0xF0, 0x80, 0x80, 0xAF, 0x22]
+  assert (!Radix.UTF8.isWellFormed overlongSlash4) "overlong slash 4-byte rejected"
+  assert (Radix.UTF8.scalarsToNats (Radix.UTF8.decodeBytesReplacing overlongSlash4) ==
+    [ UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , 0x22
+    ]) "overlong slash 4-byte resyncs after invalid bytes"
+
+  let surrogatePairBytes := UTF8Test.byteArray [0xED, 0xA0, 0x80, 0xED, 0xB0, 0x80, 0x22]
+  assert (!Radix.UTF8.isWellFormed surrogatePairBytes) "surrogate pair encoding rejected"
+  assert (Radix.UTF8.scalarsToNats (Radix.UTF8.decodeBytesReplacing surrogatePairBytes) ==
+    [ UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , 0x22
+    ]) "surrogate pair encoding replaces each invalid byte and resyncs"
 
   c.get
