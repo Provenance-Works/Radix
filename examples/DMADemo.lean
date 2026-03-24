@@ -1,4 +1,4 @@
-import Radix.DMA
+import Radix.DMA.Ops
 
 /-!
 # Example: DMA Transfer
