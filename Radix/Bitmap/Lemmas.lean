@@ -241,4 +241,82 @@ theorem spec_ones_test (n idx : Nat) (h : idx < n) :
     (Spec.BitmapState.ones n).test idx = true :=
   Spec.ones_test n idx h
 
+/-! ## Boolean Algebra Word Count Preservation -/
+
+/-- Union preserves word count. -/
+theorem union_word_count (a b : Bitmap) (h : a.numBits = b.numBits) :
+    (Bitmap.union a b h).words.size = wordsNeeded a.numBits := by
+  exact (Bitmap.union a b h).hSize
+
+/-- Intersection preserves word count. -/
+theorem intersection_word_count (a b : Bitmap) (h : a.numBits = b.numBits) :
+    (Bitmap.intersection a b h).words.size = wordsNeeded a.numBits := by
+  exact (Bitmap.intersection a b h).hSize
+
+/-- Difference preserves word count. -/
+theorem difference_word_count (a b : Bitmap) (h : a.numBits = b.numBits) :
+    (Bitmap.difference a b h).words.size = wordsNeeded a.numBits := by
+  exact (Bitmap.difference a b h).hSize
+
+/-- Complement preserves word count. -/
+theorem complement_word_count (bm : Bitmap) :
+    bm.complement.words.size = wordsNeeded bm.numBits := by
+  rw [← complement_numBits]
+  exact bm.complement.hSize
+
+/-- Set preserves hSize invariant. -/
+theorem set_hSize (bm : Bitmap) (idx : Nat) :
+    (bm.set idx).words.size = wordsNeeded (bm.set idx).numBits := by
+  exact (bm.set idx).hSize
+
+/-- Clear preserves hSize invariant. -/
+theorem clear_hSize (bm : Bitmap) (idx : Nat) :
+    (bm.clear idx).words.size = wordsNeeded (bm.clear idx).numBits := by
+  exact (bm.clear idx).hSize
+
+/-! ## Spec-Level Bound Properties -/
+
+/-- (Spec) Popcount is bounded by size. -/
+theorem spec_popcount_le_size (bm : Spec.BitmapState) :
+    bm.popcount ≤ bm.size :=
+  Spec.popcount_le_size bm
+
+/-- (Spec) FindFirstSet returns a valid index. -/
+theorem spec_findFirstSet_valid (bm : Spec.BitmapState) (idx : Nat)
+    (h : bm.findFirstSet = some idx) :
+    idx < bm.size :=
+  Spec.findFirstSet_lt_size bm idx h
+
+/-- (Spec) FindFirstClear returns a valid index. -/
+theorem spec_findFirstClear_valid (bm : Spec.BitmapState) (idx : Nat)
+    (h : bm.findFirstClear = some idx) :
+    idx < bm.size :=
+  Spec.findFirstClear_lt_size bm idx h
+
+/-! ## Concrete Test Vectors -/
+
+/-- A zeros bitmap of 64 bits tests all false. -/
+example : (Bitmap.zeros 64).test 0 = false := by native_decide
+
+/-- A zeros bitmap of 64 bits tests all false (index 63). -/
+example : (Bitmap.zeros 64).test 63 = false := by native_decide
+
+/-- Out-of-bounds test returns false. -/
+example : (Bitmap.zeros 8).test 100 = false := by native_decide
+
+/-- wordsNeeded for 0 bits = 0. -/
+example : wordsNeeded 0 = 0 := by native_decide
+
+/-- wordsNeeded for 1 bit = 1. -/
+example : wordsNeeded 1 = 1 := by native_decide
+
+/-- wordsNeeded for 64 bits = 1. -/
+example : wordsNeeded 64 = 1 := by native_decide
+
+/-- wordsNeeded for 65 bits = 2. -/
+example : wordsNeeded 65 = 2 := by native_decide
+
+/-- wordsNeeded for 128 bits = 2. -/
+example : wordsNeeded 128 = 2 := by native_decide
+
 end Radix.Bitmap.Lemmas
