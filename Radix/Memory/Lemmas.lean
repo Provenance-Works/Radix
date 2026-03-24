@@ -86,11 +86,6 @@ theorem Buffer.readU8_writeU8_eq (buf : Buffer) (offset : Nat) (val : Radix.UInt
 /-! ## Region Disjointness -/
 
 open Spec in
-theorem Spec.Region.disjoint_comm (a b : Spec.Region) :
-    Spec.Region.disjoint a b ↔ Spec.Region.disjoint b a := by
-  simp [Spec.Region.disjoint]; tauto
-
-open Spec in
 theorem Spec.Region.intersects_comm (a b : Spec.Region) :
     Spec.Region.intersects a b ↔ Spec.Region.intersects b a := by
   unfold Spec.Region.intersects
@@ -122,14 +117,7 @@ open Spec in
 theorem Spec.isAligned_mul (k align : Nat) (h : align > 0) : Spec.isAligned (k * align) align := by
   simp [Spec.isAligned, h]
 
-/-! ## Layout Properties -/
-
-theorem LayoutDesc.empty_totalSize : LayoutDesc.empty.totalSize = 0 := rfl
-
-theorem LayoutDesc.empty_fields : LayoutDesc.empty.fields = [] := rfl
-
-theorem LayoutDesc.appendField_totalSize (desc : LayoutDesc) (name : String) (size : Nat) :
-    (desc.appendField name size).totalSize = desc.totalSize + size := rfl
+/-! ## Layout Properties (additional proofs in Layout.lean) -/
 
 /-! ## Checked API Properties -/
 
@@ -157,10 +145,6 @@ theorem Buffer.readU8_writeU8_ne (buf : Buffer) (i j : Nat) (val : Radix.UInt8)
 /-! ## Region Properties -/
 
 open Spec in
-theorem Spec.Region.contains_refl (r : Spec.Region) : Spec.Region.contains r r := by
-  simp [Spec.Region.contains, Spec.Region.endOffset]
-
-open Spec in
 theorem Spec.Region.span_contains_left (a b : Spec.Region) :
     Spec.Region.contains (Spec.Region.span a b) a := by
   simp [Spec.Region.contains, Spec.Region.span, Spec.Region.endOffset]
@@ -169,11 +153,6 @@ open Spec in
 theorem Spec.Region.span_contains_right (a b : Spec.Region) :
     Spec.Region.contains (Spec.Region.span a b) b := by
   simp [Spec.Region.contains, Spec.Region.span, Spec.Region.endOffset]
-
-open Spec in
-theorem Spec.Region.span_comm (a b : Spec.Region) :
-    Spec.Region.span a b = Spec.Region.span b a := by
-  simp [Spec.Region.span, Nat.min_comm, Nat.max_comm]
 
 open Spec in
 theorem Spec.Region.intersection_comm (a b : Spec.Region) :
@@ -188,7 +167,14 @@ open Spec in
 -- Instead we prove the non-trivial direction separately.
 theorem Spec.Region.union?_isSome_of_mergeable (a b : Spec.Region) (h : Spec.Region.mergeable a b) :
     (Spec.Region.union? a b).isSome = true := by
-  simp [Spec.Region.union?, h]
+  unfold Spec.Region.union?
+  split
+  · rfl
+  · split
+    · rfl
+    · by_cases hm : Spec.Region.mergeable a b
+      · simp
+      · contradiction
 
 open Spec in
 theorem Spec.Region.span_least_upper_bound (a b c : Spec.Region)
@@ -196,16 +182,6 @@ theorem Spec.Region.span_least_upper_bound (a b c : Spec.Region)
     Spec.Region.contains c (Spec.Region.span a b) := by
   simp [Spec.Region.contains, Spec.Region.span, Spec.Region.endOffset] at *
   omega
-
-open Spec in
-theorem Spec.Region.inBounds_start (r : Spec.Region) (h : 0 < r.size) :
-    Spec.Region.inBounds r r.start := by
-  simp [Spec.Region.inBounds, Spec.Region.endOffset]; omega
-
-open Spec in
-theorem Spec.Region.not_inBounds_empty (off : Nat) :
-    ¬ Spec.Region.inBounds Spec.Region.empty off := by
-  simp [Spec.Region.inBounds, Spec.Region.endOffset, Spec.Region.empty]
 
 open Spec in
 theorem Spec.Region.contains_inBounds (outer inner : Spec.Region) (off : Nat)
@@ -349,13 +325,6 @@ theorem Buffer.checkedReadU64LE_none (buf : Buffer) (offset : Nat)
   simp [Buffer.checkedReadU64LE, h]
 
 /-! ## Region Transitivity -/
-
-open Spec in
-theorem Spec.Region.contains_trans (a b c : Spec.Region)
-    (hab : Spec.Region.contains a b) (hbc : Spec.Region.contains b c) :
-    Spec.Region.contains a c := by
-  simp [Spec.Region.contains, Spec.Region.endOffset] at *
-  omega
 
 open Spec in
 theorem Spec.Region.disjoint_of_contains (outer inner other : Spec.Region)
