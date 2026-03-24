@@ -357,4 +357,95 @@ theorem zeros_size (n : Nat) : (BitmapState.zeros n).size = n := rfl
 /-- Ones bitmap has size n. -/
 theorem ones_size (n : Nat) : (BitmapState.ones n).size = n := rfl
 
+-- ════════════════════════════════════════════════════════════════════
+-- Popcount Bounds
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Popcount never exceeds the bitmap size. -/
+theorem popcount_le_size (bm : BitmapState) :
+    bm.popcount ≤ bm.size := by
+  simp [BitmapState.popcount]
+  suffices ∀ m acc, m ≤ bm.size → acc ≤ bm.size - m →
+      BitmapState.popcount.go bm m acc ≤ bm.size by
+    exact this bm.size 0 (Nat.le_refl _) (by omega)
+  intro m
+  induction m with
+  | zero => intro acc _ h; simpa [BitmapState.popcount.go] using h
+  | succ k ih =>
+    intro acc hle hacc
+    simp [BitmapState.popcount.go]
+    split
+    · exact ih (acc + 1) (by omega) (by omega)
+    · exact ih acc (by omega) (by omega)
+
+/-- FindFirstSet returns a valid index (within bounds). -/
+theorem findFirstSet_lt_size (bm : BitmapState) (idx : Nat)
+    (h : bm.findFirstSet = some idx) :
+    idx < bm.size := by
+  simp [BitmapState.findFirstSet] at h
+  exact go_bound _ _ h
+where
+  go_bound : ∀ m start,
+      BitmapState.findFirstSet.go bm m start = some idx → idx < bm.size := by
+    intro m
+    induction m with
+    | zero => intro _ h; simp [BitmapState.findFirstSet.go] at h
+    | succ k ih =>
+      intro start h
+      unfold BitmapState.findFirstSet.go at h
+      split at h
+      · simp at h
+      · split at h
+        · injection h with h; omega
+        · exact ih _ h
+
+/-- FindFirstClear returns a valid index (within bounds). -/
+theorem findFirstClear_lt_size (bm : BitmapState) (idx : Nat)
+    (h : bm.findFirstClear = some idx) :
+    idx < bm.size := by
+  simp [BitmapState.findFirstClear] at h
+  exact go_bound _ _ h
+where
+  go_bound : ∀ m start,
+      BitmapState.findFirstClear.go bm m start = some idx → idx < bm.size := by
+    intro m
+    induction m with
+    | zero => intro _ h; simp [BitmapState.findFirstClear.go] at h
+    | succ k ih =>
+      intro start h
+      unfold BitmapState.findFirstClear.go at h
+      split at h
+      · simp at h
+      · split at h
+        · injection h with h; omega
+        · exact ih _ h
+
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Spec Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+/-- 8-bit zeros: set bit 3, test bit 3 = true. -/
+example : ((BitmapState.zeros 8).set 3).test 3 = true := by native_decide
+
+/-- 8-bit zeros: set bit 3, test bit 4 = false. -/
+example : ((BitmapState.zeros 8).set 3).test 4 = false := by native_decide
+
+/-- 8-bit zeros: set bit 3, clear bit 3, test bit 3 = false. -/
+example : (((BitmapState.zeros 8).set 3).clear 3).test 3 = false := by native_decide
+
+/-- Toggle twice: testing the toggled bit returns original value. -/
+example : (((BitmapState.zeros 8).toggle 5).toggle 5).test 5 = false := by native_decide
+
+/-- Ones(4) has popcount 4. -/
+example : (BitmapState.ones 4).popcount = 4 := by native_decide
+
+/-- FindFirstSet on zeros(8) with bit 5 set returns 5. -/
+example : ((BitmapState.zeros 8).set 5).findFirstSet = some 5 := by native_decide
+
+/-- FindFirstSet on zeros(8) with bits 3 and 5 set returns 3 (lowest). -/
+example : (((BitmapState.zeros 8).set 5).set 3).findFirstSet = some 3 := by native_decide
+
+/-- FindFirstClear on ones(4) with bit 2 cleared returns 2. -/
+example : ((BitmapState.ones 4).clear 2).findFirstClear = some 2 := by native_decide
+
 end Radix.Bitmap.Spec
