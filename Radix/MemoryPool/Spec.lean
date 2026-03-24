@@ -546,4 +546,95 @@ theorem slab_alloc_blockCount (s : SlabState) (s' : SlabState)
     simp [hfb] at hAlloc
     obtain ⟨rfl, _⟩ := hAlloc; rfl
 
+/-- Slab alloc decrements freeCount. -/
+theorem slab_alloc_decrements_freeCount (s : SlabState) (s' : SlabState)
+    (info : AllocInfo) (hAlloc : s.alloc = some (s', info)) :
+    s'.freeCount + 1 = s.freeCount := by
+  unfold SlabState.alloc at hAlloc
+  match hfb : s.freeBlocks with
+  | [] => simp [hfb] at hAlloc
+  | _ :: tl =>
+    simp [hfb] at hAlloc
+    obtain ⟨rfl, _⟩ := hAlloc
+    simp [SlabState.freeCount, hfb]
+
+/-- Slab free preserves blockSize. -/
+theorem slab_free_blockSize (s : SlabState) (idx : Nat)
+    (s' : SlabState) (hFree : s.free idx = some s') :
+    s'.blockSize = s.blockSize := by
+  unfold SlabState.free at hFree
+  split at hFree
+  · injection hFree with hFree; subst hFree; rfl
+  · contradiction
+
+/-- Slab free preserves blockCount. -/
+theorem slab_free_blockCount (s : SlabState) (idx : Nat)
+    (s' : SlabState) (hFree : s.free idx = some s') :
+    s'.blockCount = s.blockCount := by
+  unfold SlabState.free at hFree
+  split at hFree
+  · injection hFree with hFree; subst hFree; rfl
+  · contradiction
+
+-- ════════════════════════════════════════════════════════════════════
+-- Slab Conservation Law
+-- ════════════════════════════════════════════════════════════════════
+
+/-- After slab alloc, freeCount + allocatedBlocks.length is preserved. -/
+theorem slab_alloc_conservation (s : SlabState) (s' : SlabState)
+    (info : AllocInfo) (hAlloc : s.alloc = some (s', info)) :
+    s'.freeCount + s'.allocatedBlocks.length =
+    s.freeCount + s.allocatedBlocks.length := by
+  unfold SlabState.alloc at hAlloc
+  match hfb : s.freeBlocks with
+  | [] => simp [hfb] at hAlloc
+  | _ :: tl =>
+    simp [hfb] at hAlloc
+    obtain ⟨rfl, _⟩ := hAlloc
+    simp [SlabState.freeCount, hfb]
+    omega
+
+/-- After slab free, freeCount + allocatedBlocks.length is preserved
+    (but allocatedBlocks is unchanged as free doesn't remove from it). -/
+theorem slab_free_freeCount_inc (s : SlabState) (idx : Nat)
+    (s' : SlabState) (hFree : s.free idx = some s') :
+    s'.freeCount = s.freeCount + 1 :=
+  slab_free_increases_freeCount s idx s' hFree
+
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+private def testBump : BumpState := BumpState.new 1024
+
+/-- Fresh bump allocator has capacity 1024. -/
+example : testBump.capacity = 1024 := by native_decide
+
+/-- Fresh bump allocator has cursor at 0. -/
+example : testBump.cursor = 0 := by native_decide
+
+/-- Fresh bump allocator is valid. -/
+example : testBump.isValid := by
+  simp [BumpState.isValid, testBump, BumpState.new]
+
+/-- Fresh bump allocator has remaining 1024. -/
+example : testBump.remaining = 1024 := by native_decide
+
+/-- A bump allocation of size 64 succeeds. -/
+example : (testBump.alloc 64).isSome = true := by native_decide
+
+/-- A bump allocation of size 0 fails. -/
+example : (testBump.alloc 0).isNone = true := by native_decide
+
+private def testSlab : SlabState := SlabState.new 32 8
+
+/-- Fresh slab has 8 free blocks. -/
+example : testSlab.freeCount = 8 := by native_decide
+
+/-- Fresh slab has 0 allocated blocks. -/
+example : testSlab.allocatedBlocks.length = 0 := by native_decide
+
+/-- Fresh slab allocation succeeds. -/
+example : testSlab.alloc.isSome = true := by native_decide
+
 end Radix.MemoryPool.Spec

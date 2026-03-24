@@ -345,4 +345,68 @@ theorem spec_bump_alloc_offset_lt (s : Spec.BumpState) (size : Nat)
     info.offset < s.capacity :=
   Spec.bump_alloc_offset_lt s size s' info hAlloc
 
+/-! ================================================================ -/
+/-! ## Slab Conservation Properties                                   -/
+/-! ================================================================ -/
+
+/-- (Spec) Slab alloc preserves blockCount. -/
+theorem spec_slab_alloc_blockCount (s s' : Spec.SlabState) (info : Spec.AllocInfo)
+    (hAlloc : s.alloc = some (s', info)) :
+    s'.blockCount = s.blockCount :=
+  Spec.slab_alloc_blockCount s s' info hAlloc
+
+/-- (Spec) Slab alloc decrements freeCount. -/
+theorem spec_slab_alloc_decrements_freeCount (s s' : Spec.SlabState) (info : Spec.AllocInfo)
+    (hAlloc : s.alloc = some (s', info)) :
+    s'.freeCount + 1 = s.freeCount :=
+  Spec.slab_alloc_decrements_freeCount s s' info hAlloc
+
+/-- (Spec) Slab free preserves blockSize. -/
+theorem spec_slab_free_blockSize (s : Spec.SlabState) (idx : Nat)
+    (s' : Spec.SlabState) (hFree : s.free idx = some s') :
+    s'.blockSize = s.blockSize :=
+  Spec.slab_free_blockSize s idx s' hFree
+
+/-- (Spec) Slab alloc+free conservation: freeCount + allocatedBlocks.length. -/
+theorem spec_slab_alloc_conservation (s s' : Spec.SlabState) (info : Spec.AllocInfo)
+    (hAlloc : s.alloc = some (s', info)) :
+    s'.freeCount + s'.allocatedBlocks.length =
+    s.freeCount + s.allocatedBlocks.length :=
+  Spec.slab_alloc_conservation s s' info hAlloc
+
+/-! ================================================================ -/
+/-! ## Concrete Test Vectors                                          -/
+/-! ================================================================ -/
+
+private def testPool : BumpPool := BumpPool.new 256
+
+/-- Fresh bump pool of 256 bytes has 256 remaining. -/
+example : testPool.remaining = 256 := by native_decide
+
+/-- Fresh bump pool has cursor at 0. -/
+example : testPool.cursor = 0 := by native_decide
+
+/-- Allocating 64 bytes from testPool succeeds. -/
+example : (testPool.alloc 64).isSome = true := by native_decide
+
+/-- Allocating 0 bytes fails. -/
+example : (testPool.alloc 0).isNone = true := by native_decide
+
+/-- Reset pool has full remaining. -/
+example : testPool.reset.remaining = 256 := by native_decide
+
+private def testSlabPool : SlabPool := SlabPool.new 32 4 (by omega)
+
+/-- Fresh slab pool has 4 free blocks. -/
+example : testSlabPool.freeCount = 4 := by native_decide
+
+/-- Fresh slab pool has 0 allocated. -/
+example : testSlabPool.allocatedCount = 0 := by native_decide
+
+/-- Fresh slab pool can allocate. -/
+example : testSlabPool.canAlloc = true := by native_decide
+
+/-- Slab pool allocation succeeds. -/
+example : testSlabPool.alloc.isSome = true := by native_decide
+
 end Radix.MemoryPool.Lemmas
