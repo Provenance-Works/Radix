@@ -232,4 +232,49 @@ theorem later_comm (a b : Deadline) :
   simp [Radix.Timer.later]
   exact Spec.later_comm a b
 
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Timer Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Ticking by zero is identity. -/
+theorem tick_zero (clock : Clock) : tick clock 0 = clock := by
+  simp [tick, Spec.advance]
+
+/-- Double tick equals tick by sum. -/
+theorem tick_tick (clock : Clock) (d1 d2 : Nat) :
+    tick (tick clock d1) d2 = tick clock (d1 + d2) := by
+  simp [tick, Spec.advance, Nat.add_assoc]
+
+/-- Elapsed from clock to itself is zero. -/
+theorem elapsed_self (clock : Clock) : elapsed clock clock = 0 := by
+  simp [elapsed, Spec.elapsed]
+
+/-- After extending a deadline, remaining increases. -/
+theorem remaining_extend (clock : Clock) (deadline : Deadline) (delta : Nat) :
+    remaining clock deadline ≤ remaining clock (Radix.Timer.extend deadline delta) := by
+  simp [remaining, Radix.Timer.extend, Spec.remaining, Spec.extend]
+  omega
+
+/-- (Spec) Expired status is monotonic with clock advancement. -/
+theorem spec_expired_mono (c1 c2 : Clock) (d : Deadline)
+    (hm : Spec.Monotonic c1 c2) (he : Spec.expired c1 d) :
+    Spec.expired c2 d :=
+  Spec.expired_mono c1 c2 d hm he
+
+/-- (Spec) Remaining zero iff expired. -/
+theorem spec_remaining_eq_zero_iff (clock : Clock) (deadline : Deadline) :
+    Spec.remaining clock deadline = 0 ↔ Spec.expired clock deadline :=
+  Spec.remaining_eq_zero_iff clock deadline
+
+/-- (Spec) Watchdog timeout preserved across kick. -/
+theorem spec_watchdogKick_timeout (clock : Clock) (wd : Spec.Watchdog) :
+    (Spec.watchdogKick clock wd).timeout = wd.timeout :=
+  Spec.watchdogKick_timeout clock wd
+
+/-- (Spec) Monotonicity is transitive. -/
+theorem spec_monotonic_trans (a b c : Clock)
+    (hab : Spec.Monotonic a b) (hbc : Spec.Monotonic b c) :
+    Spec.Monotonic a c :=
+  Spec.monotonic_trans a b c hab hbc
+
 end Radix.Timer
