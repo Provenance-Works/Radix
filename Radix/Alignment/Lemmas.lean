@@ -264,4 +264,55 @@ theorem isAlignedPow2_iff_spec (offset align : Nat) (h : Spec.isPowerOfTwo align
     have := land_sub_one_eq_mod align offset hpow
     simp [this, hmod]
 
+/-! ## Additional Alignment Lemmas -/
+
+/-- `alignDown` distributes: `alignDown (offset + k * align) align = alignDown offset align + k * align`. -/
+theorem alignDown_add_mul (offset k align : Nat) (h : align > 0) :
+    Spec.alignDown (offset + k * align) align =
+    Spec.alignDown offset align + k * align := by
+  unfold Spec.alignDown
+  simp [beq_zero_false_of_pos h]
+  rw [Nat.add_mul_div_right _ _ h]
+  rw [Nat.add_mul]
+
+/-- `alignDown` monotone: if `a ≤ b` and both are in the same alignment class,
+    then `alignDown a align ≤ alignDown b align`. -/
+theorem alignDown_mono (a b align : Nat) (h : align > 0) (hab : a ≤ b) :
+    Spec.alignDown a align ≤ Spec.alignDown b align := by
+  unfold Spec.alignDown
+  simp [beq_zero_false_of_pos h]
+  exact Nat.mul_le_mul_right align (Nat.div_le_div_right hab)
+
+/-- `alignUp` monotone: if `a ≤ b` then `alignUp a align ≤ alignUp b align`. -/
+theorem alignUp_mono (a b align : Nat) (h : align > 0) (hab : a ≤ b) :
+    Spec.alignUp a align ≤ Spec.alignUp b align := by
+  unfold Spec.alignUp
+  simp [beq_zero_false_of_pos h]
+  apply Nat.mul_le_mul_right
+  apply Nat.div_le_div_right
+  omega
+
+/-- Padding is periodic: `alignPadding (offset + align) align = alignPadding offset align`. -/
+theorem alignPadding_add_align (offset align : Nat) (h : align > 0) :
+    Spec.alignPadding (offset + align) align = Spec.alignPadding offset align := by
+  unfold Spec.alignPadding
+  simp [beq_zero_false_of_pos h, Nat.add_mod_right]
+
+/-- `isAligned` for `alignDown` output (Ops-level). -/
+theorem ops_alignDown_isAligned (offset align : Nat) (h : align > 0) :
+    Alignment.isAligned (Alignment.alignDown offset align) align = true := by
+  rw [ops_isAligned_iff_spec _ _ h]
+  rw [ops_alignDown_eq_spec]
+  exact Spec.alignDown_isAligned offset align h
+
+/-- `isAligned` for `alignUp` output (Ops-level). -/
+theorem ops_alignUp_isAligned (offset align : Nat) (h : align > 0) :
+    Alignment.isAligned (Alignment.alignUp offset align) align = true := by
+  rw [ops_isAligned_iff_spec _ _ h]
+  rw [ops_alignUp_eq_spec]
+  exact Spec.alignUp_isAligned offset align h
+
+/-- `isPowerOfTwo` implies alignment value is positive. -/
+theorem isPowerOfTwo_pos (n : Nat) (h : Spec.isPowerOfTwo n) : 0 < n := h.1
+
 end Radix.Alignment

@@ -167,4 +167,97 @@ theorem isPowerOfTwo_two : isPowerOfTwo 2 := by decide
 /-- Power of 2: 4 is a power of two. -/
 theorem isPowerOfTwo_four : isPowerOfTwo 4 := by decide
 
+/-- Power of 2: 8 is a power of two. -/
+theorem isPowerOfTwo_eight : isPowerOfTwo 8 := by decide
+
+/-- Power of 2: 16 is a power of two. -/
+theorem isPowerOfTwo_sixteen : isPowerOfTwo 16 := by decide
+
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Alignment Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- `alignUp` of an aligned offset is identity. -/
+theorem alignUp_of_isAligned (offset align : Nat) (h : isAligned offset align) :
+    alignUp offset align = offset := by
+  obtain ⟨hpos, hmod⟩ := h
+  unfold alignUp
+  have hne : (align == 0) = false := by simp; omega
+  simp [hne]
+  have hdvd := Nat.dvd_of_mod_eq_zero hmod
+  obtain ⟨k, hk⟩ := hdvd
+  rw [hk, show align * k + align - 1 = (align - 1) + align * k from by omega]
+  rw [Nat.add_mul_div_left _ _ hpos]
+  have : (align - 1) / align = 0 := Nat.div_eq_of_lt (by omega)
+  rw [this, Nat.zero_add, Nat.mul_comm]
+
+/-- `alignDown` of an aligned offset is identity. -/
+theorem alignDown_of_isAligned (offset align : Nat) (h : isAligned offset align) :
+    alignDown offset align = offset := by
+  obtain ⟨hpos, hmod⟩ := h
+  unfold alignDown
+  have hne : (align == 0) = false := by simp; omega
+  simp [hne]
+  exact Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero hmod)
+
+/-- `alignUp` produces a result aligned to `align`. -/
+theorem alignUp_isAligned (offset align : Nat) (hpos : 0 < align) :
+    isAligned (alignUp offset align) align := by
+  unfold alignUp
+  have hne : (align == 0) = false := by simp; omega
+  simp [hne]
+  exact ⟨hpos, by rw [Nat.mul_comm]; exact Nat.mul_mod_right align _⟩
+
+/-- `alignDown` produces a result aligned to `align`. -/
+theorem alignDown_isAligned (offset align : Nat) (hpos : 0 < align) :
+    isAligned (alignDown offset align) align := by
+  unfold alignDown
+  have hne : (align == 0) = false := by simp; omega
+  simp [hne]
+  exact ⟨hpos, by rw [Nat.mul_comm]; exact Nat.mul_mod_right align _⟩
+
+/-- If offset is aligned, `alignUp offset align = offset`. -/
+theorem alignUp_eq_of_aligned (offset align : Nat) (h : isAligned offset align) :
+    alignUp offset align = offset := by
+  obtain ⟨hpos, hmod⟩ := h
+  unfold alignUp
+  have hne : (align == 0) = false := by simp; omega
+  simp [hne]
+  have hdvd := Nat.dvd_of_mod_eq_zero hmod
+  obtain ⟨k, hk⟩ := hdvd
+  rw [hk, show align * k + align - 1 = (align - 1) + align * k from by omega]
+  rw [Nat.add_mul_div_left _ _ hpos]
+  have : (align - 1) / align = 0 := Nat.div_eq_of_lt (by omega)
+  rw [this, Nat.zero_add, Nat.mul_comm]
+
+/-- If offset is aligned, `alignDown offset align = offset`. -/
+theorem alignDown_eq_of_aligned (offset align : Nat) (h : isAligned offset align) :
+    alignDown offset align = offset := by
+  obtain ⟨hpos, hmod⟩ := h
+  unfold alignDown
+  have hne : (align == 0) = false := by simp; omega
+  simp [hne]
+  exact Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero hmod)
+
+/-- Fundamental sandwich: `alignDown offset align ≤ offset ≤ alignUp offset align`. -/
+theorem alignDown_le_le_alignUp (offset align : Nat) (hpos : 0 < align) :
+    alignDown offset align ≤ offset ∧ offset ≤ alignUp offset align :=
+  ⟨alignDown_le offset align, alignUp_ge offset align hpos⟩
+
+/-- `alignDown` distributes over alignment multiples:
+    `alignDown (k * align) align = k * align`. -/
+theorem alignDown_mul (k align : Nat) (hpos : 0 < align) :
+    alignDown (k * align) align = k * align :=
+  alignDown_eq_of_aligned _ _ (isAligned_mul k align hpos)
+
+/-- `alignUp` of a multiple is identity. -/
+theorem alignUp_mul (k align : Nat) (hpos : 0 < align) :
+    alignUp (k * align) align = k * align :=
+  alignUp_eq_of_aligned _ _ (isAligned_mul k align hpos)
+
+/-- Padding at zero offset is always zero. -/
+theorem alignPadding_zero (align : Nat) (hpos : 0 < align) :
+    alignPadding 0 align = 0 :=
+  alignPadding_zero_of_aligned 0 align (isAligned_zero align hpos)
+
 end Radix.Alignment.Spec
