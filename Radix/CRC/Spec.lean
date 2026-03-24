@@ -226,6 +226,19 @@ where
 theorem reflectBits_zero_width (v : Nat) : reflectBits v 0 = 0 := by
   simp [reflectBits, reflectBits.go]
 
+/-- reflectBits is involutive for concrete widths (1-bit). -/
+example : reflectBits (reflectBits 1 1) 1 = 1 := by native_decide
+
+/-- reflectBits is involutive for concrete widths (4-bit). -/
+example : reflectBits (reflectBits 0b1010 4) 4 = 0b1010 := by native_decide
+
+/-- reflectBits is involutive for concrete 8-bit values. -/
+example : reflectBits (reflectBits 0xA5 8) 8 = 0xA5 := by native_decide
+
+/-- reflectBits involution for all 8-bit values. -/
+theorem reflectBits_involutive_8 :
+    ∀ v : Fin 256, reflectBits (reflectBits v.val 8) 8 = v.val := by native_decide
+
 /-! ## Additional Specification Properties -/
 
 /-- CRC of a single zero byte from the all-zeros initial value. -/
@@ -297,5 +310,145 @@ theorem crc32_reflectIn : CRCParams.crc32.reflectIn = true := rfl
 
 /-- CRC-32 uses reflected output. -/
 theorem crc32_reflectOut : CRCParams.crc32.reflectOut = true := rfl
+
+/-! ## GF(2) Polynomial Multiplication
+
+Multiplication in GF(2)[x] is polynomial multiplication where coefficient
+arithmetic is mod 2 (i.e., XOR for addition, AND for multiplication). -/
+
+namespace GF2Poly
+
+/-- Multiply two GF(2) polynomials.
+    Schoolbook shift-and-XOR: for each set bit in `a`, XOR `b` shifted left
+    by that bit position into the accumulator. Bounded to 128 bits. -/
+def mul (a b : GF2Poly) : GF2Poly :=
+  ⟨go a.coeffs b.coeffs 0 0⟩
+where
+  go (a b : Nat) (idx acc : Nat) : Nat :=
+    if idx ≥ 128 then acc
+    else if a == 0 then acc
+    else
+      let acc' := if a &&& 1 != 0 then acc ^^^ (b <<< idx) else acc
+      go (a >>> 1) b (idx + 1) acc'
+  termination_by 128 - idx
+
+/-- Division and remainder over GF(2).
+    Returns (quotient, remainder) such that a = quotient * b + remainder
+    with deg(remainder) < deg(b). Uses fuel to ensure termination. -/
+def divMod (a b : GF2Poly) (fuel : Nat := 256) : GF2Poly × GF2Poly :=
+  if b.coeffs == 0 then (zero, a)
+  else
+    let degB := b.degree
+    go a.coeffs b.coeffs degB 0 fuel
+where
+  go (rem : Nat) (divisor : Nat) (degDiv : Nat) (quot : Nat) : Nat → GF2Poly × GF2Poly
+    | 0 => (⟨quot⟩, ⟨rem⟩)
+    | fuel + 1 =>
+      if rem == 0 then (⟨quot⟩, ⟨0⟩)
+      else
+        let degR := Nat.log2 rem
+        if degR < degDiv then (⟨quot⟩, ⟨rem⟩)
+        else
+          let shift := degR - degDiv
+          let rem' := rem ^^^ (divisor <<< shift)
+          go rem' divisor degDiv (quot ||| (1 <<< shift)) fuel
+
+/-- GF(2) polynomial remainder (mod). -/
+def mod (a b : GF2Poly) : GF2Poly := (divMod a b).2
+
+/-- GF(2) polynomial quotient (div). -/
+def div (a b : GF2Poly) : GF2Poly := (divMod a b).1
+
+end GF2Poly
+
+/-! ## CRC as Polynomial Remainder
+
+The mathematical definition of CRC is: given a data polynomial D(x) and
+generator polynomial G(x), CRC = remainder of x^n * D(x) / G(x),
+where n = degree of G(x). -/
+
+/-- CRC as GF(2) polynomial remainder.
+    dataCoeffs represents the data as a polynomial, generator is the CRC polynomial
+    (with the implicit leading 1 bit, i.e., x^width + poly). -/
+def crcAsRemainder (dataCoeffs : Nat) (generator : Nat) (width : Nat) : Nat :=
+  let augmented := GF2Poly.mk (dataCoeffs <<< width)
+  let gen := GF2Poly.mk (generator ||| (1 <<< width))
+  (GF2Poly.mod augmented gen).coeffs
+
+/-! ## CRC Check Property Specification
+
+The fundamental CRC property: if a sender transmits data followed by the
+CRC value, the receiver computing CRC over the combined message gets zero
+(for non-reflected CRCs with xorOut=0). -/
+
+/-- The CRC check property for a non-reflected CRC with xorOut=0:
+    CRC(data ++ crc_bytes) should produce a fixed "good CRC" residue. -/
+def crcCheckProperty (params : CRCParams) (data crcBytes : List Nat) (combined : List Nat) : Prop :=
+  combined = data ++ crcBytes →
+  params.xorOut = 0 →
+  params.reflectIn = false →
+  params.reflectOut = false →
+  crcCompute params combined = 0
+
+/-! ## CRC Linearity Specification
+
+For linear CRCs (most standard CRCs), CRC(a XOR b) = CRC(a) XOR CRC(b)
+when init=0 and xorOut=0. This is a consequence of CRC being a linear
+function over GF(2). -/
+
+/-- CRC linearity property: CRC distributes over XOR for zero-init CRCs. -/
+def crcLinearProperty (poly width : Nat) (dataA dataB : List Nat) : Prop :=
+  let params : CRCParams := {
+    width := width, poly := poly, init := 0, xorOut := 0,
+    reflectIn := false, reflectOut := false
+  }
+  let xorData := List.zipWith (· ^^^ ·) dataA dataB
+  dataA.length = dataB.length →
+  crcCompute params xorData = crcCompute params dataA ^^^ crcCompute params dataB
+
+/-! ## GF(2) Multiplication Properties -/
+
+/-- GF(2) multiplication by zero gives zero. -/
+theorem gf2_mul_zero_left (a : GF2Poly) : GF2Poly.mul GF2Poly.zero a = GF2Poly.zero := by
+  simp [GF2Poly.mul, GF2Poly.zero]
+  unfold GF2Poly.mul.go
+  simp
+
+/-- Concrete verification: (x+1) * (x+1) = x^2 + 1 in GF(2)[x]. -/
+theorem gf2_mul_example :
+    GF2Poly.mul ⟨3⟩ ⟨3⟩ = ⟨5⟩ := by native_decide
+
+/-- Concrete verification: x * x = x^2 in GF(2)[x]. -/
+theorem gf2_mul_x_x :
+    GF2Poly.mul ⟨2⟩ ⟨2⟩ = ⟨4⟩ := by native_decide
+
+/-- Concrete verification: (x^2 + 1) * x = x^3 + x in GF(2)[x]. -/
+theorem gf2_mul_distribute :
+    GF2Poly.mul ⟨5⟩ ⟨2⟩ = ⟨10⟩ := by native_decide
+
+/-- GF(2) multiplication by one is identity (concrete). -/
+theorem gf2_mul_one_left :
+    GF2Poly.mul ⟨1⟩ ⟨7⟩ = ⟨7⟩ := by native_decide
+
+/-- GF(2) multiplication is commutative (concrete). -/
+theorem gf2_mul_comm_concrete :
+    GF2Poly.mul ⟨3⟩ ⟨5⟩ = GF2Poly.mul ⟨5⟩ ⟨3⟩ := by native_decide
+
+/-- GF(2) divMod example: x^3 + x + 1 divided by x + 1. -/
+theorem gf2_divmod_example :
+    GF2Poly.divMod ⟨0b1011⟩ ⟨0b11⟩ = (⟨0b110⟩, ⟨1⟩) := by native_decide
+
+/-- GF(2) mod example: x^3 + x + 1 mod (x + 1) = 1. -/
+theorem gf2_mod_example :
+    GF2Poly.mod ⟨0b1011⟩ ⟨0b11⟩ = ⟨1⟩ := by native_decide
+
+/-- Division by zero returns the dividend as remainder. -/
+theorem gf2_divmod_zero :
+    GF2Poly.divMod ⟨7⟩ ⟨0⟩ = (⟨0⟩, ⟨7⟩) := by native_decide
+
+/-- GF(2) division reconstruction: quotient * divisor + remainder = dividend. -/
+theorem gf2_divmod_reconstruct :
+    let (q, r) := GF2Poly.divMod ⟨0b1011⟩ ⟨0b11⟩
+    GF2Poly.add (GF2Poly.mul q ⟨0b11⟩) r = ⟨0b1011⟩ := by native_decide
 
 end Radix.CRC.Spec
