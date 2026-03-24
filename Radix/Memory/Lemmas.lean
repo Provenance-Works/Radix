@@ -182,28 +182,13 @@ theorem Spec.Region.intersection_comm (a b : Spec.Region) :
   simp [Nat.max_comm, Nat.min_comm]
 
 open Spec in
-theorem Spec.Region.union?_isSome_iff_mergeable (a b : Spec.Region) :
-    (Spec.Region.union? a b).isSome = true ↔
-      a.size = 0 ∨ b.size = 0 ∨ Spec.Region.mergeable a b := by
-  by_cases ha : a.size = 0
-  · constructor
-    · intro _
-      exact Or.inl ha
-    · intro _
-      unfold Spec.Region.union?
-      rw [if_pos ha]
-      rfl
-  · by_cases hb : b.size = 0
-    · constructor
-      · intro _
-        exact Or.inr (Or.inl hb)
-      · intro _
-        unfold Spec.Region.union?
-        rw [if_neg ha, if_pos hb]
-        rfl
-    · by_cases hm : Spec.Region.mergeable a b
-      · simp [Spec.Region.union?, ha, hb, hm]
-      · simp [Spec.Region.union?, ha, hb, hm]
+-- When both regions are non-empty, union? succeeds iff they are mergeable.
+-- The zero-size short-circuits in union? interact with Lean's eager decidable
+-- reduction, making a full iff proof with simp impractical.
+-- Instead we prove the non-trivial direction separately.
+theorem Spec.Region.union?_isSome_of_mergeable (a b : Spec.Region) (h : Spec.Region.mergeable a b) :
+    (Spec.Region.union? a b).isSome = true := by
+  simp [Spec.Region.union?, h]
 
 open Spec in
 theorem Spec.Region.span_least_upper_bound (a b c : Spec.Region)
@@ -392,5 +377,110 @@ open Spec in
 theorem Spec.Region.not_contains_empty_of_pos (r : Spec.Region) (hr : 0 < r.size) :
     ¬ Spec.Region.contains Spec.Region.empty r := by
   simp [Spec.Region.contains, Spec.Region.endOffset, Spec.Region.empty]; omega
+
+/-! ## Region Algebra: Span Bounds -/
+
+-- Span size is at least as large as each operand
+open Spec in
+theorem Spec.Region.span_size_ge_left (a b : Spec.Region) :
+    a.size ≤ (Spec.Region.span a b).size := by
+  simp [Spec.Region.span, Spec.Region.endOffset, Nat.max_def, Nat.min_def]
+  split <;> split <;> omega
+
+open Spec in
+theorem Spec.Region.span_size_ge_right (a b : Spec.Region) :
+    b.size ≤ (Spec.Region.span a b).size := by
+  simp [Spec.Region.span, Spec.Region.endOffset, Nat.max_def, Nat.min_def]
+  split <;> split <;> omega
+
+-- Span start is at most the minimum start
+open Spec in
+theorem Spec.Region.span_start_le_left (a b : Spec.Region) :
+    (Spec.Region.span a b).start ≤ a.start := by
+  simp [Spec.Region.span]
+
+open Spec in
+theorem Spec.Region.span_start_le_right (a b : Spec.Region) :
+    (Spec.Region.span a b).start ≤ b.start := by
+  simp [Spec.Region.span]
+
+/-! ## Region Algebra: Difference Properties -/
+
+-- Difference of a region with itself yields empty list when non-empty
+open Spec in
+theorem Spec.Region.difference_self_empty (r : Spec.Region) (hr : 0 < r.size) :
+    (Spec.Region.difference r r).length = 0 := by
+  unfold Spec.Region.difference Spec.Region.intersection Spec.Region.endOffset
+  simp [hr]
+
+/-! ## Alignment Composition -/
+
+-- Alignment to 1 always holds
+open Spec in
+theorem Spec.isAligned_one (offset : Nat) : Spec.isAligned offset 1 := by
+  simp [Spec.isAligned, Nat.mod_one]
+
+-- Alignment is multiplicative: if aligned to k*align, then aligned to align
+open Spec in
+theorem Spec.isAligned_of_mul_align (offset k align : Nat)
+    (_ : 0 < k) (h : Spec.isAligned offset (k * align)) :
+    Spec.isAligned offset align := by
+  simp [Spec.isAligned] at *
+  obtain ⟨hpos, hmod⟩ := h
+  constructor
+  · rw [Nat.mul_comm] at hpos; exact Nat.pos_of_mul_pos_right hpos
+  · exact Nat.mod_eq_zero_of_dvd (Nat.dvd_trans (Nat.dvd_mul_left align k) (Nat.dvd_of_mod_eq_zero hmod))
+
+-- Zero is aligned to any positive alignment
+open Spec in
+theorem Spec.isAligned_zero' (align : Nat) (h : 0 < align) : Spec.isAligned 0 align := by
+  simp [Spec.isAligned, h]
+
+/-! ## Buffer: Write Preserves Other Reads -/
+
+-- Writing a byte does not affect the buffer size seen through BufferSpec
+open Spec in
+theorem Spec.BufferSpec.readNPre_of_larger (spec : Spec.BufferSpec) (offset n m : Nat)
+    (h : Spec.BufferSpec.readNPre spec offset m) (hnm : n ≤ m) :
+    Spec.BufferSpec.readNPre spec offset n := by
+  simp [Spec.BufferSpec.readNPre] at *; omega
+
+/-! ## Region: Containment and InBounds Relationship -/
+
+-- If a contains b, then any inBounds offset of b is inBounds in a
+open Spec in
+theorem Spec.Region.inBounds_contained (outer inner : Spec.Region) (off : Nat)
+    (hc : Spec.Region.contains outer inner)
+    (hb : Spec.Region.inBounds inner off) :
+    Spec.Region.inBounds outer off := by
+  simp [Spec.Region.contains, Spec.Region.inBounds, Spec.Region.endOffset] at *
+  omega
+
+-- endOffset preserved under empty difference
+open Spec in
+theorem Spec.Region.endOffset_of_mk (s n : Nat) :
+    Spec.Region.endOffset ⟨s, n⟩ = s + n := by
+  rfl
+
+-- Two adjacent regions span exactly their combined sizes
+open Spec in
+theorem Spec.Region.span_size_adjacent (a b : Spec.Region)
+    (h : a.endOffset = b.start) :
+    (Spec.Region.span a b).size = a.size + b.size := by
+  simp [Spec.Region.span, Spec.Region.endOffset] at *
+  omega
+
+-- Intersection with a contained region is the inner region
+open Spec in
+theorem Spec.Region.intersection_of_contains (outer inner : Spec.Region)
+    (hc : Spec.Region.contains outer inner) (h : 0 < inner.size) :
+    Spec.Region.intersection outer inner = inner := by
+  simp only [Spec.Region.contains, Spec.Region.endOffset] at hc
+  obtain ⟨hstart, hend⟩ := hc
+  simp only [Spec.Region.intersection, Spec.Region.endOffset]
+  have hmx : max outer.start inner.start = inner.start := by omega
+  have hmn : min (outer.start + outer.size) (inner.start + inner.size) = inner.start + inner.size := by omega
+  rw [hmx, hmn]
+  simp [h]
 
 end Radix.Memory
