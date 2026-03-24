@@ -192,4 +192,53 @@ theorem spec_zeros_popcount (n : Nat) :
     (Spec.BitmapState.zeros n).popcount = 0 :=
   Spec.zeros_popcount n
 
+/-! ## Additional Spec-Level Properties -/
+
+/-- (Spec) Ones have popcount equal to size. -/
+theorem spec_ones_popcount (n : Nat) :
+    (Spec.BitmapState.ones n).popcount = n :=
+  Spec.ones_popcount n
+
+/-- (Spec) Set is idempotent. -/
+theorem spec_set_set_same (bm : Spec.BitmapState) (idx : Nat) (h : idx < bm.size) :
+    (bm.set idx).set idx = bm.set idx :=
+  Spec.set_set_same bm idx h
+
+/-- (Spec) Clear is idempotent. -/
+theorem spec_clear_clear_same (bm : Spec.BitmapState) (idx : Nat) (h : idx < bm.size) :
+    (bm.clear idx).clear idx = bm.clear idx :=
+  Spec.clear_clear_same bm idx h
+
+/-- (Spec) Set then clear = clear. -/
+theorem spec_set_clear_absorb (bm : Spec.BitmapState) (idx : Nat) (h : idx < bm.size) :
+    (bm.set idx).clear idx = bm.clear idx :=
+  Spec.set_clear_same bm idx h
+
+/-- (Spec) Clear then set = set. -/
+theorem spec_clear_set_absorb (bm : Spec.BitmapState) (idx : Nat) (h : idx < bm.size) :
+    (bm.clear idx).set idx = bm.set idx :=
+  Spec.clear_set_same bm idx h
+
+/-- (Spec) Set at different indices commutes. -/
+theorem spec_set_set_comm (bm : Spec.BitmapState) (i j : Nat)
+    (hi : i < bm.size) (hj : j < bm.size) (hne : i ≠ j) :
+    (bm.set i).set j = (bm.set j).set i :=
+  Spec.set_set_comm bm i j hi hj hne
+
+/-- (Spec) Clear at different indices commutes. -/
+theorem spec_clear_clear_comm (bm : Spec.BitmapState) (i j : Nat)
+    (hi : i < bm.size) (hj : j < bm.size) (hne : i ≠ j) :
+    (bm.clear i).clear j = (bm.clear j).clear i :=
+  Spec.clear_clear_comm bm i j hi hj hne
+
+/-- (Spec) Toggle flips the tested bit. -/
+theorem spec_toggle_test_eq (bm : Spec.BitmapState) (idx : Nat) (h : idx < bm.size) :
+    (bm.toggle idx).test idx = !(bm.test idx) :=
+  Spec.toggle_test_eq bm idx h
+
+/-- (Spec) Ones test true for valid indices. -/
+theorem spec_ones_test (n idx : Nat) (h : idx < n) :
+    (Spec.BitmapState.ones n).test idx = true :=
+  Spec.ones_test n idx h
+
 end Radix.Bitmap.Lemmas

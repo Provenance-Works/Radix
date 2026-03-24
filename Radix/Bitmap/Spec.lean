@@ -288,4 +288,73 @@ theorem toggle_out_of_range (bm : BitmapState) (idx : Nat) (h : ¬idx < bm.size)
     bm.toggle idx = bm := by
   simp [BitmapState.toggle, h]
 
+-- ════════════════════════════════════════════════════════════════════
+-- Commutativity of Operations at Different Indices
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Set at different indices commutes. -/
+theorem set_set_comm (bm : BitmapState) (i j : Nat) (hi : i < bm.size) (hj : j < bm.size)
+    (hne : i ≠ j) :
+    (bm.set i).set j = (bm.set j).set i := by
+  unfold BitmapState.set
+  simp [hi, hj]
+  congr 1; funext k
+  by_cases hki : k = i <;> by_cases hkj : k = j <;> simp_all
+
+/-- Clear at different indices commutes. -/
+theorem clear_clear_comm (bm : BitmapState) (i j : Nat) (hi : i < bm.size) (hj : j < bm.size)
+    (hne : i ≠ j) :
+    (bm.clear i).clear j = (bm.clear j).clear i := by
+  unfold BitmapState.clear
+  simp [hi, hj]
+  congr 1; funext k
+  by_cases hki : k = i <;> by_cases hkj : k = j <;> simp_all
+
+/-- Set and clear at different indices commute. -/
+theorem set_clear_comm (bm : BitmapState) (i j : Nat) (hi : i < bm.size) (hj : j < bm.size)
+    (hne : i ≠ j) :
+    (bm.set i).clear j = (bm.clear j).set i := by
+  unfold BitmapState.set BitmapState.clear
+  simp [hi, hj]
+  congr 1; funext k
+  by_cases hki : k = i <;> by_cases hkj : k = j <;> simp_all
+
+/-- Toggle at different indices commutes. -/
+theorem toggle_toggle_comm (bm : BitmapState) (i j : Nat) (hi : i < bm.size) (hj : j < bm.size)
+    (hne : i ≠ j) :
+    (bm.toggle i).toggle j = (bm.toggle j).toggle i := by
+  unfold BitmapState.toggle
+  simp [hi, hj]
+  congr 1; funext k
+  by_cases hki : k = i <;> by_cases hkj : k = j <;> simp_all
+
+-- ════════════════════════════════════════════════════════════════════
+-- FindFirstSet Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- FindFirstSet on zeros returns none. -/
+theorem zeros_findFirstSet (n : Nat) :
+    (BitmapState.zeros n).findFirstSet = none := by
+  simp [BitmapState.zeros, BitmapState.findFirstSet]
+  suffices ∀ m idx, BitmapState.findFirstSet.go { size := n, getBit := fun _ => false } m idx = none by
+    exact this n 0
+  intro m
+  induction m with
+  | zero => intro _; rfl
+  | succ k ih => intro idx; simp [BitmapState.findFirstSet.go]; intro _; exact ih _
+
+/-- FindFirstClear on zeros returns `some 0` when n > 0. -/
+theorem zeros_findFirstClear (n : Nat) (hn : 0 < n) :
+    (BitmapState.zeros n).findFirstClear = some 0 := by
+  simp [BitmapState.zeros, BitmapState.findFirstClear]
+  cases n with
+  | zero => omega
+  | succ k => simp [BitmapState.findFirstClear.go]
+
+/-- Zeros bitmap has size n. -/
+theorem zeros_size (n : Nat) : (BitmapState.zeros n).size = n := rfl
+
+/-- Ones bitmap has size n. -/
+theorem ones_size (n : Nat) : (BitmapState.ones n).size = n := rfl
+
 end Radix.Bitmap.Spec
