@@ -142,4 +142,47 @@ theorem pop_buf_size (rb : RingBuf) (v : Radix.UInt8) (rb' : RingBuf)
   subst heq
   exact rb.hSize
 
+/-! ## Additional Implementation Lemmas -/
+
+/-- After push, buffer is not empty. -/
+theorem push_not_isEmpty (rb : RingBuf) (val : Radix.UInt8) (rb' : RingBuf)
+    (h : rb.push val = some rb') :
+    rb'.isEmpty = false := by
+  simp [RingBuf.push] at h
+  obtain ⟨_, heq⟩ := h
+  subst heq
+  simp [RingBuf.isEmpty]
+
+/-- After clear then push, count = 1. -/
+theorem clear_push_count (rb : RingBuf) (val : Radix.UInt8) (rb' : RingBuf)
+    (h : (rb.clear).push val = some rb') :
+    rb'.count = 1 := by
+  have hc := clear_count rb
+  have := push_count (rb.clear) val rb' h
+  omega
+
+/-- Push preserves the buffer size invariant (buf.size = capacity). -/
+theorem push_hSize (rb : RingBuf) (val : Radix.UInt8) (rb' : RingBuf)
+    (h : rb.push val = some rb') :
+    rb'.buf.size = rb'.capacity := by
+  rw [push_capacity rb val rb' h]
+  exact push_buf_size rb val rb' h
+
+/-- Pop preserves the buffer size invariant (buf.size = capacity). -/
+theorem pop_hSize (rb : RingBuf) (v : Radix.UInt8) (rb' : RingBuf)
+    (h : rb.pop = some (v, rb')) :
+    rb'.buf.size = rb'.capacity := by
+  rw [pop_capacity rb v rb' h]
+  exact pop_buf_size rb v rb' h
+
+/-- New buffer with positive capacity allows push. -/
+theorem new_push_isSome (cap : Nat) (val : Radix.UInt8) (hcap : 0 < cap) :
+    (RingBuf.new cap).push val ≠ none := by
+  simp [RingBuf.push, RingBuf.new, hcap]
+
+/-- Pop after clear is always none. -/
+theorem clear_pop_none (rb : RingBuf) :
+    (rb.clear).pop = none := by
+  simp [RingBuf.pop, RingBuf.clear]
+
 end Radix.RingBuffer

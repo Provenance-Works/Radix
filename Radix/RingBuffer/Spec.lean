@@ -271,4 +271,75 @@ theorem isEmpty_iff_count_zero (s : RingBufferState) :
   · intro h; unfold RingBufferState.isEmpty at h; simp [RingBufferState.count, h]
   · intro h; unfold RingBufferState.isEmpty; simp [RingBufferState.count] at h; exact h
 
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Specification Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- The remaining space in a buffer with invariant is `capacity - count`. -/
+theorem remaining_space (s : RingBufferState) :
+    s.capacity - s.count = s.capacity - s.contents.length := by
+  rfl
+
+/-- An empty buffer is not full when capacity > 0. -/
+theorem empty_not_full (cap : Nat) (hcap : 0 < cap) :
+    ¬(RingBufferState.empty cap).isFull := by
+  simp [RingBufferState.empty, RingBufferState.isFull, RingBufferState.count]
+  omega
+
+/-- A full buffer is not empty when capacity > 0. -/
+theorem full_not_empty (s : RingBufferState) (hfull : s.isFull) (hcap : 0 < s.capacity) :
+    ¬s.isEmpty := by
+  intro he
+  simp [RingBufferState.isEmpty] at he
+  simp [RingBufferState.isFull, RingBufferState.count, he] at hfull
+  omega
+
+/-- Pop preserves FIFO order: after pop, remaining contents are the tail. -/
+theorem pop_contents (s : RingBufferState) (v : UInt8) (s' : RingBufferState)
+    (h : RingBufferState.popSpec s = some (v, s')) :
+    s.contents = v :: s'.contents := by
+  unfold RingBufferState.popSpec at h
+  match hc : s.contents with
+  | [] => simp [hc] at h
+  | hd :: tl =>
+    simp [hc] at h
+    obtain ⟨rfl, rfl⟩ := h
+    rfl
+
+/-- Push appends to the end of contents. -/
+theorem push_contents (s : RingBufferState) (val : UInt8) (s' : RingBufferState)
+    (h : RingBufferState.pushSpec s val = some s') :
+    s'.contents = s.contents ++ [val] := by
+  unfold RingBufferState.pushSpec at h
+  split at h
+  · contradiction
+  · injection h with h; subst h; rfl
+
+/-- After n pushes on an empty buffer, count = n (when n ≤ cap). -/
+theorem empty_push_count (cap : Nat) :
+    (RingBufferState.empty cap).count = 0 := by
+  simp [RingBufferState.empty, RingBufferState.count]
+
+/-- Peek on empty buffer returns none. -/
+theorem peek_empty (cap : Nat) :
+    RingBufferState.peekSpec (RingBufferState.empty cap) = none := by
+  simp [RingBufferState.peekSpec, RingBufferState.empty]
+
+/-- Pop then push does not change count (net zero). -/
+theorem pop_push_count (s : RingBufferState) (v : UInt8) (spop s' : RingBufferState)
+    (val : UInt8)
+    (hpop : RingBufferState.popSpec s = some (v, spop))
+    (hpush : RingBufferState.pushSpec spop val = some s')
+    (hinv : s.invariant) :
+    s'.count = s.count := by
+  have hpc := pop_count s v spop hpop
+  have hpu := push_count spop val (by
+    intro hf
+    simp [RingBufferState.isFull] at hf
+    simp [RingBufferState.invariant] at hinv
+    have hcap := pop_capacity s v spop hpop
+    simp [hcap] at hf
+    omega) s' hpush
+  omega
+
 end Radix.RingBuffer.Spec
