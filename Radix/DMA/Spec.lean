@@ -436,4 +436,75 @@ theorem Descriptor.destinationChunk_start_mono (d : Descriptor) (s1 s2 : Nat) (h
   simp only [Descriptor.destinationChunk, Descriptor.stepOffset]
   exact Nat.add_le_add_left (Nat.mul_le_mul_right d.burstBytes h) _
 
+-- ════════════════════════════════════════════════════════════════════
+-- Monotonicity and Progress Theorems
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Bytes completed is monotonically nondecreasing with steps. -/
+theorem Descriptor.bytesCompleted_mono (d : Descriptor) (s1 s2 : Nat) (h : s1 ≤ s2) :
+    d.bytesCompleted s1 ≤ d.bytesCompleted s2 := by
+  simp only [Descriptor.bytesCompleted]
+  exact min_le_min_right _ (Nat.mul_le_mul_right _ h)
+
+/-- Bytes remaining is monotonically nonincreasing with steps. -/
+theorem Descriptor.bytesRemaining_mono (d : Descriptor) (s1 s2 : Nat) (h : s1 ≤ s2) :
+    d.bytesRemaining s2 ≤ d.bytesRemaining s1 := by
+  simp only [Descriptor.bytesRemaining]
+  have := d.bytesCompleted_mono s1 s2 h
+  omega
+
+/-- Bytes completed never exceeds total bytes. -/
+theorem Descriptor.bytesCompleted_le_bytesMoved (d : Descriptor) (steps : Nat) :
+    d.bytesCompleted steps ≤ d.bytesMoved := by
+  simp [Descriptor.bytesCompleted]
+
+/-- Bytes completed plus bytes remaining equals total bytes. -/
+theorem Descriptor.bytesCompleted_add_remaining (d : Descriptor) (steps : Nat) :
+    d.bytesCompleted steps + d.bytesRemaining steps = d.bytesMoved := by
+  simp [Descriptor.bytesRemaining]
+  have := d.bytesCompleted_le_bytesMoved steps
+  omega
+
+/-- A descriptor with stepCount ≤ stepsCompleted is complete. -/
+theorem Descriptor.isComplete_iff (d : Descriptor) (stepsCompleted : Nat) :
+    d.isComplete stepsCompleted ↔ d.stepCount ≤ stepsCompleted := by
+  rfl
+
+/-- Completion is monotonic: once complete, always complete. -/
+theorem Descriptor.isComplete_mono (d : Descriptor) (s1 s2 : Nat)
+    (h : s1 ≤ s2) (hc : d.isComplete s1) : d.isComplete s2 := by
+  simp [Descriptor.isComplete] at *; omega
+
+/-- Chain total bytes is nonnegative (trivial but useful). -/
+theorem chainTotalBytes_nonneg (c : List Descriptor) :
+    0 ≤ chainTotalBytes c := Nat.zero_le _
+
+/-- Reversing a chain preserves total bytes. -/
+theorem chainTotalBytes_reverse (c : List Descriptor) :
+    chainTotalBytes c.reverse = chainTotalBytes c := by
+  simp only [chainTotalBytes, List.foldl_reverse]
+  induction c with
+  | nil => rfl
+  | cons d rest ih =>
+    simp only [List.foldr_cons, List.foldl_cons, Nat.zero_add]
+    rw [ih]
+    rw [show d.bytesMoved = d.bytesMoved + 0 from by omega]
+    rw [foldl_bytesMoved_shift]
+    omega
+
+/-- Reversing a chain preserves validity. -/
+theorem chainValid_reverse (c : List Descriptor) :
+    chainValid c.reverse ↔ chainValid c := by
+  constructor
+  · intro h d hd; exact h d (List.mem_reverse.mpr hd)
+  · intro h d hd; exact h d (List.mem_reverse.mp hd)
+
+/-- Priority toNat is injective. -/
+theorem Priority.toNat_injective (p1 p2 : Priority) (h : p1.toNat = p2.toNat) : p1 = p2 := by
+  cases p1 <;> cases p2 <;> simp [Priority.toNat] at h <;> rfl
+
+/-- Priority toNat is bounded. -/
+theorem Priority.toNat_le_three (p : Priority) : p.toNat ≤ 3 := by
+  cases p <;> simp [Priority.toNat]
+
 end Radix.DMA.Spec
