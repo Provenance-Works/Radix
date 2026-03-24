@@ -150,6 +150,22 @@ def chainTotalBytes (chain : List Descriptor) : Nat :=
 def isChainAligned (chain : List Descriptor) (align : Nat) : Bool :=
   chain.all (fun d => isDescriptorAligned d align)
 
+private def allDisjointFrom (region : Radix.Memory.Spec.Region)
+    (rest : List Radix.Memory.Spec.Region) : Bool :=
+  rest.all (fun other => decide (Radix.Memory.Spec.Region.disjoint region other))
+
+private def regionsPairwiseDisjoint : List Radix.Memory.Spec.Region → Bool
+  | [] => true
+  | region :: rest => allDisjointFrom region rest && regionsPairwiseDisjoint rest
+
+/-- Check that all source regions in a chain are pairwise disjoint. -/
+def chainSourcesDisjoint (chain : List Descriptor) : Bool :=
+  regionsPairwiseDisjoint (chain.map (·.source))
+
+/-- Check that all destination regions in a chain are pairwise disjoint. -/
+def chainDestinationsDisjoint (chain : List Descriptor) : Bool :=
+  regionsPairwiseDisjoint (chain.map (·.destination))
+
 /-- Simulate a chain of DMA copies applied sequentially. -/
 def simulateChain (src dst : ByteArray) (chain : List Descriptor) : Option ByteArray :=
   chain.foldlM (fun currentDst d => simulateCopy src currentDst d) dst
