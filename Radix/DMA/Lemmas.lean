@@ -229,4 +229,52 @@ theorem simulateChain_nil (src dst : ByteArray) :
     simulateChain src dst [] = some dst := by
   simp [simulateChain]
 
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Transfer Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Burst transfer step count is at least 1 for valid descriptors with burst atomicity. -/
+theorem stepCount_burst_pos (d : Descriptor) (bytes : Nat)
+    (hb : d.atomicity = .burst bytes) (hbpos : 0 < bytes) (hsize : 0 < d.source.size) :
+    0 < stepCount d := by
+  simp [stepCount, hb]
+  exact ⟨hbpos, by omega⟩
+
+/-- Chain total bytes distributes over cons (Layer 2 bridge). -/
+theorem chainTotalBytes_cons (d : Descriptor) (rest : List Descriptor) :
+    chainTotalBytes (d :: rest) = bytesMoved d + chainTotalBytes rest := by
+  simp [chainTotalBytes, Spec.chainTotalBytes_cons, bytesMoved, Descriptor.bytesMoved]
+
+/-- Valid chain implies each element is valid (via spec bridge). -/
+theorem chainValid_forall (chain : List Descriptor)
+    (h : isChainValid chain = true) (d : Descriptor) (hd : d ∈ chain) :
+    d.valid := by
+  exact (isValid_iff_valid d).mp (ops_isChainValid_forall chain h d hd)
+
+/-- bytesMoved of a valid descriptor is positive. -/
+theorem bytesMoved_pos_of_valid (d : Descriptor) (h : isValid d = true) :
+    0 < bytesMoved d := by
+  exact bytesMoved_pos d ((isValid_iff_valid d).mp h)
+
+/-- Chain total bytes of append (Layer 2 bridge). -/
+theorem chainTotalBytes_append (c1 c2 : List Descriptor) :
+    chainTotalBytes (c1 ++ c2) = chainTotalBytes c1 + chainTotalBytes c2 := by
+  simp [chainTotalBytes, Spec.chainTotalBytes_append]
+
+/-- (Spec) Bytes completed plus remaining equals total for any step count. -/
+theorem spec_bytesCompleted_add_remaining (d : Descriptor) (steps : Nat) :
+    Spec.Descriptor.bytesCompleted d steps + Spec.Descriptor.bytesRemaining d steps = d.bytesMoved :=
+  Spec.Descriptor.bytesCompleted_add_remaining d steps
+
+/-- (Spec) Completion is stable: once complete, always complete. -/
+theorem spec_isComplete_mono (d : Descriptor) (s1 s2 : Nat)
+    (h : s1 ≤ s2) (hc : Spec.Descriptor.isComplete d s1) :
+    Spec.Descriptor.isComplete d s2 :=
+  Spec.Descriptor.isComplete_mono d s1 s2 h hc
+
+/-- (Spec) Chain validity is preserved under reversal. -/
+theorem spec_chainValid_reverse (c : List Descriptor) :
+    Spec.chainValid c.reverse ↔ Spec.chainValid c :=
+  Spec.chainValid_reverse c
+
 end Radix.DMA
