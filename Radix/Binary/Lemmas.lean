@@ -31,25 +31,62 @@ open Spec
 
 /-! ## PrimType Properties -/
 
-theorem PrimType.byteSize_pos (p : PrimType) : 0 < p.byteSize := by
-  cases p <;> simp [PrimType.byteSize]
+theorem PrimType.byteSize_pos (p : PrimType) : 0 < p.byteSize ∨ p = .bytes 0 := by
+  cases p with
+  | byte => simp [PrimType.byteSize]
+  | uint16 e => simp [PrimType.byteSize]
+  | uint32 e => simp [PrimType.byteSize]
+  | uint64 e => simp [PrimType.byteSize]
+  | bytes count =>
+    by_cases h : count = 0
+    · right
+      simp [h]
+    · left
+      simp [PrimType.byteSize]
+      omega
 
 /-! ## Format Size Properties -/
 
 theorem Format.fixedSize_byte (name : String) :
-    (Format.byte name).fixedSize = some 1 := rfl
+    (Format.byte name).fixedSize = some 1 := by
+  simp [Format.fixedSize, Format.fixedEndOffset]
 
 theorem Format.fixedSize_uint16 (name : String) (e : Spec.Endian) :
-    (Format.uint16 name e).fixedSize = some 2 := rfl
+    (Format.uint16 name e).fixedSize = some 2 := by
+  simp [Format.fixedSize, Format.fixedEndOffset]
 
 theorem Format.fixedSize_uint32 (name : String) (e : Spec.Endian) :
-    (Format.uint32 name e).fixedSize = some 4 := rfl
+    (Format.uint32 name e).fixedSize = some 4 := by
+  simp [Format.fixedSize, Format.fixedEndOffset]
 
 theorem Format.fixedSize_uint64 (name : String) (e : Spec.Endian) :
-    (Format.uint64 name e).fixedSize = some 8 := rfl
+    (Format.uint64 name e).fixedSize = some 8 := by
+  simp [Format.fixedSize, Format.fixedEndOffset]
+
+theorem Format.fixedSize_bytes (name : String) (count : Nat) :
+    (Format.bytes name count).fixedSize = some count := by
+  simp [Format.fixedSize, Format.fixedEndOffset]
+
+theorem Format.fixedSize_lengthPrefixedBytes (name : String) (prefixBytes : Nat) (e : Spec.Endian) :
+    (Format.lengthPrefixedBytes name prefixBytes e).fixedSize = none := by
+  simp [Format.fixedSize, Format.fixedEndOffset]
+
+theorem Format.fixedSize_countPrefixedArray (name : String) (prefixBytes : Nat)
+    (e : Spec.Endian) (elem : Format) :
+    (Format.countPrefixedArray name prefixBytes e elem).fixedSize = none := by
+  simp [Format.fixedSize, Format.fixedEndOffset]
+
+theorem Format.fixedSize_constBytes (value : ByteArray) :
+    (Format.constBytes value).fixedSize = some value.size := by
+  simp [Format.fixedSize, Format.fixedEndOffset]
 
 theorem Format.fixedSize_padding (n : Nat) :
-    (Format.padding n).fixedSize = some n := rfl
+    (Format.padding n).fixedSize = some n := by
+  simp [Format.fixedSize, Format.fixedEndOffset]
+
+theorem Format.fixedSize_align (n : Nat) :
+    (Format.align n).fixedSize = some 0 := by
+  simp [Format.fixedSize, Format.fixedEndOffset, Spec.alignedOffset, Spec.paddingToAlign]
 
 /-! ## FormatSpec Properties -/
 
@@ -67,6 +104,22 @@ theorem Format.fieldNames_byte (name : String) :
 theorem Format.fieldNames_padding (n : Nat) :
     (Format.padding n).fieldNames = [] := rfl
 
+theorem Format.fieldNames_align (n : Nat) :
+  (Format.align n).fieldNames = [] := rfl
+
+theorem Format.fieldNames_bytes (name : String) (count : Nat) :
+    (Format.bytes name count).fieldNames = [name] := rfl
+
+theorem Format.fieldNames_lengthPrefixedBytes (name : String) (prefixBytes : Nat) (e : Spec.Endian) :
+  (Format.lengthPrefixedBytes name prefixBytes e).fieldNames = [name] := rfl
+
+theorem Format.fieldNames_countPrefixedArray (name : String) (prefixBytes : Nat)
+    (e : Spec.Endian) (elem : Format) :
+  (Format.countPrefixedArray name prefixBytes e elem).fieldNames = name :: elem.fieldNames := rfl
+
+theorem Format.fieldNames_constBytes (value : ByteArray) :
+    (Format.constBytes value).fieldNames = [] := rfl
+
 /-! ## Field count properties -/
 
 theorem Format.fieldCount_byte (name : String) :
@@ -74,6 +127,22 @@ theorem Format.fieldCount_byte (name : String) :
 
 theorem Format.fieldCount_padding (n : Nat) :
     (Format.padding n).fieldCount = 0 := rfl
+
+theorem Format.fieldCount_align (n : Nat) :
+  (Format.align n).fieldCount = 0 := rfl
+
+theorem Format.fieldCount_bytes (name : String) (count : Nat) :
+    (Format.bytes name count).fieldCount = 1 := rfl
+
+theorem Format.fieldCount_lengthPrefixedBytes (name : String) (prefixBytes : Nat) (e : Spec.Endian) :
+  (Format.lengthPrefixedBytes name prefixBytes e).fieldCount = 1 := rfl
+
+theorem Format.fieldCount_countPrefixedArray (name : String) (prefixBytes : Nat)
+    (e : Spec.Endian) (elem : Format) :
+  (Format.countPrefixedArray name prefixBytes e elem).fieldCount = 1 + elem.fieldCount := rfl
+
+theorem Format.fieldCount_constBytes (value : ByteArray) :
+    (Format.constBytes value).fieldCount = 0 := rfl
 
 theorem Format.fieldCount_seq (a b : Format) :
     (Format.seq a b).fieldCount = a.fieldCount + b.fieldCount := rfl
@@ -120,14 +189,27 @@ theorem PrimType.byteSize_uint32 (e : Spec.Endian) :
 theorem PrimType.byteSize_uint64 (e : Spec.Endian) :
     (PrimType.uint64 e).byteSize = 8 := rfl
 
+theorem PrimType.byteSize_bytes (count : Nat) :
+  (PrimType.bytes count).byteSize = count := rfl
+
 /-- All byte sizes are powers of 2 (or 1). -/
 theorem PrimType.byteSize_isPow2Or1 (p : PrimType) :
-    p.byteSize = 1 ∨ p.byteSize = 2 ∨ p.byteSize = 4 ∨ p.byteSize = 8 := by
-  cases p <;> simp [PrimType.byteSize]
+    p = .byte
+    ∨ (∃ e, p = .uint16 e)
+    ∨ (∃ e, p = .uint32 e)
+    ∨ (∃ e, p = .uint64 e)
+    ∨ (∃ count, p = .bytes count) := by
+  cases p <;> simp
 
-/-- byteSize is at most 8. -/
-theorem PrimType.byteSize_le_8 (p : PrimType) : p.byteSize ≤ 8 := by
-  cases p <;> simp [PrimType.byteSize]
+/-- Non-blob primitive widths fit within eight bytes. -/
+theorem PrimType.byteSize_le_8_of_not_bytes (p : PrimType)
+    (h : ∀ count, p ≠ .bytes count) : p.byteSize ≤ 8 := by
+  cases p with
+  | byte => simp [PrimType.byteSize]
+  | uint16 e => simp [PrimType.byteSize]
+  | uint32 e => simp [PrimType.byteSize]
+  | uint64 e => simp [PrimType.byteSize]
+  | bytes count => exact False.elim (h count rfl)
 
 -- ════════════════════════════════════════════════════════════════════
 -- FormatSpec Validity Properties
@@ -219,11 +301,16 @@ theorem Format.fieldNames_uint32 (name : String) (e : Spec.Endian) :
 theorem Format.fieldNames_uint64 (name : String) (e : Spec.Endian) :
     (Format.uint64 name e).fieldNames = [name] := rfl
 
-/-- fixedSize of a seq with two known sizes is their sum. -/
-theorem Format.fixedSize_seq (a b : Format) (sa sb : Nat)
-    (ha : a.fixedSize = some sa) (hb : b.fixedSize = some sb) :
-    (Format.seq a b).fixedSize = some (sa + sb) := by
-  simp [Format.fixedSize, ha, hb]
+theorem Format.fieldNames_bytes' (name : String) (count : Nat) :
+  (Format.bytes name count).fieldNames = [name] := rfl
+
+/-- `seq` computes its fixed end offset by threading the intermediate offset. -/
+theorem Format.fixedEndOffset_seq (offset : Nat) (a b : Format) :
+    Format.fixedEndOffset offset (Format.seq a b) =
+      match Format.fixedEndOffset offset a with
+      | some off => Format.fixedEndOffset off b
+      | none => none := by
+  cases h : Format.fixedEndOffset offset a <;> simp [Format.fixedEndOffset, h]
 
 /-- fieldCount of a singleton byte format is 1. -/
 theorem Format.fieldCount_uint16 (name : String) (e : Spec.Endian) :
@@ -234,6 +321,9 @@ theorem Format.fieldCount_uint32 (name : String) (e : Spec.Endian) :
 
 theorem Format.fieldCount_uint64 (name : String) (e : Spec.Endian) :
     (Format.uint64 name e).fieldCount = 1 := rfl
+
+theorem Format.fieldCount_bytes' (name : String) (count : Nat) :
+  (Format.bytes name count).fieldCount = 1 := rfl
 
 -- ════════════════════════════════════════════════════════════════════
 -- BitField Properties
@@ -283,7 +373,10 @@ example : Spec.paddingToAlign 5 4 = 3 := by native_decide
 example : Spec.alignedOffset 5 4 = 8 := by native_decide
 
 /-- VarLen length-prefixed has 2-byte overhead. -/
-example : Spec.VarLenType.minOverhead (.lengthPrefixed 2) = 2 := by rfl
+example : Spec.VarLenType.minOverhead (.lengthPrefixed 2 .little) = 2 := by rfl
+
+/-- VarLen count-prefixed arrays contribute only the prefix to the minimum size. -/
+example : Spec.VarLenType.minOverhead (.countPrefixedArray 2 .little 4) = 2 := by rfl
 
 /-- VarLen null-terminated has 1-byte overhead. -/
 example : Spec.VarLenType.minOverhead .nullTerminated = 1 := by rfl
