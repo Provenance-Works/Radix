@@ -75,12 +75,12 @@ sequenceDiagram
     Buf-->>Ser: ByteArray
     Ser-->>App: ByteArray（シリアライズ済み）
 
-    App->>Par: parseFormat format data
+    App->>Par: parseFormatExact data format
     Par->>Buf: エンディアン付きフィールド読み取り
     Buf-->>Par: FieldValues
     Par-->>App: List FieldValue（パース済み）
 
-    Note over Ser,Par: 証明: parse ∘ serialize = id
+    Note over Ser,Par: exact parse は余剰バイトを拒否し、prefix parse は parsePrefix を使う
 ```
 
 ## LEB128 エンコード/デコードフロー
