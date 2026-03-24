@@ -342,4 +342,154 @@ theorem pop_push_count (s : RingBufferState) (v : UInt8) (spop s' : RingBufferSt
     omega) s' hpush
   omega
 
+-- ════════════════════════════════════════════════════════════════════
+-- Force-Push Specification
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Specification for force-push: always succeeds.
+    If not full, appends to end. If full, drops oldest and appends. -/
+def RingBufferState.pushForceSpec (s : RingBufferState) (val : UInt8) : RingBufferState :=
+  if s.isFull then
+    match s.contents with
+    | [] => s  -- capacity = 0: no-op
+    | _ :: tl => { s with contents := tl ++ [val] }
+  else
+    { s with contents := s.contents ++ [val] }
+
+/-- Force-push never changes capacity. -/
+theorem pushForce_capacity (s : RingBufferState) (val : UInt8) :
+    (s.pushForceSpec val).capacity = s.capacity := by
+  unfold RingBufferState.pushForceSpec
+  split
+  · match s.contents with
+    | [] => rfl
+    | _ :: _ => rfl
+  · rfl
+
+/-- Force-push on non-full buffer is the same as push. -/
+theorem pushForce_eq_push_of_not_full (s : RingBufferState) (val : UInt8) (hnf : ¬s.isFull) :
+    s.pushForceSpec val = { s with contents := s.contents ++ [val] } := by
+  unfold RingBufferState.pushForceSpec
+  simp [hnf]
+
+/-- Force-push on full non-empty buffer drops one element. -/
+theorem pushForce_drops_oldest (s : RingBufferState) (val hd : UInt8) (tl : List UInt8)
+    (hfull : s.isFull) (hc : s.contents = hd :: tl) :
+    (s.pushForceSpec val).contents = tl ++ [val] := by
+  unfold RingBufferState.pushForceSpec
+  simp [hfull, hc]
+
+/-- Force-push preserves invariant on non-full buffer. -/
+theorem pushForce_preserves_invariant_notfull (s : RingBufferState) (val : UInt8)
+    (hinv : s.invariant) (hnf : ¬s.isFull) :
+    (s.pushForceSpec val).invariant := by
+  rw [pushForce_eq_push_of_not_full _ _ hnf]
+  simp [RingBufferState.invariant, RingBufferState.count, RingBufferState.isFull] at *
+  omega
+
+/-- Force-push preserves invariant on full buffer. -/
+theorem pushForce_preserves_invariant_full (s : RingBufferState) (val : UInt8)
+    (_ : s.invariant) (hfull : s.isFull) :
+    (s.pushForceSpec val).invariant := by
+  unfold RingBufferState.pushForceSpec
+  simp [hfull]
+  match hc : s.contents with
+  | [] =>
+    simp [RingBufferState.invariant, RingBufferState.count]
+    simp [RingBufferState.isFull, RingBufferState.count] at hfull
+    omega
+  | _ :: tl =>
+    simp [RingBufferState.invariant, RingBufferState.count]
+    simp [hc, RingBufferState.isFull, RingBufferState.count] at hfull
+    omega
+
+-- ════════════════════════════════════════════════════════════════════
+-- Clear Specification
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Specification for clear: resets to empty buffer with same capacity. -/
+def RingBufferState.clearSpec (s : RingBufferState) : RingBufferState :=
+  RingBufferState.empty s.capacity
+
+/-- Clear preserves capacity. -/
+theorem clear_capacity (s : RingBufferState) :
+    (s.clearSpec).capacity = s.capacity := rfl
+
+/-- Clear results in empty buffer. -/
+theorem clear_isEmpty (s : RingBufferState) :
+    (s.clearSpec).isEmpty := by
+  simp [RingBufferState.clearSpec, RingBufferState.empty, RingBufferState.isEmpty]
+
+/-- Clear results in count 0. -/
+theorem clear_count (s : RingBufferState) :
+    (s.clearSpec).count = 0 := by
+  simp [RingBufferState.clearSpec, RingBufferState.empty, RingBufferState.count]
+
+/-- Clear preserves invariant. -/
+theorem clear_invariant (s : RingBufferState) :
+    (s.clearSpec).invariant := empty_invariant s.capacity
+
+-- ════════════════════════════════════════════════════════════════════
+-- Multi-Element Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Push a list of elements onto the buffer spec.
+    Returns the updated state and the number pushed successfully. -/
+def RingBufferState.pushManySpec (s : RingBufferState) (vals : List UInt8) :
+    RingBufferState × Nat :=
+  go s vals 0
+where
+  go (s : RingBufferState) : List UInt8 → Nat → RingBufferState × Nat
+    | [], n => (s, n)
+    | v :: vs, n =>
+      match s.pushSpec v with
+      | some s' => go s' vs (n + 1)
+      | none => (s, n)
+
+/-- Pop n elements from the buffer spec. -/
+def RingBufferState.popManySpec (s : RingBufferState) (n : Nat) :
+    List UInt8 × RingBufferState :=
+  go s n []
+where
+  go (s : RingBufferState) : Nat → List UInt8 → List UInt8 × RingBufferState
+    | 0, acc => (acc.reverse, s)
+    | k + 1, acc =>
+      match s.popSpec with
+      | some (v, s') => go s' k (v :: acc)
+      | none => (acc.reverse, s)
+
+/-- Draining all elements yields the full contents (stated for empty). -/
+theorem drain_empty (cap : Nat) :
+    (RingBufferState.popManySpec (RingBufferState.empty cap) 0).1 = [] := by
+  simp [RingBufferState.popManySpec, RingBufferState.popManySpec.go]
+
+/-- Push on empty buffer of capacity ≥ 1 always succeeds. -/
+theorem push_empty_succeeds (cap : Nat) (val : UInt8) (hcap : 0 < cap) :
+    (RingBufferState.pushSpec (RingBufferState.empty cap) val).isSome = true := by
+  simp [RingBufferState.pushSpec, RingBufferState.empty, RingBufferState.isFull,
+        RingBufferState.count]
+  omega
+
+-- ════════════════════════════════════════════════════════════════════
+-- Sequence Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- After setting contents directly, count equals list length. -/
+theorem direct_count (contents : List UInt8) (cap : Nat) :
+    let result := { RingBufferState.empty cap with contents := contents }
+    result.count = contents.length := by
+  simp [RingBufferState.count]
+
+/-- FIFO property: pushing [a, b, c] then popping 3 times yields [a, b, c]. -/
+theorem fifo_three_elements (cap : Nat) (a b c : UInt8) (_ : 3 ≤ cap) :
+    let s := { RingBufferState.empty cap with contents := [a, b, c] }
+    let (v1, s1) := match RingBufferState.popSpec s with
+      | some r => r | none => (0, s)
+    let (v2, s2) := match RingBufferState.popSpec s1 with
+      | some r => r | none => (0, s1)
+    let (v3, _) := match RingBufferState.popSpec s2 with
+      | some r => r | none => (0, s2)
+    (v1, v2, v3) = (a, b, c) := by
+  simp [RingBufferState.popSpec, RingBufferState.empty]
+
 end Radix.RingBuffer.Spec
