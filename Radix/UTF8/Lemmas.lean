@@ -374,4 +374,124 @@ theorem allAscii_encode_of_ascii (s : Scalar) (h : s.val < 0x80) :
   simp [Spec.allAscii, Spec.encode, h, List.all_cons, Spec.isAsciiByte,
         Nat.mod_eq_of_lt h256]
 
+/-! ## Unicode Consortium Test Vectors
+
+Known encoding/decoding pairs from the Unicode standard (Unicode 15.1). -/
+
+/-- U+0000 NULL encodes to 0x00. -/
+theorem encode_U0000 : Spec.encode ⟨0x0000, by decide⟩ = [0x00] := by decide
+
+/-- U+007F DEL (max ASCII) encodes to 0x7F. -/
+theorem encode_U007F : Spec.encode ⟨0x007F, by decide⟩ = [0x7F] := by decide
+
+/-- U+0080 (first 2-byte) encodes to C2 80. -/
+theorem encode_U0080 : Spec.encode ⟨0x0080, by decide⟩ = [0xC2, 0x80] := by decide
+
+/-- U+07FF (max 2-byte) encodes to DF BF. -/
+theorem encode_U07FF : Spec.encode ⟨0x07FF, by decide⟩ = [0xDF, 0xBF] := by decide
+
+/-- U+0800 (first 3-byte) encodes to E0 A0 80. -/
+theorem encode_U0800 : Spec.encode ⟨0x0800, by decide⟩ = [0xE0, 0xA0, 0x80] := by decide
+
+/-- U+D7FF (last before surrogates) encodes to ED 9F BF. -/
+theorem encode_UD7FF : Spec.encode ⟨0xD7FF, by decide⟩ = [0xED, 0x9F, 0xBF] := by decide
+
+/-- U+E000 (first after surrogates) encodes to EE 80 80. -/
+theorem encode_UE000 : Spec.encode ⟨0xE000, by decide⟩ = [0xEE, 0x80, 0x80] := by decide
+
+/-- U+FFFD REPLACEMENT CHARACTER encodes to EF BF BD. -/
+theorem encode_UFFFD : Spec.encode ⟨0xFFFD, by decide⟩ = [0xEF, 0xBF, 0xBD] := by decide
+
+/-- U+FFFF (max BMP) encodes to EF BF BF. -/
+theorem encode_UFFFF : Spec.encode ⟨0xFFFF, by decide⟩ = [0xEF, 0xBF, 0xBF] := by decide
+
+/-- U+10000 (first 4-byte) encodes to F0 90 80 80. -/
+theorem encode_U10000 : Spec.encode ⟨0x10000, by decide⟩ = [0xF0, 0x90, 0x80, 0x80] := by decide
+
+/-- U+10FFFF (max code point) encodes to F4 8F BF BF. -/
+theorem encode_U10FFFF : Spec.encode ⟨0x10FFFF, by decide⟩ = [0xF4, 0x8F, 0xBF, 0xBF] := by decide
+
+/-- U+00E9 é (Latin Small Letter E with Acute) encodes to C3 A9. -/
+theorem encode_U00E9 : Spec.encode ⟨0x00E9, by decide⟩ = [0xC3, 0xA9] := by decide
+
+/-- U+2603 ☃ (SNOWMAN) encodes to E2 98 83. -/
+theorem encode_U2603 : Spec.encode ⟨0x2603, by decide⟩ = [0xE2, 0x98, 0x83] := by decide
+
+/-- U+1F600 😀 (GRINNING FACE) encodes to F0 9F 98 80. -/
+theorem encode_U1F600 : Spec.encode ⟨0x1F600, by decide⟩ = [0xF0, 0x9F, 0x98, 0x80] := by decide
+
+/-! ## Validation DFA Correctness -/
+
+/-- The DFA rejects an isolated continuation byte. -/
+theorem validateUTF8_reject_continuation :
+    Spec.validateUTF8 [0x80] = false := by decide
+
+/-- The DFA rejects overlong 2-byte encoding (C0 80 = overlong U+0000). -/
+theorem validateUTF8_reject_overlong_2 :
+    Spec.validateUTF8 [0xC0, 0x80] = false := by decide
+
+/-- The DFA rejects overlong 2-byte encoding (C1 BF = overlong U+007F). -/
+theorem validateUTF8_reject_overlong_2b :
+    Spec.validateUTF8 [0xC1, 0xBF] = false := by decide
+
+/-- The DFA rejects overlong 3-byte encoding (E0 80 80 = overlong U+0000). -/
+theorem validateUTF8_reject_overlong_3 :
+    Spec.validateUTF8 [0xE0, 0x80, 0x80] = false := by decide
+
+/-- The DFA rejects encoding of surrogate U+D800. -/
+theorem validateUTF8_reject_surrogate_D800 :
+    Spec.validateUTF8 [0xED, 0xA0, 0x80] = false := by decide
+
+/-- The DFA rejects encoding of surrogate U+DFFF. -/
+theorem validateUTF8_reject_surrogate_DFFF :
+    Spec.validateUTF8 [0xED, 0xBF, 0xBF] = false := by decide
+
+/-- The DFA rejects overlong 4-byte encoding (F0 80 80 80). -/
+theorem validateUTF8_reject_overlong_4 :
+    Spec.validateUTF8 [0xF0, 0x80, 0x80, 0x80] = false := by decide
+
+/-- The DFA rejects F4 90 80 80 (would encode U+110000, above max). -/
+theorem validateUTF8_reject_above_max :
+    Spec.validateUTF8 [0xF4, 0x90, 0x80, 0x80] = false := by decide
+
+/-- The DFA rejects F5 (invalid lead byte). -/
+theorem validateUTF8_reject_F5 :
+    Spec.validateUTF8 [0xF5, 0x80, 0x80, 0x80] = false := by decide
+
+/-- The DFA rejects FF (never valid in UTF-8). -/
+theorem validateUTF8_reject_FF :
+    Spec.validateUTF8 [0xFF] = false := by decide
+
+/-- The DFA rejects FE (never valid in UTF-8). -/
+theorem validateUTF8_reject_FE :
+    Spec.validateUTF8 [0xFE] = false := by decide
+
+/-- The DFA accepts valid 2-byte sequence (U+0080 = C2 80). -/
+theorem validateUTF8_accept_U0080 :
+    Spec.validateUTF8 [0xC2, 0x80] = true := by decide
+
+/-- The DFA accepts valid 3-byte sequence (U+0800 = E0 A0 80). -/
+theorem validateUTF8_accept_U0800 :
+    Spec.validateUTF8 [0xE0, 0xA0, 0x80] = true := by decide
+
+/-- The DFA accepts valid 4-byte sequence (U+10000 = F0 90 80 80). -/
+theorem validateUTF8_accept_U10000 :
+    Spec.validateUTF8 [0xF0, 0x90, 0x80, 0x80] = true := by decide
+
+/-- The DFA accepts BOM (EF BB BF). -/
+theorem validateUTF8_accept_BOM :
+    Spec.validateUTF8 [0xEF, 0xBB, 0xBF] = true := by decide
+
+/-- The DFA rejects truncated 2-byte sequence. -/
+theorem validateUTF8_reject_truncated_2 :
+    Spec.validateUTF8 [0xC2] = false := by decide
+
+/-- The DFA rejects truncated 3-byte sequence. -/
+theorem validateUTF8_reject_truncated_3 :
+    Spec.validateUTF8 [0xE0, 0xA0] = false := by decide
+
+/-- The DFA rejects truncated 4-byte sequence. -/
+theorem validateUTF8_reject_truncated_4 :
+    Spec.validateUTF8 [0xF0, 0x90, 0x80] = false := by decide
+
 end Radix.UTF8
