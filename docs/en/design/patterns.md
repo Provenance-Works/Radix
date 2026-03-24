@@ -185,7 +185,7 @@ Encode/decode pairs are proven to be inverses:
 | `encodeS64` / `decodeS64` | `Binary.Leb128.Lemmas` |
 | `toBigEndian` / `fromBigEndian` | `Bytes.Lemmas` |
 | `toLittleEndian` / `fromLittleEndian` | `Bytes.Lemmas` |
-| `serializeFormat` / `parseFormat` | Specified in `Binary.Spec` |
+| `serializeFormat` / `parseFormatExact` | Specified in `Binary.Spec`; `parsePrefix` is available for header-prefix parsing |
 | `toBitVec` / `fromBitVec` | `Word.Lemmas.BitVec` |
 
 ## Related Documents
