@@ -193,4 +193,68 @@ def errorRate (bs : List UInt8) : Nat × Nat :=
   let clean := countClean bs
   (total - clean, total)
 
+-- ════════════════════════════════════════════════════════════════════
+-- Hamming(15,11) Operations
+-- ════════════════════════════════════════════════════════════════════
+
+abbrev Word11 := Spec.Word11
+abbrev Codeword1511 := Spec.Codeword1511
+
+/-- Encode an 11-bit word to a Hamming(15,11) codeword. -/
+def encode1511 (w : Word11) : Codeword1511 :=
+  Spec.Codeword1511.encode w
+
+/-- Decode a Hamming(15,11) codeword to the 11-bit data word. -/
+def decode1511 (c : Codeword1511) : Word11 :=
+  Spec.Codeword1511.decode c
+
+/-- Compute the syndrome of a Hamming(15,11) codeword. -/
+def syndrome1511 (c : Codeword1511) : Fin 16 :=
+  Spec.Codeword1511.syndrome c
+
+/-- Correct a single-bit error in a Hamming(15,11) codeword. -/
+def correct1511 (c : Codeword1511) : Codeword1511 :=
+  Spec.Codeword1511.correct c
+
+/-- Encode, transmit, correct, and decode a Hamming(15,11) word. -/
+def roundtrip1511 (w : Word11) (corrupt : Codeword1511 → Codeword1511 := id) : Word11 :=
+  decode1511 (correct1511 (corrupt (encode1511 w)))
+
+/-- Pack a Hamming(15,11) codeword into a UInt16 (low 15 bits). -/
+def toUInt16 (c : Codeword1511) : UInt16 :=
+  c.bits.val.toUInt16
+
+/-- Unpack a UInt16 (low 15 bits) into a Hamming(15,11) codeword. -/
+def fromUInt16 (v : UInt16) : Codeword1511 :=
+  ⟨⟨v.toNat % 32768, by omega⟩⟩
+
+/-- Encode a list of 11-bit words into Hamming(15,11) codewords. -/
+def encodeWords (ws : List Word11) : List Codeword1511 :=
+  ws.map encode1511
+
+/-- Decode a list of Hamming(15,11) codewords. -/
+def decodeWords (cs : List Codeword1511) : List Word11 :=
+  cs.map decode1511
+
+/-- Correct and decode a list of Hamming(15,11) codewords. -/
+def correctAndDecodeWords (cs : List Codeword1511) : List Word11 :=
+  cs.map (fun c => decode1511 (correct1511 c))
+
+-- ════════════════════════════════════════════════════════════════════
+-- SECDED Batch Operations
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Encode a list of nibbles as SECDED codewords. -/
+def encodeSECDED (ns : List Nibble) : List Spec.Codeword84 :=
+  ns.map encodeNibbleSECDED
+
+/-- Classify errors for a list of SECDED codewords. -/
+def classifyAllSECDED (cs : List Spec.Codeword84) : List SECDEDResult :=
+  cs.map classifySECDED
+
+/-- Count double errors detected in a list of SECDED codewords. -/
+def countDoubleErrors (cs : List Spec.Codeword84) : Nat :=
+  cs.foldl (fun acc c =>
+    acc + if classifySECDED c == .doubleError then 1 else 0) 0
+
 end Radix.ECC
