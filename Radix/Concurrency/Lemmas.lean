@@ -514,4 +514,35 @@ theorem isCoherent_empty (mo : ModificationOrder) :
     isCoherent (Trace.mk []) mo :=
   ⟨coherenceRR_empty mo, by intro a b ha; simp at ha, coherenceWW_empty mo⟩
 
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Memory Ordering Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- isAtLeast is reflexive. -/
+theorem MemoryOrder.isAtLeast_refl (o : MemoryOrder) :
+    MemoryOrder.isAtLeast o o = true := by
+  cases o <;> simp [MemoryOrder.isAtLeast, MemoryOrder.strength]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+/-- SeqCst strength is 3. -/
+example : MemoryOrder.strength .seqCst = 3 := by rfl
+
+/-- AcqRel strength is 2. -/
+example : MemoryOrder.strength .acqRel = 2 := by rfl
+
+/-- Acquire strength is 1. -/
+example : MemoryOrder.strength .acquire = 1 := by rfl
+
+/-- Relaxed strength is 0. -/
+example : MemoryOrder.strength .relaxed = 0 := by rfl
+
+/-- SeqCst is at least as strong as AcqRel. -/
+example : MemoryOrder.isAtLeast .seqCst .acqRel = true := by rfl
+
+/-- Relaxed is not at least as strong as SeqCst. -/
+example : MemoryOrder.isAtLeast .relaxed .seqCst = false := by rfl
+
 end Radix.Concurrency
