@@ -235,4 +235,57 @@ theorem Format.fieldCount_uint32 (name : String) (e : Spec.Endian) :
 theorem Format.fieldCount_uint64 (name : String) (e : Spec.Endian) :
     (Format.uint64 name e).fieldCount = 1 := rfl
 
+-- ════════════════════════════════════════════════════════════════════
+-- BitField Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Extracting a bit-field always produces a value less than 2^width. -/
+theorem BitFieldSpec.extract_lt_pow2 (bf : Spec.BitFieldSpec) (v : Nat) :
+    bf.extract v < 2 ^ bf.width := by
+  simp [Spec.BitFieldSpec.extract]
+  exact Nat.mod_lt _ (Nat.two_pow_pos bf.width)
+
+/-- Two disjoint fields are symmetric. -/
+theorem BitFieldSpec.disjoint_comm (a b : Spec.BitFieldSpec) :
+    Spec.BitFieldSpec.disjoint a b ↔ Spec.BitFieldSpec.disjoint b a := by
+  simp [Spec.BitFieldSpec.disjoint, Spec.BitFieldSpec.endPos]
+  omega
+
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+/-- PrimType byte has size 1. -/
+example : Spec.PrimType.byteSize .byte = 1 := by rfl
+
+/-- PrimType uint16 has size 2. -/
+example : Spec.PrimType.byteSize (.uint16 .little) = 2 := by rfl
+
+/-- PrimType uint32 has size 4. -/
+example : Spec.PrimType.byteSize (.uint32 .big) = 4 := by rfl
+
+/-- PrimType uint64 has size 8. -/
+example : Spec.PrimType.byteSize (.uint64 .little) = 8 := by rfl
+
+/-- Padding to align 0 to 4 is 0. -/
+example : Spec.paddingToAlign 0 4 = 0 := by native_decide
+
+/-- Padding to align 3 to 4 is 1. -/
+example : Spec.paddingToAlign 3 4 = 1 := by native_decide
+
+/-- Padding to align 4 to 4 is 0. -/
+example : Spec.paddingToAlign 4 4 = 0 := by native_decide
+
+/-- Padding to align 5 to 4 is 3. -/
+example : Spec.paddingToAlign 5 4 = 3 := by native_decide
+
+/-- alignedOffset 5 4 = 8. -/
+example : Spec.alignedOffset 5 4 = 8 := by native_decide
+
+/-- VarLen length-prefixed has 2-byte overhead. -/
+example : Spec.VarLenType.minOverhead (.lengthPrefixed 2) = 2 := by rfl
+
+/-- VarLen null-terminated has 1-byte overhead. -/
+example : Spec.VarLenType.minOverhead .nullTerminated = 1 := by rfl
+
 end Radix.Binary
