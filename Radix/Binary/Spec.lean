@@ -107,4 +107,83 @@ def inverseRoundTrip {α : Type} (parse : ByteArray → Nat → Option α) (seri
     parse buf offset = some x →
     serialize x = buf.extract offset (offset + spec.totalSize)
 
+-- ════════════════════════════════════════════════════════════════════
+-- Bit-Field Specifications
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A bit-field within a byte or word: position (0 = LSB) and width. -/
+structure BitFieldSpec where
+  position : Nat
+  width    : Nat
+  hWidth   : 0 < width
+  deriving Repr
+
+/-- Bit-field end position (exclusive). -/
+def BitFieldSpec.endPos (bf : BitFieldSpec) : Nat :=
+  bf.position + bf.width
+
+/-- Extract a bit-field value from a natural number. -/
+def BitFieldSpec.extract (bf : BitFieldSpec) (v : Nat) : Nat :=
+  (v >>> bf.position) % (2 ^ bf.width)
+
+/-- Insert a bit-field value into a natural number.
+    Clears the field bits first, then ORs in the new value.
+    Note: for Nat, we use XOR to clear since Nat has no complement. -/
+def BitFieldSpec.insert (bf : BitFieldSpec) (target value : Nat) : Nat :=
+  let mask := (2 ^ bf.width - 1) <<< bf.position
+  let cleared := target ^^^ (target &&& mask)  -- zero out field bits
+  cleared ||| ((value % (2 ^ bf.width)) <<< bf.position)
+
+/-- Two bit-fields do not overlap if their ranges are disjoint. -/
+def BitFieldSpec.disjoint (a b : BitFieldSpec) : Prop :=
+  a.endPos ≤ b.position ∨ b.endPos ≤ a.position
+
+instance (a b : BitFieldSpec) : Decidable (BitFieldSpec.disjoint a b) :=
+  inferInstanceAs (Decidable (_ ∨ _))
+
+/-- A bit-field register: a collection of non-overlapping fields within a given bit width. -/
+structure RegisterSpec where
+  bitWidth : Nat
+  fields   : List (String × BitFieldSpec)
+  deriving Repr
+
+/-- A register spec is valid if all fields fit within the bit width
+    and no two fields overlap. -/
+def RegisterSpec.isValid (reg : RegisterSpec) : Prop :=
+  (∀ nf ∈ reg.fields, nf.2.endPos ≤ reg.bitWidth)
+  ∧ (∀ a ∈ reg.fields, ∀ b ∈ reg.fields, a ≠ b → BitFieldSpec.disjoint a.2 b.2)
+
+-- ════════════════════════════════════════════════════════════════════
+-- Variable-Length Encoding Spec
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A variable-length field type for binary formats. -/
+inductive VarLenType where
+  /-- Length-prefixed data with a given prefix size in bytes. -/
+  | lengthPrefixed (prefixBytes : Nat)
+  /-- Null-terminated string/data. -/
+  | nullTerminated
+  /-- Fixed count of repeated elements. -/
+  | fixedArray (count : Nat) (elemSize : Nat)
+  deriving Repr
+
+/-- Minimum byte overhead for a variable-length type. -/
+def VarLenType.minOverhead : VarLenType → Nat
+  | .lengthPrefixed n => n
+  | .nullTerminated => 1  -- at least the null terminator
+  | .fixedArray count elemSize => count * elemSize
+
+-- ════════════════════════════════════════════════════════════════════
+-- Alignment and Padding Spec
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Compute the padding needed to align `offset` to `alignment`. -/
+def paddingToAlign (offset alignment : Nat) : Nat :=
+  if alignment ≤ 1 then 0
+  else (alignment - offset % alignment) % alignment
+
+/-- Compute the aligned offset. -/
+def alignedOffset (offset alignment : Nat) : Nat :=
+  offset + paddingToAlign offset alignment
+
 end Radix.Binary.Spec
