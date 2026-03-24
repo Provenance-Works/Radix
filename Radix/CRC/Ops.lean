@@ -236,4 +236,200 @@ where
 
 end CRC16
 
+/-! ================================================================ -/
+/-! ## CRC-8/MAXIM (1-Wire, iButton)                                  -/
+/-! ================================================================ -/
+
+namespace CRC8
+
+/-- CRC-8/MAXIM (1-Wire) polynomial in reflected representation. -/
+@[inline] def poly : _root_.UInt8 := 0x8C
+
+/-- Initial CRC-8/MAXIM register value. -/
+@[inline] def initVal : _root_.UInt8 := 0x00
+
+/-- Build one entry of the CRC-8 lookup table. -/
+private def buildTableEntry (byte : _root_.UInt8) : _root_.UInt8 :=
+  go byte 8
+where
+  go (crc : _root_.UInt8) : Nat → _root_.UInt8
+    | 0 => crc
+    | fuel + 1 =>
+      if crc &&& 1 != 0 then
+        go ((crc >>> 1) ^^^ poly) fuel
+      else
+        go (crc >>> 1) fuel
+
+/-- Precomputed CRC-8 lookup table (256 entries). -/
+def table : Array _root_.UInt8 :=
+  Array.ofFn (n := 256) fun i => buildTableEntry i.val.toUInt8
+
+/-- Update CRC-8 with a single byte using table lookup. -/
+@[inline] def updateByte (crc : _root_.UInt8) (byte : _root_.UInt8) : _root_.UInt8 :=
+  let index := (crc ^^^ byte).toNat
+  table[index]!
+
+/-- Compute CRC-8/MAXIM of a `ByteArray`. -/
+@[inline] def compute (data : ByteArray) : _root_.UInt8 :=
+  data.foldl (init := initVal) fun crc byte =>
+    updateByte crc byte
+
+/-- Initialize a streaming CRC-8 computation. -/
+@[inline] def init : _root_.UInt8 := initVal
+
+/-- Feed more data into a running CRC-8 computation. -/
+@[inline] def update (crc : _root_.UInt8) (data : ByteArray) : _root_.UInt8 :=
+  data.foldl (init := crc) fun c byte => updateByte c byte
+
+/-- Finalize a running CRC-8 computation (identity for MAXIM). -/
+@[inline] def finalize (crc : _root_.UInt8) : _root_.UInt8 := crc
+
+/-- Compute CRC-8 bit-by-bit (reference implementation, no table). -/
+def computeNaive (data : ByteArray) : _root_.UInt8 :=
+  data.foldl (init := initVal) fun crc byte =>
+    updateByteNaive crc byte
+where
+  updateByteNaive (crc : _root_.UInt8) (byte : _root_.UInt8) : _root_.UInt8 :=
+    let init := crc ^^^ byte
+    go init 8
+  go (crc : _root_.UInt8) : Nat → _root_.UInt8
+    | 0 => crc
+    | fuel + 1 =>
+      if crc &&& 1 != 0 then
+        go ((crc >>> 1) ^^^ poly) fuel
+      else
+        go (crc >>> 1) fuel
+
+end CRC8
+
+/-! ================================================================ -/
+/-! ## CRC-64/XZ (LZMA, 7-Zip)                                       -/
+/-! ================================================================ -/
+
+namespace CRC64
+
+/-- CRC-64/XZ polynomial in reflected (LSB-first) representation.
+    Normal form: 0x42F0E1EBA9EA3693
+    Reflected:   0xC96C5795D7870F42 -/
+@[inline] def poly : _root_.UInt64 := 0xC96C5795D7870F42
+
+/-- Initial CRC-64 register value (all ones). -/
+@[inline] def initVal : _root_.UInt64 := 0xFFFFFFFFFFFFFFFF
+
+/-- Build one entry of the CRC-64 lookup table. -/
+private def buildTableEntry (byte : _root_.UInt64) : _root_.UInt64 :=
+  go byte 8
+where
+  go (crc : _root_.UInt64) : Nat → _root_.UInt64
+    | 0 => crc
+    | fuel + 1 =>
+      if crc &&& 1 != 0 then
+        go ((crc >>> 1) ^^^ poly) fuel
+      else
+        go (crc >>> 1) fuel
+
+/-- Precomputed CRC-64 lookup table (256 entries). -/
+def table : Array _root_.UInt64 :=
+  Array.ofFn (n := 256) fun i => buildTableEntry i.val.toUInt64
+
+/-- Update CRC-64 with a single byte using table lookup. -/
+@[inline] def updateByte (crc : _root_.UInt64) (byte : _root_.UInt8) : _root_.UInt64 :=
+  let index := ((crc ^^^ byte.toUInt64) &&& 0xFF).toNat
+  table[index]! ^^^ (crc >>> 8)
+
+/-- Compute CRC-64/XZ of a `ByteArray`. -/
+@[inline] def compute (data : ByteArray) : _root_.UInt64 :=
+  let result := data.foldl (init := initVal) fun crc byte =>
+    updateByte crc byte
+  result ^^^ initVal
+
+/-- Initialize a streaming CRC-64 computation. -/
+@[inline] def init : _root_.UInt64 := initVal
+
+/-- Feed more data into a running CRC-64 computation. -/
+@[inline] def update (crc : _root_.UInt64) (data : ByteArray) : _root_.UInt64 :=
+  data.foldl (init := crc) fun c byte => updateByte c byte
+
+/-- Finalize a running CRC-64 computation. -/
+@[inline] def finalize (crc : _root_.UInt64) : _root_.UInt64 := crc ^^^ initVal
+
+/-- Compute CRC-64 bit-by-bit (reference implementation, no table). -/
+def computeNaive (data : ByteArray) : _root_.UInt64 :=
+  let result := data.foldl (init := initVal) fun crc byte =>
+    updateByteNaive crc byte
+  result ^^^ initVal
+where
+  updateByteNaive (crc : _root_.UInt64) (byte : _root_.UInt8) : _root_.UInt64 :=
+    let init := crc ^^^ byte.toUInt64
+    go init 8
+  go (crc : _root_.UInt64) : Nat → _root_.UInt64
+    | 0 => crc
+    | fuel + 1 =>
+      if crc &&& 1 != 0 then
+        go ((crc >>> 1) ^^^ poly) fuel
+      else
+        go (crc >>> 1) fuel
+
+end CRC64
+
+/-! ================================================================ -/
+/-! ## Generic CRC Engine                                              -/
+/-! ================================================================ -/
+
+/-- A generic CRC engine parameterized by width, polynomial, init, and xorOut.
+    Works for any reflected CRC algorithm up to 64 bits wide. -/
+structure GenericCRC where
+  /-- CRC width in bits (up to 64). -/
+  width : Nat
+  /-- Reflected polynomial as UInt64. -/
+  poly : _root_.UInt64
+  /-- Initial register value. -/
+  initVal : _root_.UInt64
+  /-- Final XOR value. -/
+  xorOut : _root_.UInt64
+  /-- Bit mask for the CRC width. -/
+  mask : _root_.UInt64
+
+namespace GenericCRC
+
+/-- Create a GenericCRC from width and polynomial parameters. -/
+def mk' (width : Nat) (poly init xorOut : _root_.UInt64) : GenericCRC :=
+  { width := width
+    poly := poly
+    initVal := init
+    xorOut := xorOut
+    mask := if width ≥ 64 then 0xFFFFFFFFFFFFFFFF
+            else (1 <<< width.toUInt64) - 1 }
+
+/-- Build a lookup table entry for the generic CRC. -/
+private def buildEntry (g : GenericCRC) (byte : _root_.UInt64) : _root_.UInt64 :=
+  go byte g.poly g.mask 8
+where
+  go (crc poly mask : _root_.UInt64) : Nat → _root_.UInt64
+    | 0 => crc &&& mask
+    | fuel + 1 =>
+      if crc &&& 1 != 0 then
+        go (((crc >>> 1) ^^^ poly) &&& mask) poly mask fuel
+      else
+        go ((crc >>> 1) &&& mask) poly mask fuel
+
+/-- Build a 256-entry lookup table for the generic CRC. -/
+def buildTable (g : GenericCRC) : Array _root_.UInt64 :=
+  Array.ofFn (n := 256) fun i => g.buildEntry i.val.toUInt64
+
+/-- Update a running CRC with a single byte. -/
+@[inline] def updateByte (g : GenericCRC) (table : Array _root_.UInt64)
+    (crc : _root_.UInt64) (byte : _root_.UInt8) : _root_.UInt64 :=
+  let index := ((crc ^^^ byte.toUInt64) &&& 0xFF).toNat
+  (table[index]! ^^^ (crc >>> 8)) &&& g.mask
+
+/-- Compute the CRC of a ByteArray using the generic engine. -/
+def compute (g : GenericCRC) (data : ByteArray) : _root_.UInt64 :=
+  let table := g.buildTable
+  let result := data.foldl (init := g.initVal) fun crc byte =>
+    g.updateByte table crc byte
+  (result ^^^ g.xorOut) &&& g.mask
+
+end GenericCRC
+
 end Radix.CRC
