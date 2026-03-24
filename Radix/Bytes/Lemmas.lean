@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Radix.Bytes.Order
 import Radix.Bytes.Slice
+import Radix.Bytes.Spec
 
 /-!
 # Byte Operation Proofs (Layer 3)
@@ -446,5 +447,102 @@ theorem ByteSlice.writeU64_len (s : ByteSlice) (off : Nat) (v : Radix.UInt64)
     (e : Bytes.Spec.Endian) (h : off + 8 ≤ s.len) :
     (s.writeU64 off v e h).len = s.len := by
   unfold ByteSlice.writeU64; split <;> rfl
+
+/-! ## Spec-Level Bswap Involution (via bv_decide) -/
+
+open Bytes.Spec in
+theorem Bytes.Spec.bswap16_invol (x : BitVec 16) :
+    bswap16 (bswap16 x) = x := by
+  simp [bswap16, extractByte]; bv_decide
+
+open Bytes.Spec in
+theorem Bytes.Spec.bswap32_invol (x : BitVec 32) :
+    bswap32 (bswap32 x) = x := by
+  simp [bswap32, extractByte]; bv_decide
+
+open Bytes.Spec in
+theorem Bytes.Spec.bswap64_invol (x : BitVec 64) :
+    bswap64 (bswap64 x) = x := by
+  simp [bswap64, extractByte]; bv_decide
+
+/-! ## Nibble Round-Trip -/
+
+open Bytes.Spec in
+theorem Bytes.Spec.fromNibbles_round_trip (b : BitVec 8) :
+    fromNibbles (highNibble b) (lowNibble b) = b := by
+  simp [fromNibbles, highNibble, lowNibble]; bv_decide
+
+open Bytes.Spec in
+theorem Bytes.Spec.highNibble_fromNibbles (hi lo : BitVec 4) :
+    highNibble (fromNibbles hi lo) = hi := by
+  simp [highNibble, fromNibbles]; bv_decide
+
+open Bytes.Spec in
+theorem Bytes.Spec.lowNibble_fromNibbles (hi lo : BitVec 4) :
+    lowNibble (fromNibbles hi lo) = lo := by
+  simp [lowNibble, fromNibbles]
+
+/-! ## BE/LE ReadU16 Relationship -/
+
+open Bytes.Spec in
+theorem Bytes.Spec.readU16BE_eq_bswap_readU16LE
+    (s : ByteSliceSpec) (off : Nat) (h : off + 2 ≤ s.len) :
+    ByteSliceSpec.readU16BE s off h = bswap16 (ByteSliceSpec.readU16LE s off h) := by
+  simp [ByteSliceSpec.readU16BE, ByteSliceSpec.readU16LE, bswap16, extractByte]
+  bv_decide
+
+/-! ## Endian Identity Properties -/
+
+open Bytes.Spec in
+theorem Bytes.Spec.toLittleEndian16_id (x : BitVec 16) :
+    toLittleEndian16 x = x := rfl
+
+open Bytes.Spec in
+theorem Bytes.Spec.toLittleEndian32_id (x : BitVec 32) :
+    toLittleEndian32 x = x := rfl
+
+open Bytes.Spec in
+theorem Bytes.Spec.toLittleEndian64_id (x : BitVec 64) :
+    toLittleEndian64 x = x := rfl
+
+open Bytes.Spec in
+theorem Bytes.Spec.fromBE_toBE_roundtrip16 (x : BitVec 16) :
+    fromBigEndian16 (toBigEndian16 x) = x := by
+  simp [fromBigEndian16, toBigEndian16]
+  exact bswap16_invol x
+
+open Bytes.Spec in
+theorem Bytes.Spec.fromBE_toBE_roundtrip32 (x : BitVec 32) :
+    fromBigEndian32 (toBigEndian32 x) = x := by
+  simp [fromBigEndian32, toBigEndian32]
+  exact bswap32_invol x
+
+open Bytes.Spec in
+theorem Bytes.Spec.fromBE_toBE_roundtrip64 (x : BitVec 64) :
+    fromBigEndian64 (toBigEndian64 x) = x := by
+  simp [fromBigEndian64, toBigEndian64]
+  exact bswap64_invol x
+
+/-! ## Concrete Test Vectors -/
+
+open Bytes.Spec in
+/-- bswap16 of 0x1234 is 0x3412. -/
+example : bswap16 0x1234#16 = 0x3412#16 := by native_decide
+
+open Bytes.Spec in
+/-- bswap32 of 0x12345678 is 0x78563412. -/
+example : bswap32 0x12345678#32 = 0x78563412#32 := by native_decide
+
+open Bytes.Spec in
+/-- High nibble of 0xAB is 0xA. -/
+example : highNibble 0xAB#8 = 0xA#4 := by native_decide
+
+open Bytes.Spec in
+/-- Low nibble of 0xAB is 0xB. -/
+example : lowNibble 0xAB#8 = 0xB#4 := by native_decide
+
+open Bytes.Spec in
+/-- fromNibbles(0xA, 0xB) = 0xAB. -/
+example : fromNibbles 0xA#4 0xB#4 = 0xAB#8 := by native_decide
 
 end Radix

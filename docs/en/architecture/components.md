@@ -4,7 +4,12 @@
 
 ## Component Overview
 
-Radix consists of 13 modules, each providing a distinct set of systems programming primitives. All modules follow the three-layer architecture (Spec → Impl → Bridge), and v0.2.0 adds six new building blocks on top of the original foundation: numeric typeclasses inside Word, alignment helpers, ring buffers, bitmaps, CRC implementations, and allocator models.
+Radix exposes 18 top-level modules providing distinct systems-programming
+primitives. Seventeen runtime and model modules follow the three-layer
+architecture (Spec → Impl → Bridge), while `ProofAutomation` is a meta-level
+helper module for reusable tactic macros. v0.3.0 adds UTF-8 verification,
+error-correction primitives, DMA reasoning, timer helpers, and region algebra
+support on top of the v0.2.0 foundation.
 
 ```mermaid
 graph TD
@@ -12,7 +17,7 @@ graph TD
         Word["Word<br/>10 integer types<br/>5 arithmetic modes + Numeric"]
         Bit["Bit<br/>bitwise ops<br/>scan + fields"]
         Bytes["Bytes<br/>byte order<br/>ByteSlice"]
-        Memory["Memory<br/>buffer + ptr + layout"]
+        Memory["Memory<br/>buffer + ptr + layout<br/>region algebra"]
         Binary["Binary<br/>format DSL<br/>parser + serializer + LEB128"]
     end
     subgraph "v0.2.0 Pure Modules"
@@ -22,10 +27,19 @@ graph TD
         CRC["CRC<br/>CRC-32 / CRC-16<br/>streaming API"]
         MemoryPool["MemoryPool<br/>bump + slab allocators<br/>pure models"]
     end
+    subgraph "v0.3.0 Pure Modules"
+        UTF8["UTF8<br/>Unicode scalar model<br/>encoding + decoding"]
+        ECC["ECC<br/>Hamming(7,4)<br/>syndrome + correction"]
+        DMA["DMA<br/>descriptor model<br/>checked copy simulator"]
+        Timer["Timer<br/>monotonic clocks<br/>deadlines + expiry"]
+    end
     subgraph "Bridge / Model Modules"
         System["System<br/>OS interface<br/>File I/O, Error, FD"]
         Concurrency["Concurrency<br/>atomic model<br/>C11 ordering"]
         BareMetal["BareMetal<br/>platform model<br/>linker + startup + GC-free"]
+    end
+    subgraph "Meta Proof Support"
+        ProofAutomation["ProofAutomation<br/>tactic macros<br/>radix_decide + radix_omega + radix_simp + radix_finish"]
     end
     Bit --> Word
     Bytes --> Word
@@ -44,6 +58,8 @@ graph TD
     CRC --> Bit
     MemoryPool --> Memory
     MemoryPool --> Word
+    DMA --> Memory
+    DMA -.-> Concurrency
     System --> Word
     System --> Bytes
     System --> Memory
@@ -59,9 +75,14 @@ graph TD
     style Bitmap fill:#26C6DA,color:white
     style CRC fill:#26C6DA,color:white
     style MemoryPool fill:#29B6F6,color:white
+    style UTF8 fill:#26A69A,color:white
+    style ECC fill:#26A69A,color:white
+    style DMA fill:#26A69A,color:white
+    style Timer fill:#26A69A,color:white
     style System fill:#FFA726,color:white
     style Concurrency fill:#AB47BC,color:white
     style BareMetal fill:#8D6E63,color:white
+    style ProofAutomation fill:#5C6BC0,color:white
 ```
 
 ## Module Details
@@ -105,7 +126,7 @@ graph TD
 
 | Submodule | Layer | Description |
 |-----------|-------|-------------|
-| `Memory.Spec` | 3 | Region, alignment, disjointness definitions |
+| `Memory.Spec` | 3 | Region, alignment, disjointness, and region-algebra definitions |
 | `Memory.Model` | 2 | `Buffer` — `ByteArray`-based memory with proof-carrying read/write |
 | `Memory.Ptr` | 2 | `Ptr n` — byte-width–parametric pointer abstraction |
 | `Memory.Layout` | 2 | `FieldDesc`, `LayoutDesc` — packed struct layout computation |
@@ -194,6 +215,44 @@ graph TD
 | `MemoryPool.Spec` | 3 | Bump/slab allocator state models and safety invariants |
 | `MemoryPool.Model` | 2 | Pure allocator models backed by `Memory.Buffer` |
 | `MemoryPool.Lemmas` | 3 | Capacity tracking, reset correctness, no double-free proofs |
+
+### UTF8 — Verified UTF-8 Model
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `UTF8.Spec` | 3 | Unicode scalar validity and canonical UTF-8 semantics over raw bytes |
+| `UTF8.Ops` | 2 | Scalar construction, encoding/decoding helpers, well-formedness checks |
+| `UTF8.Lemmas` | 3 | Round-trip, byte-count, and canonical well-formedness proofs |
+
+### ECC — Error Correction Primitives
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `ECC.Spec` | 3 | Hamming(7,4) codeword structure, parity, and syndrome specifications |
+| `ECC.Ops` | 2 | Byte packing, encoding, correction, and decode helpers |
+| `ECC.Lemmas` | 3 | Single-bit correction and encode/decode correctness proofs |
+
+### DMA — DMA Transfer Model
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `DMA.Spec` | 3 | Region-based descriptors with coherence and atomicity contracts |
+| `DMA.Ops` | 2 | Descriptor validation, step counting, and checked byte-copy simulation |
+| `DMA.Lemmas` | 3 | Validity reflection, step-count, and simulator correctness lemmas |
+
+### Timer — Monotonic Clock Model
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `Timer.Spec` | 3 | Logical clocks, deadlines, elapsed/remaining time, and expiry predicates |
+| `Timer.Ops` | 2 | Tick advancement, deadline construction, boolean expiry helpers |
+| `Timer.Lemmas` | 3 | Monotonicity, elapsed-time, expiry, and remaining-time proofs |
+
+### ProofAutomation — Meta-Level Proof Support
+
+| Submodule | Layer | Description |
+|-----------|-------|-------------|
+| `ProofAutomation` | Meta | `radix_decide`, `radix_omega`, `radix_simp`, and `radix_finish` tactic macros for common Radix proof obligations |
 
 ## Related Documents
 

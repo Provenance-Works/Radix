@@ -327,4 +327,222 @@ theorem Trace.empty_isValid :
     (Trace.mk []).isValid := by
   exact ⟨Trace.empty_isWellFormed, by simp [Trace.hasUniqueIds]⟩
 
+-- ════════════════════════════════════════════════════════════════════
+-- Transitive Closure Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Single-step happens-before lifts to the transitive closure. -/
+theorem happensBefore_to_star (events : List MemoryEvent)
+    (a b : MemoryEvent) (ha : a ∈ events) (hb : b ∈ events)
+    (hab : happensBefore a b) :
+    happensBeforeStar events a b :=
+  happensBeforeStar.single a b ha hb hab
+
+/-- The transitive closure is transitive (directly from the constructor). -/
+theorem happensBeforeStar_trans (events : List MemoryEvent)
+    (a c b : MemoryEvent) (hc : c ∈ events)
+    (hac : happensBeforeStar events a c)
+    (hcb : happensBeforeStar events c b) :
+    happensBeforeStar events a b :=
+  happensBeforeStar.trans a c b hc hac hcb
+
+/-- Program order composes with synchronizes-with in the transitive closure. -/
+theorem programOrder_sync_star (events : List MemoryEvent)
+    (a b c : MemoryEvent) (ha : a ∈ events) (hb : b ∈ events) (hc : c ∈ events)
+    (hpo : programOrder a b) (hsw : synchronizesWith b c) :
+    happensBeforeStar events a c :=
+  happensBeforeStar.trans a b c hb
+    (happensBeforeStar.single a b ha hb (Or.inl hpo))
+    (happensBeforeStar.single b c hb hc (Or.inr hsw))
+
+/-- Synchronizes-with followed by program order in the transitive closure. -/
+theorem sync_programOrder_star (events : List MemoryEvent)
+    (a b c : MemoryEvent) (ha : a ∈ events) (hb : b ∈ events) (hc : c ∈ events)
+    (hsw : synchronizesWith a b) (hpo : programOrder b c) :
+    happensBeforeStar events a c :=
+  happensBeforeStar.trans a b c hb
+    (happensBeforeStar.single a b ha hb (Or.inr hsw))
+    (happensBeforeStar.single b c hb hc (Or.inl hpo))
+
+-- ════════════════════════════════════════════════════════════════════
+-- Deeper Ordering Algebra
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Strengthening with a weaker ordering returns the stronger one. -/
+theorem strengthen_relaxed_left (o : MemoryOrder) :
+    strengthen .relaxed o = o := by
+  cases o <;> simp [strengthen, MemoryOrder.strength]
+
+/-- Strengthening with a weaker ordering on the right is identity. -/
+theorem strengthen_relaxed_right (o : MemoryOrder) :
+    strengthen o .relaxed = o := by
+  cases o <;> simp [strengthen, MemoryOrder.strength]
+
+/-- SeqCst absorbs any other ordering under strengthen. -/
+theorem strengthen_seqCst_left (o : MemoryOrder) :
+    strengthen .seqCst o = .seqCst := by
+  cases o <;> simp [strengthen, MemoryOrder.strength]
+
+/-- SeqCst absorbs any other ordering under strengthen (right). -/
+theorem strengthen_seqCst_right (o : MemoryOrder) :
+    strengthen o .seqCst = .seqCst := by
+  cases o <;> simp [strengthen, MemoryOrder.strength]
+
+-- ════════════════════════════════════════════════════════════════════
+-- More Atomic Operation Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- fetchSub with 0 preserves the cell. -/
+theorem fetchSub_zero_identity (cell : AtomicCell) (order : MemoryOrder) :
+    (fetchSub cell 0 order).2 = cell := by
+  simp [fetchSub]
+
+/-- fetchAnd with all-ones mask preserves the cell. -/
+theorem fetchAnd_allOnes (cell : AtomicCell) (order : MemoryOrder) :
+    (fetchAnd cell cell.val order).2.val = cell.val := by
+  simp [fetchAnd, Nat.and_self]
+
+/-- fetchOr with 0 preserves the cell. -/
+theorem fetchOr_zero_identity (cell : AtomicCell) (order : MemoryOrder) :
+    (fetchOr cell 0 order).2.val = cell.val := by
+  simp [fetchOr, Nat.or_zero]
+
+/-- fetchXor with 0 preserves the cell. -/
+theorem fetchXor_zero_identity (cell : AtomicCell) (order : MemoryOrder) :
+    (fetchXor cell 0 order).2.val = cell.val := by
+  simp [fetchXor, Nat.xor_zero]
+
+/-- fetchXor is self-inverse: XOR twice with the same value returns original. -/
+theorem fetchXor_self_inverse (cell : AtomicCell) (mask : Nat) (order : MemoryOrder) :
+    let (_, cell') := fetchXor cell mask order
+    (fetchXor cell' mask order).2.val = cell.val := by
+  simp [fetchXor, Nat.xor_assoc, Nat.xor_self, Nat.xor_zero]
+
+/-- Three consecutive fetchAdd operations compose additively. -/
+theorem fetchAdd_compose3 (cell : AtomicCell) (d1 d2 d3 : Nat)
+    (o1 o2 o3 : MemoryOrder) :
+    let (_, c1) := fetchAdd cell d1 o1
+    let (_, c2) := fetchAdd c1 d2 o2
+    (fetchAdd c2 d3 o3).2.val = cell.val + d1 + d2 + d3 := by
+  simp [fetchAdd]
+
+/-- Store followed by CAS with matching expected succeeds. -/
+theorem store_then_cas_succeeds (cell : AtomicCell) (v desired : Nat)
+    (hStore : validStoreOrder .seqCst = true) :
+    let afterStore := (atomicStore cell v .seqCst hStore).2
+    (atomicCAS afterStore v desired .seqCst .seqCst).1.success = true := by
+  simp [atomicStore, atomicCAS]
+
+/-- CAS success implies the previous value matched expected. -/
+theorem cas_success_implies_match (cell : AtomicCell) (expected desired : Nat)
+    (succOrder failOrder : MemoryOrder)
+    (h : (atomicCAS cell expected desired succOrder failOrder).1.success = true) :
+    cell.val = expected := by
+  simp [atomicCAS] at h
+  split at h <;> simp_all
+
+-- ════════════════════════════════════════════════════════════════════
+-- Data-Race Freedom under Synchronization
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Conflicting events that are synchronized via release-acquire are not races. -/
+theorem synchronized_no_race (a b : MemoryEvent)
+    (hsw : synchronizesWith a b) :
+    ¬isDataRace a b := by
+  intro ⟨_, _, hNotAB, _⟩
+  exact hNotAB (Or.inr hsw)
+
+/-- A singleton store trace is data-race free. -/
+theorem Trace.singleton_store_isDataRaceFree (e : MemoryEvent) (he : e.kind = .store) :
+    (Trace.mk [e]).isDataRaceFree := by
+  intro a b ha hb
+  simp at ha hb
+  subst ha; subst hb
+  intro ⟨hConf, _, _, _⟩
+  exact hConf.1 rfl
+
+/-- A trace where all events are from a single thread is data-race free.
+    Data races require different threads, so this is immediate. -/
+theorem Trace.singleThread_isDataRaceFree (t : Trace) (tid : ThreadId)
+    (hSingle : ∀ e, e ∈ t.events → e.id.thread = tid) :
+    t.isDataRaceFree := by
+  intro a b ha hb hRace
+  have ⟨_, hDiffThread, _, _⟩ := hRace
+  exact hDiffThread (by rw [hSingle a ha, hSingle b hb])
+
+-- ════════════════════════════════════════════════════════════════════
+-- Well-Formedness and Validity
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A singleton well-formed event produces a valid trace. -/
+theorem Trace.singleton_isValid (e : MemoryEvent) (h : validOrderForAccess e.kind e.order) :
+    (Trace.mk [e]).isValid := by
+  constructor
+  · intro ev hev
+    simp at hev
+    subst hev
+    exact h
+  · intro a b ha hb hid
+    simp at ha hb
+    subst ha; subst hb
+    rfl
+
+/-- Appending a well-formed event preserves well-formedness if existing trace is well-formed. -/
+theorem Trace.cons_isWellFormed (e : MemoryEvent) (es : List MemoryEvent)
+    (hWf : (Trace.mk es).isWellFormed) (he : validOrderForAccess e.kind e.order) :
+    (Trace.mk (e :: es)).isWellFormed := by
+  intro ev hev
+  simp at hev
+  cases hev with
+  | inl h => subst h; exact he
+  | inr h => exact hWf ev h
+
+/-- Coherence WW on an empty trace is trivially satisfied. -/
+theorem coherenceWW_empty (mo : ModificationOrder) :
+    coherenceWW (Trace.mk []) mo := by
+  intro a b ha
+  simp at ha
+
+/-- Coherence RR on an empty trace is trivially satisfied. -/
+theorem coherenceRR_empty (mo : ModificationOrder) :
+    coherenceRR (Trace.mk []) mo := by
+  intro a b ha
+  simp at ha
+
+/-- Full coherence on an empty trace is trivially satisfied. -/
+theorem isCoherent_empty (mo : ModificationOrder) :
+    isCoherent (Trace.mk []) mo :=
+  ⟨coherenceRR_empty mo, by intro a b ha; simp at ha, coherenceWW_empty mo⟩
+
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Memory Ordering Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- isAtLeast is reflexive. -/
+theorem MemoryOrder.isAtLeast_refl (o : MemoryOrder) :
+    MemoryOrder.isAtLeast o o = true := by
+  cases o <;> simp [MemoryOrder.isAtLeast, MemoryOrder.strength]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+/-- SeqCst strength is 3. -/
+example : MemoryOrder.strength .seqCst = 3 := by rfl
+
+/-- AcqRel strength is 2. -/
+example : MemoryOrder.strength .acqRel = 2 := by rfl
+
+/-- Acquire strength is 1. -/
+example : MemoryOrder.strength .acquire = 1 := by rfl
+
+/-- Relaxed strength is 0. -/
+example : MemoryOrder.strength .relaxed = 0 := by rfl
+
+/-- SeqCst is at least as strong as AcqRel. -/
+example : MemoryOrder.isAtLeast .seqCst .acqRel = true := by rfl
+
+/-- Relaxed is not at least as strong as SeqCst. -/
+example : MemoryOrder.isAtLeast .relaxed .seqCst = false := by rfl
+
 end Radix.Concurrency

@@ -298,4 +298,73 @@ def sgt (x y : BitVec n) : Bool := slt y x
 /-- Signed greater-than-or-equal: symmetric to `sle`. -/
 def sge (x y : BitVec n) : Bool := sle y x
 
+-- ════════════════════════════════════════════════════════════════════
+-- Specification Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Wrapping addition is commutative. -/
+theorem wrappingAdd_comm (x y : BitVec n) : wrappingAdd x y = wrappingAdd y x := by
+  simp [wrappingAdd, BitVec.add_comm]
+
+/-- Wrapping addition with zero is identity. -/
+theorem wrappingAdd_zero (x : BitVec n) : wrappingAdd x 0 = x := by
+  simp [wrappingAdd]
+
+/-- Wrapping multiplication is commutative. -/
+theorem wrappingMul_comm (x y : BitVec n) : wrappingMul x y = wrappingMul y x := by
+  simp [wrappingMul, BitVec.mul_comm]
+
+/-- Wrapping multiplication by zero is zero. -/
+theorem wrappingMul_zero (x : BitVec n) : wrappingMul x 0 = 0 := by
+  simp [wrappingMul]
+
+/-- Checked addition of zero never fails. -/
+theorem checkedAdd_zero (x : BitVec n) : checkedAdd x 0 = some x := by
+  simp [checkedAdd, addOverflows]
+  exact x.isLt
+
+/-- Checked subtraction from self is always zero. -/
+theorem checkedSub_self (x : BitVec n) : checkedSub x x = some 0 := by
+  simp [checkedSub, subUnderflows]
+
+/-- Saturating subtraction from self is zero. -/
+theorem saturatingSub_self (x : BitVec n) : saturatingSub x x = 0 := by
+  simp [saturatingSub, subUnderflows]
+
+/-- Overflowing addition reports no overflow when result fits. -/
+theorem overflowingAdd_no_overflow (x y : BitVec n)
+    (h : ¬addOverflows x y) : (overflowingAdd x y).2 = false := by
+  simp [overflowingAdd, h]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors (8-bit)
+-- ════════════════════════════════════════════════════════════════════
+
+/-- 8-bit wrapping: 200 + 100 = 44 (wraps). -/
+example : wrappingAdd 200#8 100#8 = 44#8 := by native_decide
+
+/-- 8-bit saturating: 200 + 100 = 255 (saturates). -/
+example : saturatingAdd 200#8 100#8 = 255#8 := by native_decide
+
+/-- 8-bit checked: 200 + 100 = none (overflow). -/
+example : checkedAdd 200#8 100#8 = none := by native_decide
+
+/-- 8-bit overflowing: 200 + 100 = (44, true). -/
+example : overflowingAdd 200#8 100#8 = (44#8, true) := by native_decide
+
+/-- 8-bit checked: 100 + 50 = some 150 (no overflow). -/
+example : checkedAdd 100#8 50#8 = some 150#8 := by native_decide
+
+/-- 8-bit saturating subtraction: 10 - 20 = 0. -/
+example : saturatingSub 10#8 20#8 = 0#8 := by native_decide
+
+/-- 8-bit checked subtraction: 10 - 20 = none. -/
+example : checkedSub 10#8 20#8 = none := by native_decide
+
+/-- 8-bit ult: 10 < 20. -/
+example : ult 10#8 20#8 = true := by native_decide
+
+/-- 8-bit ult: 20 < 10 is false. -/
+example : ult 20#8 10#8 = false := by native_decide
+
 end Radix.Word.Spec

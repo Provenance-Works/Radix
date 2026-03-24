@@ -88,8 +88,8 @@ def run : IO Unit := do
   IO.println s!"  Raw packet: {rawPacket.size} bytes"
   IO.println ""
 
-  -- Parse the packet
-  match Radix.Binary.parseFormat rawPacket ipv4HeaderFormat with
+  -- Parse the complete header and reject trailing bytes.
+  match Radix.Binary.parseFormatExact rawPacket ipv4HeaderFormat with
   | .ok parsed =>
     IO.println "  Parsed IPv4 Header:"
 

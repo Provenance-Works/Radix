@@ -8,16 +8,21 @@
 radix/
 ├── lakefile.lean              # Lake build configuration
 ├── lean-toolchain             # Lean 4 version pin (v4.29.0-rc4)
-├── Radix.lean                 # Root import (imports all 13 modules)
+├── Radix.lean                 # Root import (imports all 18 modules)
 ├── CHANGELOG.md               # Version history
 ├── test_helpers.lean          # Ad-hoc proof experiments
 │
-├── Radix/                     # Source modules (13 modules)
+├── Radix/                     # Source modules (18 modules)
 │   ├── Alignment.lean         # Alignment module aggregator
 │   ├── Bitmap.lean            # Bitmap module aggregator
 │   ├── CRC.lean               # CRC module aggregator
+│   ├── DMA.lean               # DMA module aggregator
+│   ├── ECC.lean               # ECC module aggregator
 │   ├── MemoryPool.lean        # Memory pool module aggregator
+│   ├── ProofAutomation.lean   # Proof automation tactic macros
 │   ├── RingBuffer.lean        # Ring buffer module aggregator
+│   ├── Timer.lean             # Timer module aggregator
+│   ├── UTF8.lean              # UTF-8 module aggregator
 │   ├── Word.lean              # Word module aggregator
 │   ├── Bit.lean               # Bit module aggregator
 │   ├── Bytes.lean             # Bytes module aggregator
@@ -29,7 +34,7 @@ radix/
 │   └── <Module>/              # Per-module Spec / Impl / Lemmas / Assumptions files
 │
 ├── tests/
-│   ├── Main.lean              # Execution tests (all 13 modules)
+│   ├── Main.lean              # Execution tests (all 18 modules)
 │   ├── PropertyTests.lean     # Property-based tests (500 iter, LCG PRNG)
 │   ├── ComprehensiveTests.lean # Full regression runner with assertion counts
 │   └── ComprehensiveTests/    # Per-module comprehensive tests
@@ -42,7 +47,7 @@ radix/
 │
 ├── examples/
 │   ├── Main.lean              # Orchestrates the examples executable
-│   └── *.lean                 # 15 runnable example modules
+│   └── *.lean                 # 21 runnable example modules
 │
 └── docs/                      # User-facing documentation
     ├── en/                    # English documentation
@@ -82,7 +87,7 @@ graph TD
 |------|---------|
 | `lakefile.lean` | Build configuration, dependencies, targets |
 | `lean-toolchain` | Pinned Lean 4 version |
-| `Radix.lean` | Root import — imports all 13 module aggregators |
+| `Radix.lean` | Root import — imports all 18 module aggregators |
 | `tests/ComprehensiveTests.lean` | Full regression entry point with assertion summaries |
 | `CHANGELOG.md` | Version history |
 

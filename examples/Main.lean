@@ -31,6 +31,12 @@ import examples.BitmapDemo
 import examples.AlignmentDemo
 import examples.MemoryPoolDemo
 import examples.NumericDemo
+import examples.UTF8Demo
+import examples.ECCDemo
+import examples.DMADemo
+import examples.RegionAlgebraDemo
+import examples.TimerDemo
+import examples.ProofAutomationDemo
 
 /-!
 # Radix Usage Examples (P4-03)
@@ -381,7 +387,7 @@ private def exampleBinaryFormat : IO Unit := do
   let packetFmt :=
     Radix.Binary.Format.u32le "magic" ++
     Radix.Binary.Format.u16be "version" ++
-    Radix.Binary.Format.pad 2 ++
+    Radix.Binary.Format.align 4 ++
     Radix.Binary.Format.u32le "payload_len"
 
   -- Compute expected size
@@ -401,8 +407,8 @@ private def exampleBinaryFormat : IO Unit := do
     IO.println s!"  serialized {bytes.size} bytes"
     check (bytes.size == 12) "serialized size"
 
-    -- Parse back
-    match Radix.Binary.parseFormat bytes packetFmt with
+    -- Parse back and require full consumption.
+    match Radix.Binary.parseFormatExact bytes packetFmt with
     | .ok parsed =>
       IO.println s!"  parsed {parsed.length} fields"
       -- Find specific field
@@ -733,5 +739,18 @@ def main : IO Unit := do
   Examples.AlignmentDemo.main
   Examples.MemoryPoolDemo.main
   Examples.NumericDemo.main
+
+  IO.println ""
+  IO.println "=============================="
+  IO.println "v0.3.0 Feature Examples"
+  IO.println "=============================="
+  IO.println ""
+
+  Examples.UTF8Demo.main
+  Examples.ECCDemo.main
+  Examples.DMADemo.main
+  Examples.RegionAlgebraDemo.main
+  Examples.TimerDemo.main
+  Examples.ProofAutomationDemo.main
 
   IO.println "All examples completed successfully!"

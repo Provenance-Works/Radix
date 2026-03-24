@@ -271,4 +271,75 @@ structure AllocProfile where
 def AllocProfile.isGCFreeCompatible (p : AllocProfile) : Bool :=
   p.strategy.isGCFree
 
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Theorems
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Disjointness implies non-overlap. -/
+theorem MemRegion.disjoint_not_overlaps (a b : MemRegion) (h : MemRegion.disjoint a b) :
+    ¬MemRegion.overlaps a b := by
+  intro ⟨h1, h2⟩
+  simp [MemRegion.disjoint, MemRegion.endAddr] at h
+  simp [MemRegion.endAddr] at h1 h2
+  cases h with
+  | inl h => omega
+  | inr h => omega
+
+/-- Overlaps implies not disjoint. -/
+theorem MemRegion.overlaps_not_disjoint (a b : MemRegion) (h : MemRegion.overlaps a b) :
+    ¬MemRegion.disjoint a b := by
+  intro hd
+  exact MemRegion.disjoint_not_overlaps a b hd h
+
+/-- Overlap is symmetric. -/
+theorem MemRegion.overlaps_comm (a b : MemRegion) :
+    MemRegion.overlaps a b ↔ MemRegion.overlaps b a := by
+  simp [MemRegion.overlaps, MemRegion.endAddr]; constructor <;> intro ⟨h1, h2⟩ <;> exact ⟨h2, h1⟩
+
+/-- A zero-size region contains no addresses. -/
+theorem MemRegion.not_contains_zero_size (r : MemRegion) (hr : r.size = 0) (addr : Nat) :
+    ¬MemRegion.contains r addr := by
+  intro ⟨h1, h2⟩
+  simp [MemRegion.endAddr] at h2
+  omega
+
+/-- Contains is within bounds. -/
+theorem MemRegion.contains_bounds (r : MemRegion) (addr : Nat) (h : MemRegion.contains r addr) :
+    r.baseAddr ≤ addr ∧ addr < r.baseAddr + r.size := by
+  simp [MemRegion.contains, MemRegion.endAddr] at h; exact h
+
+/-- An empty memory map has no regions. -/
+theorem MemoryMap.findRegion_none_empty (p : Platform) (addr : Nat) :
+    (MemoryMap.mk [] p).findRegion addr = none := rfl
+
+/-- A valid startup step goes to the next phase. -/
+theorem StartupStep.isValid_next (s : StartupStep) (hs : s.isValid) :
+    s.target.order = s.source.order + 1 := hs
+
+/-- Phase ordering is strict: no phase precedes itself. -/
+theorem StartupPhase.not_precedes_self (p : StartupPhase) :
+    StartupPhase.precedes p p = false := by
+  cases p <;> rfl
+
+/-- Platform word bits are always 64 for all supported platforms. -/
+theorem Platform.wordBits_eq_64 (p : Platform) : p.wordBits = 64 := by
+  cases p <;> rfl
+
+/-- Platform natural alignment is always 8 for all supported platforms. -/
+theorem Platform.naturalAlign_eq_8 (p : Platform) : p.naturalAlign = 8 := by
+  cases p <;> rfl
+
+/-- GC-free strategies form a complete partition with heap. -/
+theorem AllocStrategy.gcfree_or_heap (s : AllocStrategy) :
+    s.isGCFree = true ∨ s = .heap := by
+  cases s <;> simp [AllocStrategy.isGCFree]
+
+/-- Phase order is bounded by 4. -/
+theorem StartupPhase.order_le_four (p : StartupPhase) : p.order ≤ 4 := by
+  cases p <;> simp [StartupPhase.order]
+
+/-- Memory map total size is nonneg. -/
+theorem MemoryMap.totalSize_nonneg (mm : MemoryMap) : 0 ≤ mm.totalSize :=
+  Nat.zero_le _
+
 end Radix.BareMetal.Spec

@@ -2,7 +2,7 @@
 
 > **Audience**: Users, Developers
 
-All examples below are grounded in the project's `examples/Main.lean` runner and the focused example modules under `examples/`. In v0.2.0 the examples split into three groups: 13 built-in walkthrough sections, 11 focused application-style demos, and 4 new feature demos for Bitmap, Alignment, MemoryPool, and Numeric typeclasses.
+All examples below are grounded in the project's `examples/Main.lean` runner and the focused example modules under `examples/`. The current tree splits the examples into three groups: 13 built-in walkthrough sections, 11 focused application-style demos, and 10 feature demos spanning the v0.2.0 and v0.3.0 additions.
 
 ## Word Arithmetic
 

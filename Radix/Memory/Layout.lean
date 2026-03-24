@@ -85,4 +85,68 @@ def allFieldsFit (desc : LayoutDesc) : Bool :=
 
 end LayoutDesc
 
+/-! ## Layout Correctness Properties -/
+
+/-- Empty layout has no fields. -/
+theorem LayoutDesc.empty_fields : LayoutDesc.empty.fields = [] := rfl
+
+/-- Empty layout has zero total size. -/
+theorem LayoutDesc.empty_totalSize : LayoutDesc.empty.totalSize = 0 := rfl
+
+/-- Empty layout is non-overlapping. -/
+theorem LayoutDesc.empty_isNonOverlapping : LayoutDesc.empty.isNonOverlapping = true := by
+  native_decide
+
+/-- Empty layout has all fields fit. -/
+theorem LayoutDesc.empty_allFieldsFit : LayoutDesc.empty.allFieldsFit = true := by
+  native_decide
+
+/-- appendField increases totalSize by the field size. -/
+theorem LayoutDesc.appendField_totalSize (desc : LayoutDesc) (name : String) (size : Nat) :
+    (desc.appendField name size).totalSize = desc.totalSize + size := by
+  simp [LayoutDesc.appendField]
+
+/-- appendField places field at current end. -/
+theorem LayoutDesc.appendField_last_offset (desc : LayoutDesc) (name : String) (size : Nat) :
+    let desc' := desc.appendField name size
+    desc'.fields.getLast? = some ⟨name, desc.totalSize, size⟩ := by
+  simp [LayoutDesc.appendField, List.getLast?_append]
+
+/-- appendAligned totalSize is at least appendField totalSize. -/
+theorem LayoutDesc.appendAligned_totalSize_ge (desc : LayoutDesc) (name : String)
+    (size align : Nat) (hAlign : align > 0) :
+    (desc.appendAligned name size align hAlign).totalSize ≥ desc.totalSize + size := by
+  simp [LayoutDesc.appendAligned]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+private def layout1 : LayoutDesc :=
+  LayoutDesc.empty
+    |>.appendField "magic" 4
+    |>.appendField "version" 2
+    |>.appendField "length" 4
+
+/-- layout1 has 3 fields. -/
+example : layout1.fields.length = 3 := by native_decide
+
+/-- layout1 total size is 10. -/
+example : layout1.totalSize = 10 := by native_decide
+
+/-- layout1 is non-overlapping. -/
+example : layout1.isNonOverlapping = true := by native_decide
+
+/-- layout1 all fields fit. -/
+example : layout1.allFieldsFit = true := by native_decide
+
+/-- layout1 magic field is at offset 0. -/
+example : (layout1.findField "magic") = some ⟨"magic", 0, 4⟩ := by native_decide
+
+/-- layout1 version field is at offset 4. -/
+example : (layout1.findField "version") = some ⟨"version", 4, 2⟩ := by native_decide
+
+/-- layout1 length field is at offset 6. -/
+example : (layout1.findField "length") = some ⟨"length", 6, 4⟩ := by native_decide
+
 end Radix.Memory

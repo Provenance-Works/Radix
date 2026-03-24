@@ -6,7 +6,7 @@
 # =============================================================================
 
 .DEFAULT_GOAL := help
-.PHONY: help build build-baseline build-ffi test proptest examples bench lint clean check setup fmt sorry-check
+.PHONY: help build build-baseline build-ffi test proptest comptest test-all examples bench lint clean check setup fmt sorry-check
 
 # ---------------------------------------------------------------------------
 # Help
@@ -67,7 +67,10 @@ test: ## Run unit tests
 proptest: ## Run property-based tests
 	lake exe proptest
 
-test-all: test proptest ## Run all tests (unit + property-based)
+comptest: ## Run comprehensive regression tests
+	lake exe comptest
+
+test-all: test proptest comptest ## Run all tests (unit + property + comprehensive)
 
 # ---------------------------------------------------------------------------
 # Examples & Benchmarks
@@ -101,7 +104,7 @@ sorry-check: ## Verify zero sorry statements in codebase
 
 lint: sorry-check ## Run all lint checks
 
-check: build test-all lint ## Run full verification (build + test + lint)
+check: build test-all examples lint ## Run full verification (build + all tests + examples + lint)
 
 # ---------------------------------------------------------------------------
 # Clean
@@ -128,7 +131,8 @@ release-check: check ## Pre-release verification (full check + changelog review)
 	@echo ""
 	@echo "Pre-release checklist:"
 	@echo "  [✓] Build succeeds"
-	@echo "  [✓] All tests pass"
+	@echo "  [✓] Unit, property, and comprehensive tests pass"
+	@echo "  [✓] Examples execute successfully"
 	@echo "  [✓] Zero sorry statements"
 	@echo ""
 	@echo "Manual steps remaining:"

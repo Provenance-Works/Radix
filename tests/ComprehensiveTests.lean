@@ -30,6 +30,7 @@ import tests.ComprehensiveTests.Bytes.Properties
 import tests.ComprehensiveTests.Memory.Buffer
 import tests.ComprehensiveTests.Memory.Ptr
 import tests.ComprehensiveTests.Memory.Layout
+import tests.ComprehensiveTests.Memory.Region
 import tests.ComprehensiveTests.Memory.Properties
 
 -- Binary
@@ -62,6 +63,13 @@ import tests.ComprehensiveTests.RingBuffer
 import tests.ComprehensiveTests.Bitmap
 import tests.ComprehensiveTests.CRC
 import tests.ComprehensiveTests.MemoryPool
+import tests.ComprehensiveTests.UTF8
+import tests.ComprehensiveTests.ECC
+import tests.ComprehensiveTests.DMA
+import tests.ComprehensiveTests.Timer
+import tests.ComprehensiveTests.ProofAutomation
+
+set_option maxRecDepth 4096
 
 /-- Run all test modules and print summary. -/
 def main : IO Unit := do
@@ -109,6 +117,7 @@ def main : IO Unit := do
   let n ← runMemoryBufferTests;    totalAsserts := totalAsserts + n; results := results.push ("Memory/Buffer", n)
   let n ← runMemoryPtrTests;       totalAsserts := totalAsserts + n; results := results.push ("Memory/Ptr", n)
   let n ← runMemoryLayoutTests;    totalAsserts := totalAsserts + n; results := results.push ("Memory/Layout", n)
+  let n ← runMemoryRegionTests;    totalAsserts := totalAsserts + n; results := results.push ("Memory/Region", n)
   let n ← runMemoryPropertyTests;  totalAsserts := totalAsserts + n; results := results.push ("Memory/Properties", n)
   IO.println ""
 
@@ -153,14 +162,16 @@ def main : IO Unit := do
   let n ← runMemoryPoolTests;   totalAsserts := totalAsserts + n; results := results.push ("MemoryPool", n)
   IO.println ""
 
+  -- === v0.3.0 Modules ===
+  IO.println "  ── v0.3.0 Composable Modules ──"
+  let n ← runUTF8Tests;             totalAsserts := totalAsserts + n; results := results.push ("UTF8", n)
+  let n ← runECCTests;              totalAsserts := totalAsserts + n; results := results.push ("ECC", n)
+  let n ← runDMATests;              totalAsserts := totalAsserts + n; results := results.push ("DMA", n)
+  let n ← runTimerTests;            totalAsserts := totalAsserts + n; results := results.push ("Timer", n)
+  let n ← runProofAutomationTests;  totalAsserts := totalAsserts + n; results := results.push ("ProofAutomation", n)
+  IO.println ""
+
   -- === Summary ===
-  IO.println "╔══════════════════════════════════════════════════════╗"
-  IO.println "║    Test Results Summary                             ║"
-  IO.println "╠══════════════════════════════════════════════════════╣"
-  for (name, count) in results do
-    let pad := String.ofList (List.replicate (30 - name.length) ' ')
-    IO.println s!"║  ✅ {name}{pad} {count} assertions  ║"
-  IO.println "╠══════════════════════════════════════════════════════╣"
-  IO.println s!"║  TOTAL: {totalAsserts} assertions passed               ║"
-  IO.println "║  All tests PASSED                                   ║"
-  IO.println "╚══════════════════════════════════════════════════════╝"
+  IO.println s!"Recorded modules: {results.size}"
+  IO.println s!"Total assertions: {totalAsserts}"
+  IO.println "All tests PASSED"

@@ -50,6 +50,22 @@ def runSystemErrorTests : IO Nat := do
   let e11 := Radix.System.SysError.unsupported "nope"
   assert (toString e11 != "") "unsupported toString"
 
+  -- ## IOError mapping
+  let mappedInvalid := Radix.System.SysError.fromIOError (.invalidArgument none 0 "bad arg")
+  assert (mappedInvalid == Radix.System.SysError.invalidArgument "bad arg")
+    "fromIOError invalidArgument"
+
+  let mappedUnsupported := Radix.System.SysError.fromIOError (.unsupportedOperation 0 "no ffi")
+  assert (mappedUnsupported == Radix.System.SysError.unsupported "no ffi")
+    "fromIOError unsupportedOperation"
+
+  let mappedMissing := Radix.System.SysError.fromIOError (.noFileOrDirectory "missing" 0 "gone")
+  assert (mappedMissing == Radix.System.SysError.notFound "gone")
+    "fromIOError noFileOrDirectory"
+
+  let mappedEof := Radix.System.SysError.fromIOError .unexpectedEof
+  assert (mappedEof == Radix.System.SysError.endOfFile) "fromIOError unexpectedEof"
+
   -- ## SysError BEq
   assert (e1 == e1) "SysError BEq reflexive"
   assert (!(e1 == e2)) "SysError BEq different"
@@ -122,5 +138,13 @@ def runSystemErrorTests : IO Nat := do
   assert (Radix.System.OpenMode.read != Radix.System.OpenMode.write) "OpenMode read ≠ write"
   assert (Radix.System.OpenMode.readWrite != Radix.System.OpenMode.append)
     "OpenMode readWrite ≠ append"
+
+  -- ## liftIO mapping for unsupported operations
+  let unsupportedLift : Except Radix.System.SysError Unit ←
+    Radix.System.liftIO (throw (.unsupportedOperation 0 "no ffi") : IO Unit)
+  match unsupportedLift with
+  | .ok _ => assert false "liftIO unsupported should fail"
+  | .error err =>
+    assert (err == Radix.System.SysError.unsupported "no ffi") "liftIO unsupported mapping"
 
   c.get

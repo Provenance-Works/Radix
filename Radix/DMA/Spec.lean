@@ -1,0 +1,557 @@
+/-
+Copyright (c) 2026 Radix Contributors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+import Mathlib.Tactic
+import Radix.Memory.Spec
+import Radix.Concurrency.Spec
+
+/-!
+# DMA Transfer Specification (Layer 3)
+
+Formal model for DMA descriptors over source and destination regions.
+
+## References
+
+- v0.3.0 Roadmap: DMA Transfer Model
+-/
+
+set_option autoImplicit false
+
+namespace Radix.DMA.Spec
+
+open Radix.Memory.Spec
+open Radix.Concurrency.Spec
+
+/-- Cache coherence contract for a DMA transfer. -/
+inductive Coherence where
+  | coherent
+  | nonCoherent
+  deriving DecidableEq, Repr
+
+/-- Atomicity model for completion visibility. -/
+inductive Atomicity where
+  | whole
+  | burst (bytes : Nat)
+  deriving DecidableEq, Repr
+
+/-- A DMA transfer descriptor. -/
+structure Descriptor where
+  source : Region
+  destination : Region
+  order : MemoryOrder
+  coherence : Coherence
+  atomicity : Atomicity
+  deriving Repr
+
+/-- Fence requirements for cache-incoherent transfers. -/
+def fenceOrderSufficient (d : Descriptor) : Prop :=
+  match d.coherence with
+  | .coherent => True
+  | .nonCoherent => d.order = .seqCst
+
+instance (d : Descriptor) : Decidable (fenceOrderSufficient d) := by
+  unfold fenceOrderSufficient
+  cases d.coherence <;> infer_instance
+
+/-- Atomicity configuration is internally consistent. -/
+def atomicityValid (d : Descriptor) : Prop :=
+  match d.atomicity with
+  | .whole => True
+  | .burst bytes => 0 < bytes ∧ bytes ≤ d.source.size
+
+instance (d : Descriptor) : Decidable (atomicityValid d) := by
+  unfold atomicityValid
+  cases d.atomicity <;> infer_instance
+
+/-- A descriptor is valid when it copies a positive number of bytes between
+    equally sized regions and satisfies the coherence contract. The
+    source and destination offsets are interpreted relative to separate
+    buffers in the executable simulator. -/
+def Descriptor.valid (d : Descriptor) : Prop :=
+  d.source.size = d.destination.size
+  ∧ 0 < d.source.size
+  ∧ atomicityValid d
+  ∧ fenceOrderSufficient d
+
+instance (d : Descriptor) : Decidable d.valid :=
+  inferInstanceAs
+    (Decidable
+      (d.source.size = d.destination.size
+        ∧ 0 < d.source.size
+        ∧ atomicityValid d
+        ∧ fenceOrderSufficient d))
+
+/-- Number of bytes transferred. -/
+def Descriptor.bytesMoved (d : Descriptor) : Nat :=
+  d.source.size
+
+/-- Number of bytes made visible by each transfer step. -/
+def Descriptor.burstBytes (d : Descriptor) : Nat :=
+  match d.atomicity with
+  | .whole => d.source.size
+  | .burst bytes => bytes
+
+/-- Byte offset from the start of the transfer at a given step. -/
+def Descriptor.stepOffset (d : Descriptor) (step : Nat) : Nat :=
+  step * d.burstBytes
+
+/-- Number of bytes covered by a particular visibility step. The value
+    saturates to zero once the step offset moves past the transfer size. -/
+def Descriptor.stepByteCount (d : Descriptor) (step : Nat) : Nat :=
+  min d.burstBytes (d.bytesMoved - d.stepOffset step)
+
+/-- Source chunk visible at a particular step. -/
+def Descriptor.sourceChunk (d : Descriptor) (step : Nat) : Region :=
+  { start := d.source.start + d.stepOffset step
+  , size := d.stepByteCount step
+  }
+
+/-- Destination chunk visible at a particular step. -/
+def Descriptor.destinationChunk (d : Descriptor) (step : Nat) : Region :=
+  { start := d.destination.start + d.stepOffset step
+  , size := d.stepByteCount step
+  }
+
+/-- Number of visibility steps required to complete the transfer. -/
+def Descriptor.stepCount (d : Descriptor) : Nat :=
+  match d.atomicity with
+  | .whole => 1
+  | .burst bytes => (d.source.size + bytes - 1) / bytes
+
+theorem Descriptor.stepByteCount_le_burstBytes (d : Descriptor) (step : Nat) :
+    d.stepByteCount step ≤ d.burstBytes := by
+  unfold Descriptor.stepByteCount
+  exact Nat.min_le_left _ _
+
+theorem Descriptor.sourceChunk_size_eq (d : Descriptor) (step : Nat) :
+    (d.sourceChunk step).size = d.stepByteCount step := by
+  rfl
+
+theorem Descriptor.destinationChunk_size_eq (d : Descriptor) (step : Nat) :
+    (d.destinationChunk step).size = d.stepByteCount step := by
+  rfl
+
+theorem Descriptor.stepCount_pos (d : Descriptor) (h : d.valid) :
+    0 < d.stepCount := by
+  rcases h with ⟨_, hsize, hatomic, _⟩
+  cases hAtomicity : d.atomicity with
+  | whole =>
+      simp [Descriptor.stepCount, hAtomicity]
+  | burst bytes =>
+      have hatomic' : 0 < bytes ∧ bytes ≤ d.source.size := by
+        simpa [atomicityValid, hAtomicity] using hatomic
+      rcases hatomic' with ⟨hbytes, _⟩
+      have : 0 < (d.source.size + bytes - 1) / bytes := by
+        have hsum : bytes ≤ d.source.size + bytes - 1 := by omega
+        have := Nat.div_pos hsum hbytes
+        simpa using this
+      simpa [Descriptor.stepCount, hAtomicity] using this
+
+-- ════════════════════════════════════════════════════════════════════
+-- Transfer Direction
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Direction of a DMA transfer relative to the device. -/
+inductive Direction where
+  | memToMem
+  | memToDev
+  | devToMem
+  deriving DecidableEq, Repr
+
+-- ════════════════════════════════════════════════════════════════════
+-- Alignment Requirements
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Alignment constraint: start address and size must both be multiples of `align`. -/
+def isAligned (r : Region) (align : Nat) : Prop :=
+  0 < align ∧ r.start % align = 0 ∧ r.size % align = 0
+
+instance (r : Region) (align : Nat) : Decidable (isAligned r align) :=
+  inferInstanceAs (Decidable (0 < align ∧ r.start % align = 0 ∧ r.size % align = 0))
+
+/-- A descriptor is aligned when both source and destination satisfy
+    the given alignment constraint. -/
+def Descriptor.isAligned (d : Descriptor) (align : Nat) : Prop :=
+  Spec.isAligned d.source align ∧ Spec.isAligned d.destination align
+
+instance (d : Descriptor) (align : Nat) : Decidable (d.isAligned align) :=
+  inferInstanceAs (Decidable (Spec.isAligned d.source align ∧ Spec.isAligned d.destination align))
+
+-- ════════════════════════════════════════════════════════════════════
+-- Scatter-Gather DMA Chain
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A chain is valid when every descriptor is valid. -/
+def chainValid (c : List Descriptor) : Prop :=
+  ∀ d ∈ c, d.valid
+
+/-- Total bytes transferred by a chain. -/
+def chainTotalBytes (c : List Descriptor) : Nat :=
+  c.foldl (fun acc d => acc + d.bytesMoved) 0
+
+/-- Source regions must not overlap within the chain (prevents read conflicts). -/
+def chainSourcesDisjoint (c : List Descriptor) : Prop :=
+  ∀ i j : Fin c.length,
+    i ≠ j → Region.disjoint (c.get i).source (c.get j).source
+
+/-- Destination regions must not overlap within the chain (prevents write conflicts). -/
+def chainDestinationsDisjoint (c : List Descriptor) : Prop :=
+  ∀ i j : Fin c.length,
+    i ≠ j → Region.disjoint (c.get i).destination (c.get j).destination
+
+-- ════════════════════════════════════════════════════════════════════
+-- DMA Channel Status
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Runtime status of a DMA channel. -/
+inductive ChannelStatus where
+  | idle
+  | running (descriptorIdx : Nat) (stepIdx : Nat)
+  | completed
+  | error (msg : String)
+  deriving DecidableEq, Repr
+
+/-- A DMA channel with a descriptor chain and a status. -/
+structure Channel where
+  chain : List Descriptor
+  status : ChannelStatus
+  deriving Repr
+
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Theorems
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Byte count at step 0 of a whole-atomicity descriptor equals the transfer size. -/
+theorem Descriptor.stepByteCount_zero_whole (d : Descriptor)
+    (hw : d.atomicity = .whole) :
+    d.stepByteCount 0 = d.bytesMoved := by
+  simp [Descriptor.stepByteCount, Descriptor.burstBytes, Descriptor.bytesMoved,
+        Descriptor.stepOffset, hw]
+
+/-- A whole-atomicity descriptor always has exactly 1 step. -/
+theorem Descriptor.stepCount_whole (d : Descriptor)
+    (hw : d.atomicity = .whole) :
+    d.stepCount = 1 := by
+  simp [Descriptor.stepCount, hw]
+
+/-- Source and destination chunks have the same size at each step. -/
+theorem Descriptor.chunks_same_size (d : Descriptor) (step : Nat) :
+    (d.sourceChunk step).size = (d.destinationChunk step).size := by
+  simp [Descriptor.sourceChunk, Descriptor.destinationChunk]
+
+/-- An empty chain transfers zero bytes. -/
+theorem chainTotalBytes_nil : chainTotalBytes [] = 0 := by
+  simp [chainTotalBytes]
+
+/-- An empty chain is vacuously valid. -/
+theorem chainValid_nil : chainValid [] := by
+  intro _ hd; simp at hd
+
+/-- A single-descriptor chain's total bytes equal the descriptor's transfer size. -/
+theorem chainTotalBytes_singleton (d : Descriptor) :
+    chainTotalBytes [d] = d.bytesMoved := by
+  simp [chainTotalBytes, Descriptor.bytesMoved]
+
+/-- Alignment at 1 is trivially satisfied for any region. -/
+theorem isAligned_one (r : Region) : isAligned r 1 := by
+  refine ⟨by omega, ?_, ?_⟩ <;> omega
+
+/-- If a region is aligned to `n`, it is also aligned to 1. -/
+theorem isAligned_implies_one (r : Region) (n : Nat) (_ : isAligned r n) :
+    isAligned r 1 := isAligned_one r
+
+/-- A zero-size region at offset 0 is aligned to any positive alignment. -/
+theorem isAligned_zero_region (align : Nat) (hpos : 0 < align) :
+    isAligned { start := 0, size := 0 } align := by
+  simp [isAligned, hpos]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Descriptor Priority and Ordering
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Priority level for a DMA descriptor. -/
+inductive Priority where
+  | low
+  | normal
+  | high
+  | critical
+  deriving DecidableEq, Repr, Ord
+
+/-- Numeric encoding for priority levels. -/
+def Priority.toNat : Priority → Nat
+  | .low => 0
+  | .normal => 1
+  | .high => 2
+  | .critical => 3
+
+/-- Higher priority values correspond to more urgent transfers. -/
+theorem Priority.low_le_normal : Priority.low.toNat ≤ Priority.normal.toNat := by decide
+theorem Priority.normal_le_high : Priority.normal.toNat ≤ Priority.high.toNat := by decide
+theorem Priority.high_le_critical : Priority.high.toNat ≤ Priority.critical.toNat := by decide
+
+-- ════════════════════════════════════════════════════════════════════
+-- Transfer Completion and Progress
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A transfer is complete when all bytes have been moved.
+    Represented as step index reaching or exceeding the step count. -/
+def Descriptor.isComplete (d : Descriptor) (stepsCompleted : Nat) : Prop :=
+  d.stepCount ≤ stepsCompleted
+
+instance (d : Descriptor) (s : Nat) : Decidable (d.isComplete s) :=
+  inferInstanceAs (Decidable (d.stepCount ≤ s))
+
+/-- Progress fraction: how much of the transfer has been completed (as bytes). -/
+def Descriptor.bytesCompleted (d : Descriptor) (stepsCompleted : Nat) : Nat :=
+  min (stepsCompleted * d.burstBytes) d.bytesMoved
+
+/-- Bytes remaining to transfer. -/
+def Descriptor.bytesRemaining (d : Descriptor) (stepsCompleted : Nat) : Nat :=
+  d.bytesMoved - d.bytesCompleted stepsCompleted
+
+/-- A complete transfer has zero bytes remaining (requires valid atomicity). -/
+theorem Descriptor.bytesRemaining_zero_of_complete (d : Descriptor)
+    (stepsCompleted : Nat) (ha : atomicityValid d) (h : d.isComplete stepsCompleted) :
+    d.bytesRemaining stepsCompleted = 0 := by
+  unfold Descriptor.bytesRemaining Descriptor.bytesCompleted
+  simp [Descriptor.isComplete] at h
+  cases hAtom : d.atomicity with
+  | whole =>
+    simp [Descriptor.burstBytes, Descriptor.bytesMoved, Descriptor.stepCount, hAtom] at h ⊢
+    -- omega can't handle stepsCompleted * d.source.size (nonlinear), so introduce it
+    have : d.source.size ≤ stepsCompleted * d.source.size :=
+      calc d.source.size = 1 * d.source.size := by ring
+        _ ≤ stepsCompleted * d.source.size := Nat.mul_le_mul_right _ h
+    omega
+  | burst bytes =>
+    simp [atomicityValid, hAtom] at ha
+    obtain ⟨hbpos, _⟩ := ha
+    simp [Descriptor.burstBytes, Descriptor.bytesMoved, Descriptor.stepCount, hAtom] at h ⊢
+    suffices d.source.size ≤ stepsCompleted * bytes by omega
+    -- Rewrite to k * s form so omega can unify with Nat.div_add_mod's k * q atom
+    rw [mul_comm]
+    calc d.source.size
+        ≤ bytes * ((d.source.size + bytes - 1) / bytes) := by
+          have := Nat.div_add_mod (d.source.size + bytes - 1) bytes
+          have := Nat.mod_lt (d.source.size + bytes - 1) hbpos
+          omega
+      _ ≤ bytes * stepsCompleted := Nat.mul_le_mul_left bytes h
+
+/-- Bytes completed at step 0 is always zero. -/
+theorem Descriptor.bytesCompleted_zero (d : Descriptor) :
+    d.bytesCompleted 0 = 0 := by
+  simp [Descriptor.bytesCompleted]
+
+/-- Bytes remaining at step 0 equals total bytes. -/
+theorem Descriptor.bytesRemaining_zero_step (d : Descriptor) :
+    d.bytesRemaining 0 = d.bytesMoved := by
+  simp [Descriptor.bytesRemaining, Descriptor.bytesCompleted]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Chain Composition and Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Appending to a valid chain preserves validity of existing descriptors. -/
+theorem chainValid_cons (d : Descriptor) (rest : List Descriptor)
+    (hd : d.valid) (hrest : chainValid rest) :
+    chainValid (d :: rest) := by
+  intro x hx
+  simp at hx
+  cases hx with
+  | inl h => rw [h]; exact hd
+  | inr h => exact hrest x h
+
+/-- Valid chain with a cons can be decomposed. -/
+theorem chainValid_cons_iff (d : Descriptor) (rest : List Descriptor) :
+    chainValid (d :: rest) ↔ d.valid ∧ chainValid rest := by
+  constructor
+  · intro h
+    exact ⟨h d (by simp), fun x hx => h x (by simp [hx])⟩
+  · intro ⟨hd, hrest⟩
+    exact chainValid_cons d rest hd hrest
+
+private theorem foldl_bytesMoved_shift (l : List Descriptor) (a b : Nat) :
+    l.foldl (fun acc x => acc + x.bytesMoved) (a + b) =
+    a + l.foldl (fun acc x => acc + x.bytesMoved) b := by
+  induction l generalizing b with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl]
+    rw [show a + b + x.bytesMoved = a + (b + x.bytesMoved) from by omega]
+    exact ih (b + x.bytesMoved)
+
+/-- Chain total bytes distributes over cons. -/
+theorem chainTotalBytes_cons (d : Descriptor) (rest : List Descriptor) :
+    chainTotalBytes (d :: rest) = d.bytesMoved + chainTotalBytes rest := by
+  simp only [chainTotalBytes, List.foldl, Nat.zero_add]
+  rw [show d.bytesMoved = d.bytesMoved + 0 from by omega]
+  exact foldl_bytesMoved_shift rest d.bytesMoved 0
+
+/-- Chain total bytes of append is the sum. -/
+theorem chainTotalBytes_append (c1 c2 : List Descriptor) :
+    chainTotalBytes (c1 ++ c2) = chainTotalBytes c1 + chainTotalBytes c2 := by
+  induction c1 with
+  | nil => simp [chainTotalBytes_nil]
+  | cons d rest ih =>
+    rw [List.cons_append, chainTotalBytes_cons, chainTotalBytes_cons, ih]
+    omega
+
+/-- Valid chain of append is valid iff both parts are valid. -/
+theorem chainValid_append (c1 c2 : List Descriptor) :
+    chainValid (c1 ++ c2) ↔ chainValid c1 ∧ chainValid c2 := by
+  constructor
+  · intro h
+    exact ⟨fun d hd => h d (List.mem_append_left _ hd),
+           fun d hd => h d (List.mem_append_right _ hd)⟩
+  · intro ⟨h1, h2⟩ d hd
+    rw [List.mem_append] at hd
+    cases hd with
+    | inl h => exact h1 d h
+    | inr h => exact h2 d h
+
+-- ════════════════════════════════════════════════════════════════════
+-- Burst Transfer Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Burst transfers with burst size 1 have exactly `source.size` steps. -/
+theorem Descriptor.stepCount_burst_one (d : Descriptor)
+    (hb : d.atomicity = .burst 1) :
+    d.stepCount = d.source.size := by
+  simp [Descriptor.stepCount, hb]
+
+/-- Source and destination regions have the same size for valid descriptors. -/
+theorem Descriptor.valid_regions_same_size (d : Descriptor) (h : d.valid) :
+    d.source.size = d.destination.size := h.1
+
+/-- The source chunk start is monotonically increasing with step. -/
+theorem Descriptor.sourceChunk_start_mono (d : Descriptor) (s1 s2 : Nat) (h : s1 ≤ s2) :
+    (d.sourceChunk s1).start ≤ (d.sourceChunk s2).start := by
+  simp only [Descriptor.sourceChunk, Descriptor.stepOffset]
+  exact Nat.add_le_add_left (Nat.mul_le_mul_right d.burstBytes h) _
+
+/-- The destination chunk start is monotonically increasing with step. -/
+theorem Descriptor.destinationChunk_start_mono (d : Descriptor) (s1 s2 : Nat) (h : s1 ≤ s2) :
+    (d.destinationChunk s1).start ≤ (d.destinationChunk s2).start := by
+  simp only [Descriptor.destinationChunk, Descriptor.stepOffset]
+  exact Nat.add_le_add_left (Nat.mul_le_mul_right d.burstBytes h) _
+
+-- ════════════════════════════════════════════════════════════════════
+-- Monotonicity and Progress Theorems
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Bytes completed is monotonically nondecreasing with steps. -/
+theorem Descriptor.bytesCompleted_mono (d : Descriptor) (s1 s2 : Nat) (h : s1 ≤ s2) :
+    d.bytesCompleted s1 ≤ d.bytesCompleted s2 := by
+  simp only [Descriptor.bytesCompleted]
+  exact min_le_min_right _ (Nat.mul_le_mul_right _ h)
+
+/-- Bytes remaining is monotonically nonincreasing with steps. -/
+theorem Descriptor.bytesRemaining_mono (d : Descriptor) (s1 s2 : Nat) (h : s1 ≤ s2) :
+    d.bytesRemaining s2 ≤ d.bytesRemaining s1 := by
+  simp only [Descriptor.bytesRemaining]
+  have := d.bytesCompleted_mono s1 s2 h
+  omega
+
+/-- Bytes completed never exceeds total bytes. -/
+theorem Descriptor.bytesCompleted_le_bytesMoved (d : Descriptor) (steps : Nat) :
+    d.bytesCompleted steps ≤ d.bytesMoved := by
+  simp [Descriptor.bytesCompleted]
+
+/-- Bytes completed plus bytes remaining equals total bytes. -/
+theorem Descriptor.bytesCompleted_add_remaining (d : Descriptor) (steps : Nat) :
+    d.bytesCompleted steps + d.bytesRemaining steps = d.bytesMoved := by
+  simp [Descriptor.bytesRemaining]
+  have := d.bytesCompleted_le_bytesMoved steps
+  omega
+
+/-- A descriptor with stepCount ≤ stepsCompleted is complete. -/
+theorem Descriptor.isComplete_iff (d : Descriptor) (stepsCompleted : Nat) :
+    d.isComplete stepsCompleted ↔ d.stepCount ≤ stepsCompleted := by
+  rfl
+
+/-- Completion is monotonic: once complete, always complete. -/
+theorem Descriptor.isComplete_mono (d : Descriptor) (s1 s2 : Nat)
+    (h : s1 ≤ s2) (hc : d.isComplete s1) : d.isComplete s2 := by
+  simp [Descriptor.isComplete] at *; omega
+
+/-- Chain total bytes is nonnegative (trivial but useful). -/
+theorem chainTotalBytes_nonneg (c : List Descriptor) :
+    0 ≤ chainTotalBytes c := Nat.zero_le _
+
+/-- Reversing a chain preserves total bytes. -/
+theorem chainTotalBytes_reverse (c : List Descriptor) :
+    chainTotalBytes c.reverse = chainTotalBytes c := by
+  simp only [chainTotalBytes, List.foldl_reverse]
+  induction c with
+  | nil => rfl
+  | cons d rest ih =>
+    simp only [List.foldr_cons, List.foldl_cons, Nat.zero_add]
+    rw [ih]
+    rw [show d.bytesMoved = d.bytesMoved + 0 from by omega]
+    rw [foldl_bytesMoved_shift]
+    omega
+
+/-- Reversing a chain preserves validity. -/
+theorem chainValid_reverse (c : List Descriptor) :
+    chainValid c.reverse ↔ chainValid c := by
+  constructor
+  · intro h d hd; exact h d (List.mem_reverse.mpr hd)
+  · intro h d hd; exact h d (List.mem_reverse.mp hd)
+
+/-- Priority toNat is injective. -/
+theorem Priority.toNat_injective (p1 p2 : Priority) (h : p1.toNat = p2.toNat) : p1 = p2 := by
+  cases p1 <;> cases p2 <;> simp [Priority.toNat] at h <;> rfl
+
+/-- Priority toNat is bounded. -/
+theorem Priority.toNat_le_three (p : Priority) : p.toNat ≤ 3 := by
+  cases p <;> simp [Priority.toNat]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+private def testDesc1 : Descriptor :=
+  { source := { start := 0, size := 64 }
+    destination := { start := 0, size := 64 }
+    order := .relaxed
+    coherence := .coherent
+    atomicity := .whole }
+
+/-- A 64-byte coherent whole transfer is valid. -/
+example : testDesc1.valid := by native_decide
+
+/-- A 64-byte whole transfer has exactly 1 step. -/
+example : testDesc1.stepCount = 1 := by native_decide
+
+/-- A 64-byte whole transfer moves 64 bytes. -/
+example : testDesc1.bytesMoved = 64 := by native_decide
+
+private def testBurstDesc : Descriptor :=
+  { source := { start := 0, size := 256 }
+    destination := { start := 0, size := 256 }
+    order := .seqCst
+    coherence := .nonCoherent
+    atomicity := .burst 64 }
+
+/-- A 256-byte non-coherent burst descriptor with seqCst is valid. -/
+example : testBurstDesc.valid := by native_decide
+
+/-- A 256-byte burst(64) transfer has 4 steps. -/
+example : testBurstDesc.stepCount = 4 := by native_decide
+
+/-- A mismatched-size descriptor is invalid. -/
+example : ¬({ source := { start := 0, size := 32 }
+              destination := { start := 0, size := 64 }
+              order := .relaxed
+              coherence := .coherent
+              atomicity := .whole : Descriptor }).valid := by native_decide
+
+/-- A non-coherent descriptor with relaxed order is invalid. -/
+example : ¬({ source := { start := 0, size := 16 }
+              destination := { start := 0, size := 16 }
+              order := .relaxed
+              coherence := .nonCoherent
+              atomicity := .whole : Descriptor }).valid := by native_decide
+
+end Radix.DMA.Spec

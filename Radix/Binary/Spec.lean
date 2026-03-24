@@ -39,6 +39,7 @@ inductive PrimType where
   | uint16 (endian : Endian)
   | uint32 (endian : Endian)
   | uint64 (endian : Endian)
+  | bytes (count : Nat)
   deriving DecidableEq, Repr
 
 /-- The byte size of a primitive type. -/
@@ -47,21 +48,56 @@ def PrimType.byteSize : PrimType → Nat
   | .uint16 _     => 2
   | .uint32 _     => 4
   | .uint64 _     => 8
+  | .bytes count  => count
+
+/-! ## Variable-Length Field Types -/
+
+/-- A variable-length field type for binary formats. -/
+inductive VarLenType where
+  /-- Length-prefixed data with a given prefix size and byte order. -/
+  | lengthPrefixed (prefixBytes : Nat) (endian : Endian)
+  /-- Count-prefixed arrays with a given prefix size, byte order, and element minimum size. -/
+  | countPrefixedArray (prefixBytes : Nat) (endian : Endian) (elemMinSize : Nat)
+  /-- Null-terminated string/data. -/
+  | nullTerminated
+  /-- Fixed count of repeated elements. -/
+  | fixedArray (count : Nat) (elemSize : Nat)
+  deriving Repr, DecidableEq
+
+/-- Minimum byte overhead for a variable-length type. -/
+def VarLenType.minOverhead : VarLenType → Nat
+  | .lengthPrefixed n _ => n
+  | .countPrefixedArray n _ _ => n
+  | .nullTerminated => 1
+  | .fixedArray count elemSize => count * elemSize
+
+/-- A field type can be fixed-size or variable-length. -/
+inductive FieldType where
+  | prim (ptype : PrimType)
+  | var (vtype : VarLenType)
+  deriving Repr, DecidableEq
+
+/-- The minimum number of bytes required to encode a field type. -/
+def FieldType.minSize : FieldType → Nat
+  | .prim ptype => ptype.byteSize
+  | .var vtype => vtype.minOverhead
 
 /-! ## Format Description -/
 
-/-- A binary format is a list of typed fields with names, offsets, and sizes. -/
+/-- A binary format is a list of typed fields with names and offsets.
+    Variable-length fields contribute their minimum overhead. -/
 structure FieldSpec where
   name   : String
   offset : Nat
-  ptype  : PrimType
+  ftype  : FieldType
   deriving Repr
 
-/-- The byte range occupied by a field. -/
+/-- The minimum byte range occupied by a field. -/
 def FieldSpec.endOffset (f : FieldSpec) : Nat :=
-  f.offset + f.ptype.byteSize
+  f.offset + f.ftype.minSize
 
-/-- A complete binary format specification. -/
+/-- A complete binary format specification.
+    `totalSize` is exact for fixed layouts and a minimum size for variable layouts. -/
 structure FormatSpec where
   fields    : List FieldSpec
   totalSize : Nat
@@ -85,12 +121,14 @@ def FormatSpec.isValid (spec : FormatSpec) : Prop :=
 /-! ## Round-Trip Property Definitions -/
 
 /-- A parse function is correct with respect to a format if it
-    successfully parses any buffer that is large enough. -/
+  successfully parses any buffer that is at least as large as the
+  specification's minimum size. -/
 def parseCorrectness {α : Type} (parse : ByteArray → Nat → Option α) (spec : FormatSpec) : Prop :=
   ∀ (buf : ByteArray) (offset : Nat),
     offset + spec.totalSize ≤ buf.size → (parse buf offset).isSome
 
-/-- A serialize function is correct if the output has the expected size. -/
+/-- A serialize function is correct if the output has the expected size.
+  This is primarily intended for fixed-size specifications. -/
 def serializeCorrectness {α : Type} (serialize : α → ByteArray) (spec : FormatSpec) : Prop :=
   ∀ (x : α), (serialize x).size = spec.totalSize
 
@@ -106,5 +144,64 @@ def inverseRoundTrip {α : Type} (parse : ByteArray → Nat → Option α) (seri
     offset + spec.totalSize ≤ buf.size →
     parse buf offset = some x →
     serialize x = buf.extract offset (offset + spec.totalSize)
+
+-- ════════════════════════════════════════════════════════════════════
+-- Bit-Field Specifications
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A bit-field within a byte or word: position (0 = LSB) and width. -/
+structure BitFieldSpec where
+  position : Nat
+  width    : Nat
+  hWidth   : 0 < width
+  deriving Repr
+
+/-- Bit-field end position (exclusive). -/
+def BitFieldSpec.endPos (bf : BitFieldSpec) : Nat :=
+  bf.position + bf.width
+
+/-- Extract a bit-field value from a natural number. -/
+def BitFieldSpec.extract (bf : BitFieldSpec) (v : Nat) : Nat :=
+  (v >>> bf.position) % (2 ^ bf.width)
+
+/-- Insert a bit-field value into a natural number.
+    Clears the field bits first, then ORs in the new value.
+    Note: for Nat, we use XOR to clear since Nat has no complement. -/
+def BitFieldSpec.insert (bf : BitFieldSpec) (target value : Nat) : Nat :=
+  let mask := (2 ^ bf.width - 1) <<< bf.position
+  let cleared := target ^^^ (target &&& mask)  -- zero out field bits
+  cleared ||| ((value % (2 ^ bf.width)) <<< bf.position)
+
+/-- Two bit-fields do not overlap if their ranges are disjoint. -/
+def BitFieldSpec.disjoint (a b : BitFieldSpec) : Prop :=
+  a.endPos ≤ b.position ∨ b.endPos ≤ a.position
+
+instance (a b : BitFieldSpec) : Decidable (BitFieldSpec.disjoint a b) :=
+  inferInstanceAs (Decidable (_ ∨ _))
+
+/-- A bit-field register: a collection of non-overlapping fields within a given bit width. -/
+structure RegisterSpec where
+  bitWidth : Nat
+  fields   : List (String × BitFieldSpec)
+  deriving Repr
+
+/-- A register spec is valid if all fields fit within the bit width
+    and no two fields overlap. -/
+def RegisterSpec.isValid (reg : RegisterSpec) : Prop :=
+  (∀ nf ∈ reg.fields, nf.2.endPos ≤ reg.bitWidth)
+  ∧ (∀ a ∈ reg.fields, ∀ b ∈ reg.fields, a ≠ b → BitFieldSpec.disjoint a.2 b.2)
+
+-- ════════════════════════════════════════════════════════════════════
+-- Alignment and Padding Spec
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Compute the padding needed to align `offset` to `alignment`. -/
+def paddingToAlign (offset alignment : Nat) : Nat :=
+  if alignment ≤ 1 then 0
+  else (alignment - offset % alignment) % alignment
+
+/-- Compute the aligned offset. -/
+def alignedOffset (offset alignment : Nat) : Nat :=
+  offset + paddingToAlign offset alignment
 
 end Radix.Binary.Spec

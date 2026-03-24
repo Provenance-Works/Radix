@@ -74,7 +74,7 @@ def runBinaryPropertyTests : IO Nat := do
     let fields := [Radix.Binary.FieldValue.byte "x" ⟨v8⟩]
     match Radix.Binary.serializeFormat (.byte "x") fields with
     | .ok ba =>
-      match Radix.Binary.parseFormat ba (.byte "x") with
+      match Radix.Binary.parseFormatExact ba (.byte "x") with
       | .ok pf =>
         match pf with
         | [.byte _ pv] => assert (pv == ⟨v8⟩) "byte format roundtrip"
@@ -89,13 +89,29 @@ def runBinaryPropertyTests : IO Nat := do
     for e in [Radix.Bytes.Spec.Endian.little, Radix.Bytes.Spec.Endian.big] do
       match Radix.Binary.serializeFormat (.uint16 "x" e) fields with
       | .ok ba =>
-        match Radix.Binary.parseFormat ba (.uint16 "x" e) with
+        match Radix.Binary.parseFormatExact ba (.uint16 "x" e) with
         | .ok pf =>
           match pf with
           | [.uint16 _ pv] => assert (pv == ⟨v16⟩) "u16 format roundtrip"
           | _ => assert false "u16 format wrong shape"
         | .error _ => assert false "u16 format parse error"
       | .error _ => assert false "u16 format serialize error"
+
+  -- ## Format round-trip for fixed bytes blob
+  for _ in [:numIter] do
+    let (rng', v32) := rng.nextUInt32; rng := rng'
+    let blob := ByteArray.mk
+      #[(v32 &&& 0xFF).toUInt8, ((v32 >>> 8) &&& 0xFF).toUInt8, ((v32 >>> 16) &&& 0xFF).toUInt8, ((v32 >>> 24) &&& 0xFF).toUInt8]
+    let fields := [Radix.Binary.FieldValue.bytes "blob" blob]
+    match Radix.Binary.serializeFormat (.bytes "blob" 4) fields with
+    | .ok ba =>
+      match Radix.Binary.parseFormatExact ba (.bytes "blob" 4) with
+      | .ok pf =>
+        match pf with
+        | [.bytes _ parsed] => assert (parsed == blob) "bytes format roundtrip"
+        | _ => assert false "bytes format wrong shape"
+      | .error _ => assert false "bytes format parse error"
+    | .error _ => assert false "bytes format serialize error"
 
   -- ## Encoding size monotonicity: larger values >= same size encoding
   let size0 := (Radix.Binary.Leb128.encodeU32 ⟨0⟩).size

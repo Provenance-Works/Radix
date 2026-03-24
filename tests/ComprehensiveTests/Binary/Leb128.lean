@@ -42,6 +42,16 @@ def runBinaryLeb128Tests : IO Nat := do
   | some (v, _) => assert (v.toNat == 128) "U32 rt 128"
   | none => assert false "decU32(128) failed"
 
+  -- Canonical external ULEB128 example: 624485 -> E5 8E 26
+  let enc624485 := Radix.Binary.Leb128.encodeU32 ⟨624485⟩
+  assert (enc624485 == ByteArray.mk #[0xE5, 0x8E, 0x26])
+    "ULEB128 canonical encoding for 624485"
+  match Radix.Binary.Leb128.decodeU32 (ByteArray.mk #[0xE5, 0x8E, 0x26]) 0 with
+  | some (v, consumed) =>
+    assert (v.toNat == 624485) "ULEB128 canonical decode for 624485"
+    assert (consumed == 3) "ULEB128 canonical byte count for 624485"
+  | none => assert false "ULEB128 canonical decode for 624485 failed"
+
   -- Larger values
   for n in [255, 256, 1000, 16384, 65535, 1000000] do
     let enc := Radix.Binary.Leb128.encodeU32 ⟨n.toUInt32⟩
@@ -72,6 +82,20 @@ def runBinaryLeb128Tests : IO Nat := do
   | some (v, _) => assert (v.toNat == 0xFFFFFFFFFFFFFFFF) "U64 rt MAX"
   | none => assert false "decU64(MAX) failed"
 
+  -- WebAssembly permits trailing-zero variants within the byte bound.
+  match Radix.Binary.Leb128.decodeU32 (ByteArray.mk #[0x03]) 0 with
+  | some (v, consumed) =>
+    assert (v.toNat == 3) "U32 canonical short encoding for 3"
+    assert (consumed == 1) "U32 short encoding byte count for 3"
+  | none => assert false "U32 canonical short encoding for 3 failed"
+  match Radix.Binary.Leb128.decodeU32 (ByteArray.mk #[0x83, 0x00]) 0 with
+  | some (v, consumed) =>
+    assert (v.toNat == 3) "U32 trailing-zero encoding for 3"
+    assert (consumed == 2) "U32 trailing-zero byte count for 3"
+  | none => assert false "U32 trailing-zero encoding for 3 failed"
+  assert (Radix.Binary.Leb128.decodeU32 (ByteArray.mk #[0x83, 0x80, 0x80, 0x80, 0x10]) 0 == none)
+    "U32 rejects terminal byte with non-zero unused high bits"
+
   -- ## Signed S32 encode/decode round-trip
   -- Zero
   let sEnc0 := Radix.Binary.Leb128.encodeS32 (0 : Radix.Int32)
@@ -94,6 +118,37 @@ def runBinaryLeb128Tests : IO Nat := do
     match Radix.Binary.Leb128.decodeS32 enc 0 with
     | some (v, _) => assert (v.toInt == n) s!"S32 rt {n}"
     | none => assert false s!"decS32({n}) failed"
+
+  -- Canonical external SLEB128 example: -123456 -> C0 BB 78
+  let sEncNeg123456 := Radix.Binary.Leb128.encodeS32 (Radix.Int32.fromInt (-123456))
+  assert (sEncNeg123456 == ByteArray.mk #[0xC0, 0xBB, 0x78])
+    "SLEB128 canonical encoding for -123456"
+  match Radix.Binary.Leb128.decodeS32 (ByteArray.mk #[0xC0, 0xBB, 0x78]) 0 with
+  | some (v, consumed) =>
+    assert (v.toInt == -123456) "SLEB128 canonical decode for -123456"
+    assert (consumed == 3) "SLEB128 canonical byte count for -123456"
+  | none => assert false "SLEB128 canonical decode for -123456 failed"
+
+  -- WebAssembly accepts sign-extension variants within the byte bound.
+  match Radix.Binary.Leb128.decodeS32 (ByteArray.mk #[0x7E]) 0 with
+  | some (v, consumed) =>
+    assert (v.toInt == -2) "S32 short encoding for -2"
+    assert (consumed == 1) "S32 short encoding byte count for -2"
+  | none => assert false "S32 short encoding for -2 failed"
+  match Radix.Binary.Leb128.decodeS32 (ByteArray.mk #[0xFE, 0x7F]) 0 with
+  | some (v, consumed) =>
+    assert (v.toInt == -2) "S32 sign-extended encoding for -2"
+    assert (consumed == 2) "S32 sign-extended byte count for -2"
+  | none => assert false "S32 sign-extended encoding for -2 failed"
+  match Radix.Binary.Leb128.decodeS32 (ByteArray.mk #[0xFE, 0xFF, 0x7F]) 0 with
+  | some (v, consumed) =>
+    assert (v.toInt == -2) "S32 longer sign-extended encoding for -2"
+    assert (consumed == 3) "S32 longer sign-extended byte count for -2"
+  | none => assert false "S32 longer sign-extended encoding for -2 failed"
+  assert (Radix.Binary.Leb128.decodeS32 (ByteArray.mk #[0x80, 0x80, 0x80, 0x80, 0x08]) 0 == none)
+    "S32 rejects terminal byte with invalid positive sign extension"
+  assert (Radix.Binary.Leb128.decodeS32 (ByteArray.mk #[0x80, 0x80, 0x80, 0x80, 0x77]) 0 == none)
+    "S32 rejects terminal byte with invalid negative sign extension"
 
   -- Min S32: -2147483648
   let sEncMin := Radix.Binary.Leb128.encodeS32 (Radix.Int32.fromInt (-2147483648))
@@ -126,5 +181,7 @@ def runBinaryLeb128Tests : IO Nat := do
   -- ## Decode from empty / truncated data
   assert (Radix.Binary.Leb128.decodeU32 ByteArray.empty 0 == none) "decU32 empty"
   assert (Radix.Binary.Leb128.decodeU32 (ByteArray.mk #[0x80]) 0 == none) "decU32 truncated"
+  assert (Radix.Binary.Leb128.decodeS32 ByteArray.empty 0 == none) "decS32 empty"
+  assert (Radix.Binary.Leb128.decodeS32 (ByteArray.mk #[0x80]) 0 == none) "decS32 truncated"
 
   c.get

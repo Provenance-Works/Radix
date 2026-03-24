@@ -48,7 +48,11 @@ lean_lib ComprehensiveTestLib where
              `tests.ComprehensiveTests.Memory.Buffer,
              `tests.ComprehensiveTests.Memory.Ptr,
              `tests.ComprehensiveTests.Memory.Layout,
+             `tests.ComprehensiveTests.Memory.Region,
              `tests.ComprehensiveTests.Memory.Properties,
+             `tests.ComprehensiveTests.Binary.FormatBasics,
+             `tests.ComprehensiveTests.Binary.FormatSerialization,
+             `tests.ComprehensiveTests.Binary.FormatLayout,
              `tests.ComprehensiveTests.Binary.Format,
              `tests.ComprehensiveTests.Binary.Leb128,
              `tests.ComprehensiveTests.Binary.Properties,
@@ -70,7 +74,12 @@ lean_lib ComprehensiveTestLib where
              `tests.ComprehensiveTests.RingBuffer,
              `tests.ComprehensiveTests.Bitmap,
              `tests.ComprehensiveTests.CRC,
-             `tests.ComprehensiveTests.MemoryPool]
+             `tests.ComprehensiveTests.MemoryPool,
+             `tests.ComprehensiveTests.UTF8,
+             `tests.ComprehensiveTests.ECC,
+             `tests.ComprehensiveTests.DMA,
+             `tests.ComprehensiveTests.Timer,
+             `tests.ComprehensiveTests.ProofAutomation]
 
 lean_exe comptest where
   root := `tests.ComprehensiveTests
@@ -94,7 +103,13 @@ lean_lib ExamplesLib where
              `examples.BitmapDemo,
              `examples.AlignmentDemo,
              `examples.MemoryPoolDemo,
-             `examples.NumericDemo]
+             `examples.NumericDemo,
+             `examples.UTF8Demo,
+             `examples.ECCDemo,
+             `examples.DMADemo,
+             `examples.RegionAlgebraDemo,
+             `examples.TimerDemo,
+             `examples.ProofAutomationDemo]
 
 lean_exe examples where
   root := `examples.Main

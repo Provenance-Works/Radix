@@ -8,16 +8,21 @@
 radix/
 ├── lakefile.lean              # Lake ビルド設定
 ├── lean-toolchain             # Lean 4 バージョンピン（v4.29.0-rc4）
-├── Radix.lean                 # ルートインポート（全13モジュールをインポート）
+├── Radix.lean                 # ルートインポート（全18モジュールをインポート）
 ├── CHANGELOG.md               # バージョン履歴
 ├── test_helpers.lean          # アドホック証明実験
 │
-├── Radix/                     # ソースモジュール（13モジュール）
+├── Radix/                     # ソースモジュール（18モジュール）
 │   ├── Alignment.lean         # Alignment モジュールアグリゲータ
 │   ├── Bitmap.lean            # Bitmap モジュールアグリゲータ
 │   ├── CRC.lean               # CRC モジュールアグリゲータ
+│   ├── DMA.lean               # DMA モジュールアグリゲータ
+│   ├── ECC.lean               # ECC モジュールアグリゲータ
 │   ├── MemoryPool.lean        # MemoryPool モジュールアグリゲータ
+│   ├── ProofAutomation.lean   # 証明自動化 tactic マクロ
 │   ├── RingBuffer.lean        # RingBuffer モジュールアグリゲータ
+│   ├── Timer.lean             # Timer モジュールアグリゲータ
+│   ├── UTF8.lean              # UTF-8 モジュールアグリゲータ
 │   ├── Word.lean              # Word モジュールアグリゲータ
 │   ├── Bit.lean               # Bit モジュールアグリゲータ
 │   ├── Bytes.lean             # Bytes モジュールアグリゲータ
@@ -29,7 +34,7 @@ radix/
 │   └── <Module>/              # モジュールごとの Spec / Impl / Lemmas / Assumptions
 │
 ├── tests/
-│   ├── Main.lean              # 実行テスト（全13モジュール）
+│   ├── Main.lean              # 実行テスト（全18モジュール）
 │   ├── PropertyTests.lean     # プロパティベーステスト（500イテレーション、LCG PRNG）
 │   ├── ComprehensiveTests.lean # アサーション集計付きの完全回帰テスト
 │   └── ComprehensiveTests/    # モジュール別の包括テスト
@@ -42,7 +47,7 @@ radix/
 │
 ├── examples/
 │   ├── Main.lean              # examples 実行ファイルのエントリポイント
-│   └── *.lean                 # 15個の実行可能使用例
+│   └── *.lean                 # 21個の実行可能使用例
 │
 └── docs/                      # ユーザー向けドキュメント
     ├── en/                    # 英語ドキュメント
@@ -75,7 +80,7 @@ graph TD
 |------|---------|
 | `lakefile.lean` | ビルド設定、依存関係、ターゲット |
 | `lean-toolchain` | ピン留めされたLean 4バージョン |
-| `Radix.lean` | ルートインポート — 全13モジュールアグリゲータをインポート |
+| `Radix.lean` | ルートインポート — 全18モジュールアグリゲータをインポート |
 | `tests/ComprehensiveTests.lean` | アサーション集計付きの完全回帰エントリポイント |
 | `CHANGELOG.md` | バージョン履歴 |
 

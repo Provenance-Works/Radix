@@ -41,6 +41,7 @@ match result with
 | バリアント | 説明 |
 |---------|-------------|
 | `outOfBounds` | 入力 ByteArray の範囲外を読み取ろうとした |
+| `trailingBytes` | フォーマットの解析後に余剰バイトが残っていた |
 | `internal` | パーサー内部の不整合 |
 
 ## バイナリシリアライゼーションエラー (`Radix.Binary.Serial.SerialError`)
@@ -49,6 +50,7 @@ match result with
 |---------|-------------|
 | `missingField` | 必須フィールドが提供されていない |
 | `typeMismatch` | フィールド値の型がフォーマットと一致しない |
+| `unexpectedField` | シリアライズ後に未使用のフィールドが残っていた |
 
 ## LEB128 デコード失敗
 

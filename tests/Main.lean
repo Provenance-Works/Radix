@@ -17,6 +17,12 @@ import tests.ComprehensiveTests.RingBuffer
 import tests.ComprehensiveTests.Bitmap
 import tests.ComprehensiveTests.CRC
 import tests.ComprehensiveTests.MemoryPool
+import tests.ComprehensiveTests.Memory.Region
+import tests.ComprehensiveTests.UTF8
+import tests.ComprehensiveTests.ECC
+import tests.ComprehensiveTests.DMA
+import tests.ComprehensiveTests.Timer
+import tests.ComprehensiveTests.ProofAutomation
 
 /-! # Radix Execution Tests -/
 
@@ -607,13 +613,13 @@ private def testMemoryPtr : IO Unit := do
 
 private def testBinaryFormat : IO Unit := do
   IO.println "  Binary.Format..."
-  let fmt := Radix.Binary.Format.u32le "magic" ++ Radix.Binary.Format.u16le "version" ++ Radix.Binary.Format.pad 2
+  let fmt := Radix.Binary.Format.u32le "magic" ++ Radix.Binary.Format.u16le "version" ++ Radix.Binary.Format.align 4
   assert (fmt.fixedSize == some 8) "Format fixedSize"
   assert (fmt.fieldCount == 2) "Format fieldCount"
   let spec := fmt.toFormatSpec
   assert (spec.totalSize == 8) "FormatSpec totalSize"
   let data := ByteArray.mk #[0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00]
-  match Radix.Binary.parseFormat data fmt with
+  match Radix.Binary.parseFormatExact data fmt with
   | .ok fields =>
     match Radix.Binary.findField "magic" fields with
     | some (Radix.Binary.FieldValue.uint32 _ v) =>
@@ -630,7 +636,7 @@ private def testBinaryFormat : IO Unit := do
   ]
   match Radix.Binary.serializeFormat fmt fields with
   | .ok serialized =>
-    match Radix.Binary.parseFormat serialized fmt with
+    match Radix.Binary.parseFormatExact serialized fmt with
     | .ok fields2 =>
       match Radix.Binary.findField "magic" fields2 with
       | some (Radix.Binary.FieldValue.uint32 _ v) =>
@@ -1129,6 +1135,15 @@ def main : IO Unit := do
   IO.println "All Radix Phase 4 tests passed!"
   IO.println ""
   IO.println "Running Radix Phase 5 tests..."
+  let _ ← runMemoryRegionTests
+  let _ ← runUTF8Tests
+  let _ ← runECCTests
+  let _ ← runDMATests
+  let _ ← runTimerTests
+  let _ ← runProofAutomationTests
+  IO.println "All Radix Phase 5 tests passed!"
+  IO.println ""
+  IO.println "Running Radix Phase 6 tests..."
   testConcurrency
   testBareMetal
-  IO.println "All Radix Phase 5 tests passed!"
+  IO.println "All Radix Phase 6 tests passed!"

@@ -229,4 +229,28 @@ def readU8_writeU8_diff : Prop :=
     (hi : i < s.len) (hj : j < s.len) (_ : i ≠ j),
     (s.writeU8 i v hi).readU8 j (by simp [ByteSliceSpec.writeU8_len]; exact hj) = s.readU8 j hj
 
+/-! ## 7. Nibble and Hex Encoding -/
+
+/-- Extract the high nibble (bits 7..4) of a byte. -/
+def highNibble (b : BitVec 8) : BitVec 4 :=
+  BitVec.truncate 4 (b >>> 4)
+
+/-- Extract the low nibble (bits 3..0) of a byte. -/
+def lowNibble (b : BitVec 8) : BitVec 4 :=
+  BitVec.truncate 4 b
+
+/-- Reconstruct a byte from high and low nibbles. -/
+def fromNibbles (hi lo : BitVec 4) : BitVec 8 :=
+  (hi.zeroExtend 8 <<< 4) ||| lo.zeroExtend 8
+
+/-- Byte extraction is bounded: extractByte always produces a valid 8-bit value. -/
+theorem extractByte_width {n : Nat} (x : BitVec n) (i : Nat) :
+    (extractByte x i).toNat < 256 := by
+  exact (extractByte x i).isLt
+
+/-- Zero-extending an 8-bit value to width n preserves the value. -/
+theorem extractByte_zero {n : Nat} (x : BitVec n) :
+    (extractByte x 0).toNat = x.toNat % 256 := by
+  simp [extractByte]
+
 end Radix.Bytes.Spec

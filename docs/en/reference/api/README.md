@@ -2,7 +2,7 @@
 
 > **Audience**: Developers
 
-Per-module API documentation for all Radix v0.2.0 modules and extension surfaces.
+Per-module API documentation for the current Radix surface, including the v0.3.0 composable additions.
 
 ## Module Index
 
@@ -12,7 +12,7 @@ Per-module API documentation for all Radix v0.2.0 modules and extension surfaces
 | [Numeric](numeric.md) | Width-generic numeric typeclasses over Word and Bit | `Radix/Word/Numeric.lean` |
 | [Bit](bit.md) | Bitwise operations, scanning, bit fields | `Radix/Bit/` |
 | [Bytes](bytes.md) | Byte order, endianness, ByteSlice | `Radix/Bytes/` |
-| [Memory](memory.md) | Buffer, Ptr, Layout | `Radix/Memory/` |
+| [Memory](memory.md) | Buffer, Ptr, Layout, and region algebra | `Radix/Memory/` |
 | [Binary](binary.md) | Format DSL, Parser, Serializer, LEB128 | `Radix/Binary/` |
 | [System](system.md) | Error, FD, IO, Assumptions | `Radix/System/` |
 | [Concurrency](concurrency.md) | Atomic operations model, memory ordering | `Radix/Concurrency/` |
@@ -22,6 +22,11 @@ Per-module API documentation for all Radix v0.2.0 modules and extension surfaces
 | [Bitmap](bitmap.md) | Dense bitset backed by `Array UInt64` | `Radix/Bitmap/` |
 | [CRC](crc.md) | CRC-32 and CRC-16 implementations with streaming API | `Radix/CRC/` |
 | [MemoryPool](memorypool.md) | Bump and slab allocator models | `Radix/MemoryPool/` |
+| [UTF8](utf8.md) | Verified UTF-8 scalar model and executable codecs | `Radix/UTF8/` |
+| [ECC](ecc.md) | Hamming(7,4) parity and single-bit correction helpers | `Radix/ECC/` |
+| [DMA](dma.md) | DMA descriptor validation and copy simulation | `Radix/DMA/` |
+| [Timer](timer.md) | Monotonic clock and deadline helpers | `Radix/Timer/` |
+| [ProofAutomation](proofautomation.md) | Radix-specific tactic macros | `Radix/ProofAutomation.lean` |
 
 ## See Also
 

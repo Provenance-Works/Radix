@@ -26,6 +26,12 @@ graph LR
     CRC --> Bit
     MemoryPool["MemoryPool"] --> Word
     MemoryPool --> Memory
+    UTF8["UTF8"]
+    ECC["ECC"]
+    DMA["DMA"] --> Memory
+    DMA -.-> Concurrency
+    Timer["Timer"]
+    ProofAutomation["ProofAutomation"]
     System["System"] --> Word
     System --> Bytes
     System --> Memory
@@ -42,6 +48,11 @@ graph LR
     style Bitmap fill:#26C6DA,color:white
     style CRC fill:#26C6DA,color:white
     style MemoryPool fill:#29B6F6,color:white
+    style UTF8 fill:#26A69A,color:white
+    style ECC fill:#26A69A,color:white
+    style DMA fill:#26A69A,color:white
+    style Timer fill:#26A69A,color:white
+    style ProofAutomation fill:#5C6BC0,color:white
     style System fill:#FFA726,color:white
     style Concurrency fill:#AB47BC,color:white
     style BareMetal fill:#8D6E63,color:white
@@ -118,6 +129,14 @@ graph TD
         SAssume["System.Assumptions<br/>(Layer 1)"] --> SSpec
     end
 
+    subgraph "Concurrency モジュール"
+        CSpec["Concurrency.Spec<br/>(Layer 3)"]
+        COrd["Concurrency.Ordering<br/>(Layer 2)"] --> CSpec
+        CAtomic["Concurrency.Atomic<br/>(Layer 2)"] --> CSpec
+        CLemmas["Concurrency.Lemmas<br/>(Layer 3)"] --> COrd
+        CLemmas --> CAtomic
+    end
+
     subgraph "v0.2.0 モジュール"
         ASpec["Alignment.Spec<br/>(Layer 3)"]
         AOps["Alignment.Ops<br/>(Layer 2)"] --> ASpec
@@ -149,6 +168,29 @@ graph TD
         MPModel --> WUInt
         MPLemmas["MemoryPool.Lemmas<br/>(Layer 3)"] --> MPModel
     end
+
+    subgraph "v0.3.0 モジュール"
+        USpec["UTF8.Spec<br/>(Layer 3)"]
+        UOps["UTF8.Ops<br/>(Layer 2)"] --> USpec
+        ULemmas["UTF8.Lemmas<br/>(Layer 3)"] --> UOps
+
+        ESpec["ECC.Spec<br/>(Layer 3)"]
+        EOps["ECC.Ops<br/>(Layer 2)"] --> ESpec
+        ELemmas["ECC.Lemmas<br/>(Layer 3)"] --> EOps
+
+        DSpec["DMA.Spec<br/>(Layer 3)"] --> MSpec
+        DSpec -.-> CSpec
+        DOps["DMA.Ops<br/>(Layer 2)"] --> DSpec
+        DLemmas["DMA.Lemmas<br/>(Layer 3)"] --> DOps
+
+        TSpec["Timer.Spec<br/>(Layer 3)"]
+        TOps["Timer.Ops<br/>(Layer 2)"] --> TSpec
+        TLemmas["Timer.Lemmas<br/>(Layer 3)"] --> TOps
+    end
+
+    subgraph "メタレベル証明支援"
+        PAuto["ProofAutomation<br/>(メタレベルマクロ)"]
+    end
 ```
 
 ## 外部依存関係
@@ -166,14 +208,20 @@ graph TD
 - **Bit** は Word の型にのみ依存（Word.Arith には依存しない）
 - **Bytes** は Word と Bit に依存
 - **Memory** は Word と Bytes に依存（Bit には直接依存しない）
+- **Memory** は `Memory.Spec.Region` に領域代数プリミティブも持つ
 - **Binary** は Word、Bit、Bytes、Memory に依存
 - **Alignment** は Word のみに依存
 - **RingBuffer** は Memory に依存
 - **Bitmap** は Word と Bit に依存
 - **CRC** は Word、Word.Arith、Bit に依存
 - **MemoryPool** は Memory と Word に依存
+- **UTF8** は生バイトと `ByteArray` 上で自己完結している
+- **ECC** は自己完結した符号理論プリミティブ
+- **DMA** は Memory と Concurrency のオーダリングモデルに依存
+- **Timer** は自己完結した論理クロックモデル
 - **System** は Word、Bytes、Memory に依存
 - **Concurrency** と **BareMetal** は独立したモデルモジュール
+- **ProofAutomation** は Mathlib タクティクス上のメタレベル補助モジュール
 
 ## 関連ドキュメント
 
