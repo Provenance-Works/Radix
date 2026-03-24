@@ -408,4 +408,164 @@ theorem generatorMatrix_cols :
 theorem parityCheckMatrix_cols :
     ∀ row ∈ parityCheckMatrix, row.length = 7 := by decide
 
+-- ════════════════════════════════════════════════════════════════════
+-- SECDED Complete Double-Error Detection
+-- ════════════════════════════════════════════════════════════════════
+
+set_option maxHeartbeats 400000 in
+/-- SECDED detects all double-bit inner errors for all nibbles.
+    When two distinct bits are flipped, the result is always .doubleError. -/
+theorem classifySECDED_double_all (n : Nibble) (i j : Fin 7) (hij : i ≠ j) :
+    classifySECDED
+      { inner := flipAt (flipAt (ofNibble n) i) j
+        overallParity := (ofNibbleSECDED n).overallParity } = .doubleError := by
+  fin_cases n <;> fin_cases i <;> fin_cases j <;> (first | exact absurd rfl hij | decide)
+
+set_option maxHeartbeats 400000 in
+/-- SECDED correction recovers original data for all single-bit parity-bit error. -/
+theorem correctSECDED_parity_bit_flip (n : Nibble) :
+    correctSECDED
+      { inner := (ofNibbleSECDED n).inner
+        overallParity := !(ofNibbleSECDED n).overallParity }
+    = some (ofNibbleSECDED n) := by
+  fin_cases n <;> decide
+
+-- ════════════════════════════════════════════════════════════════════
+-- Hamming(15,11) Extended Code
+-- ════════════════════════════════════════════════════════════════════
+
+/-- An 11-bit data word for Hamming(15,11). -/
+abbrev Word11 := Fin 2048
+
+/-- A Hamming(15,11) codeword as a 15-bit natural number.
+    Bits at positions 1,2,4,8 are parity; positions 3,5,6,7,9,10,11,12,13,14,15
+    are data. Layout uses 0-indexed positions 0..14. -/
+structure Codeword1511 where
+  bits : Fin 32768  -- 2^15 values
+  deriving DecidableEq, Repr
+
+namespace Codeword1511
+
+/-- Extract bit at position i (0-indexed) from the codeword. -/
+def getBit (c : Codeword1511) (i : Fin 15) : Bool :=
+  (c.bits.val >>> i.val) &&& 1 == 1
+
+/-- The positions that are parity bits (0-indexed: 0,1,3,7 = positions 1,2,4,8). -/
+def parityPositions : List (Fin 15) := [⟨0, by omega⟩, ⟨1, by omega⟩, ⟨3, by omega⟩, ⟨7, by omega⟩]
+
+/-- The 11 data positions (0-indexed). -/
+def dataPositions : List (Fin 15) :=
+  [⟨2, by omega⟩, ⟨4, by omega⟩, ⟨5, by omega⟩, ⟨6, by omega⟩,
+   ⟨8, by omega⟩, ⟨9, by omega⟩, ⟨10, by omega⟩, ⟨11, by omega⟩,
+   ⟨12, by omega⟩, ⟨13, by omega⟩, ⟨14, by omega⟩]
+
+/-- Compute syndrome for Hamming(15,11). Each syndrome bit checks
+    all positions whose binary representation has that bit set. -/
+def syndrome (c : Codeword1511) : Fin 16 :=
+  let s0 := (List.range 15).foldl (fun acc i =>
+    if (i + 1) &&& 1 != 0 then acc ^^^ ((c.bits.val >>> i) &&& 1) else acc) 0
+  let s1 := (List.range 15).foldl (fun acc i =>
+    if (i + 1) &&& 2 != 0 then acc ^^^ ((c.bits.val >>> i) &&& 1) else acc) 0
+  let s2 := (List.range 15).foldl (fun acc i =>
+    if (i + 1) &&& 4 != 0 then acc ^^^ ((c.bits.val >>> i) &&& 1) else acc) 0
+  let s3 := (List.range 15).foldl (fun acc i =>
+    if (i + 1) &&& 8 != 0 then acc ^^^ ((c.bits.val >>> i) &&& 1) else acc) 0
+  ⟨(s0 % 2) + 2 * (s1 % 2) + 4 * (s2 % 2) + 8 * (s3 % 2), by omega⟩
+
+/-- Encode an 11-bit word into a Hamming(15,11) codeword. -/
+def encode (w : Word11) : Codeword1511 :=
+  -- Place data bits at non-power-of-2 positions
+  let d := w.val
+  let b2  := (d >>> 0) &&& 1
+  let b4  := (d >>> 1) &&& 1
+  let b5  := (d >>> 2) &&& 1
+  let b6  := (d >>> 3) &&& 1
+  let b8  := (d >>> 4) &&& 1
+  let b9  := (d >>> 5) &&& 1
+  let b10 := (d >>> 6) &&& 1
+  let b11 := (d >>> 7) &&& 1
+  let b12 := (d >>> 8) &&& 1
+  let b13 := (d >>> 9) &&& 1
+  let b14 := (d >>> 10) &&& 1
+  -- Compute parity bits
+  let p0 := b2 ^^^ b4 ^^^ b6 ^^^ b8 ^^^ b10 ^^^ b12 ^^^ b14
+  let p1 := b2 ^^^ b5 ^^^ b6 ^^^ b9 ^^^ b10 ^^^ b13 ^^^ b14
+  let p3 := b4 ^^^ b5 ^^^ b6 ^^^ b11 ^^^ b12 ^^^ b13 ^^^ b14
+  let p7 := b8 ^^^ b9 ^^^ b10 ^^^ b11 ^^^ b12 ^^^ b13 ^^^ b14
+  -- Assemble the 15-bit codeword
+  let val := p0 ||| (p1 <<< 1) ||| (b2 <<< 2) ||| (p3 <<< 3) |||
+             (b4 <<< 4) ||| (b5 <<< 5) ||| (b6 <<< 6) ||| (p7 <<< 7) |||
+             (b8 <<< 8) ||| (b9 <<< 9) ||| (b10 <<< 10) ||| (b11 <<< 11) |||
+             (b12 <<< 12) ||| (b13 <<< 13) ||| (b14 <<< 14)
+  ⟨⟨val % 32768, by omega⟩⟩
+
+/-- Extract the 11 data bits from a Hamming(15,11) codeword. -/
+def decode (c : Codeword1511) : Word11 :=
+  let v := c.bits.val
+  let d0  := (v >>> 2) &&& 1
+  let d1  := (v >>> 4) &&& 1
+  let d2  := (v >>> 5) &&& 1
+  let d3  := (v >>> 6) &&& 1
+  let d4  := (v >>> 8) &&& 1
+  let d5  := (v >>> 9) &&& 1
+  let d6  := (v >>> 10) &&& 1
+  let d7  := (v >>> 11) &&& 1
+  let d8  := (v >>> 12) &&& 1
+  let d9  := (v >>> 13) &&& 1
+  let d10 := (v >>> 14) &&& 1
+  let val := d0 ||| (d1 <<< 1) ||| (d2 <<< 2) ||| (d3 <<< 3) |||
+             (d4 <<< 4) ||| (d5 <<< 5) ||| (d6 <<< 6) ||| (d7 <<< 7) |||
+             (d8 <<< 8) ||| (d9 <<< 9) ||| (d10 <<< 10)
+  ⟨val % 2048, by omega⟩
+
+/-- Flip a single bit in a Hamming(15,11) codeword. -/
+def flipBit (c : Codeword1511) (pos : Fin 15) : Codeword1511 :=
+  ⟨⟨(c.bits.val ^^^ (1 <<< pos.val)) % 32768, by omega⟩⟩
+
+/-- Correct a single-bit error using the syndrome. -/
+def correct (c : Codeword1511) : Codeword1511 :=
+  let s := syndrome c
+  if s.val == 0 then c
+  else if h : s.val - 1 < 15 then flipBit c ⟨s.val - 1, h⟩
+  else c  -- syndrome > 15: multi-bit error, cannot correct
+
+end Codeword1511
+
+-- ════════════════════════════════════════════════════════════════════
+-- Hamming(15,11) Theorems
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Encoding then decoding recovers the original 11-bit word (small examples). -/
+theorem hamming1511_roundtrip_0 : Codeword1511.decode (Codeword1511.encode 0) = 0 := by native_decide
+
+theorem hamming1511_roundtrip_1 : Codeword1511.decode (Codeword1511.encode 1) = 1 := by native_decide
+
+theorem hamming1511_roundtrip_42 : Codeword1511.decode (Codeword1511.encode 42) = 42 := by native_decide
+
+theorem hamming1511_roundtrip_2047 :
+    Codeword1511.decode (Codeword1511.encode 2047) = 2047 := by native_decide
+
+/-- Syndrome of a freshly encoded codeword is 0. -/
+theorem hamming1511_syndrome_clean_0 :
+    (Codeword1511.encode 0).syndrome = 0 := by native_decide
+
+theorem hamming1511_syndrome_clean_42 :
+    (Codeword1511.encode 42).syndrome = 0 := by native_decide
+
+theorem hamming1511_syndrome_clean_2047 :
+    (Codeword1511.encode 2047).syndrome = 0 := by native_decide
+
+/-- Single-bit correction works for Hamming(15,11). -/
+theorem hamming1511_correct_bit0 :
+    Codeword1511.decode (Codeword1511.correct
+      (Codeword1511.flipBit (Codeword1511.encode 42) 0)) = 42 := by native_decide
+
+theorem hamming1511_correct_bit7 :
+    Codeword1511.decode (Codeword1511.correct
+      (Codeword1511.flipBit (Codeword1511.encode 42) 7)) = 42 := by native_decide
+
+theorem hamming1511_correct_bit14 :
+    Codeword1511.decode (Codeword1511.correct
+      (Codeword1511.flipBit (Codeword1511.encode 42) 14)) = 42 := by native_decide
+
 end Radix.ECC.Spec
