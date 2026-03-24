@@ -17,7 +17,7 @@ import Radix.MemoryPool
 import Radix.Word.Numeric
 import Radix.UTF8
 import Radix.ECC
-import Radix.DMA
+import Radix.DMA.Ops
 import Radix.Timer
 
 /-!
@@ -72,6 +72,18 @@ def PRNG.nextNat (rng : PRNG) (bound : Nat) : PRNG × Nat :=
   let (rng', v) := rng.nextBounded bound.toUInt64
   (rng', v.toNat)
 
+def PRNG.nextByteList (rng : PRNG) (maxLen : Nat) : PRNG × List UInt8 :=
+  Id.run do
+    let (rng0, len) := rng.nextNat (maxLen + 1)
+    let mut state := rng0
+    let mut bytes : List UInt8 := []
+    for _ in [:len] do
+      let (nextState, value) := state.next
+      let byte := (value % 256).toUInt8
+      state := nextState
+      bytes := byte :: bytes
+    return (state, bytes.reverse)
+
 def PRNG.nextUInt8 (rng : PRNG) : PRNG × UInt8 :=
   let (rng', v) := rng.next
   (rng', (v % 256).toUInt8)
@@ -99,6 +111,11 @@ private def assertUTF8RoundTrip (n : Nat) : IO Unit := do
     | some [decoded] => assert (decoded.val == n) s!"UTF8 round-trip: {n}"
     | _ => assert false s!"UTF8 round-trip decode failed: {n}"
   | none => assert false s!"UTF8 scalar constructor failed: {n}"
+
+private def assertUTF8ReplacementResync (bad : UInt8) : IO Unit := do
+  let decoded := Radix.UTF8.decodeListReplacing [bad, 0x22]
+  assert (Radix.UTF8.scalarsToNats decoded == [Radix.UTF8.replacement.val, 0x22])
+    s!"UTF8 replacement resync after invalid byte: {bad.toNat}"
 
 /-! ================================================================ -/
 /-! ## UInt8 Property Tests                                          -/
@@ -1055,6 +1072,15 @@ private def testBinaryFormatProperties : IO Unit := do
     | .ok bytes => assert (bytes == testData) "Binary u32LE round-trip"
     | .error _ => assert false "Binary u32LE serialize failed"
   | .error _ => assert false "Binary u32LE parse failed"
+  match Radix.Binary.parseFormatExact testData fmt with
+  | .ok fields =>
+    match Radix.Binary.serializeFormat fmt fields with
+    | .ok bytes => assert (bytes == testData) "Binary u32LE exact round-trip"
+    | .error _ => assert false "Binary u32LE exact serialize failed"
+  | .error _ => assert false "Binary u32LE exact parse failed"
+  assert (match Radix.Binary.parseFormatExact (testData ++ ByteArray.mk #[0x00]) fmt with
+    | .error (.trailingBytes _ 1) => true
+    | _ => false) "Binary exact parse rejects trailing byte"
 
   -- Sequence format: u16be + u32le
   let seqFmt := Radix.Binary.Format.u16be "hdr" ++ Radix.Binary.Format.u32le "payload"
@@ -1066,6 +1092,9 @@ private def testBinaryFormatProperties : IO Unit := do
     | .ok bytes => assert (bytes == seqData) "Binary seq round-trip"
     | .error _ => assert false "Binary seq serialize failed"
   | .error _ => assert false "Binary seq parse failed"
+  match Radix.Binary.parsePrefix seqData seqFmt with
+  | .ok (_, consumed) => assert (consumed == seqData.size) "Binary seq parsePrefix consumed size"
+  | .error _ => assert false "Binary seq parsePrefix failed"
 
   -- Padding format
   let padFmt := Radix.Binary.Format.byte "tag" ++ Radix.Binary.Format.pad 3
@@ -1078,6 +1107,71 @@ private def testBinaryFormatProperties : IO Unit := do
       assert (bytes.get! 0 == 0x42) "Binary padding preserves tag"
     | .error _ => assert false "Binary padding serialize failed"
   | .error _ => assert false "Binary padding parse failed"
+
+  let alignFmt := Radix.Binary.Format.byte "tag" ++ Radix.Binary.Format.align 4 ++ Radix.Binary.Format.u32le "payload"
+  let alignData := ByteArray.mk #[0x42, 0x00, 0x00, 0x00, 0x78, 0x56, 0x34, 0x12]
+  match Radix.Binary.parseFormatExact alignData alignFmt with
+  | .ok fields =>
+    match Radix.Binary.serializeFormat alignFmt fields with
+    | .ok bytes => assert (bytes == alignData) "Binary align round-trip"
+    | .error _ => assert false "Binary align serialize failed"
+  | .error _ => assert false "Binary align parse failed"
+
+  let blobFmt := Radix.Binary.Format.bytes "blob" 4
+  let blobData := ByteArray.mk #[0xDE, 0xAD, 0xBE, 0xEF]
+  match Radix.Binary.parseFormatExact blobData blobFmt with
+  | .ok fields =>
+    match Radix.Binary.serializeFormat blobFmt fields with
+    | .ok bytes => assert (bytes == blobData) "Binary fixed bytes round-trip"
+    | .error _ => assert false "Binary fixed bytes serialize failed"
+  | .error _ => assert false "Binary fixed bytes parse failed"
+
+  let constFmt := Radix.Binary.Format.constBytes (ByteArray.mk #[0x52, 0x44, 0x58, 0x21]) ++
+    Radix.Binary.Format.u16le "version"
+  let constData := ByteArray.mk #[0x52, 0x44, 0x58, 0x21, 0x01, 0x00]
+  match Radix.Binary.parseFormatExact constData constFmt with
+  | .ok fields =>
+    match Radix.Binary.serializeFormat constFmt fields with
+    | .ok bytes => assert (bytes == constData) "Binary const bytes round-trip"
+    | .error _ => assert false "Binary const bytes serialize failed"
+  | .error _ => assert false "Binary const bytes parse failed"
+  assert (match Radix.Binary.parseFormatExact (ByteArray.mk #[0x52, 0x44, 0x58, 0x20, 0x01, 0x00]) constFmt with
+    | .error (.constantMismatch _ _ _) => true
+    | _ => false) "Binary const bytes rejects wrong magic"
+
+  let prefixedFmt := Radix.Binary.Format.lengthPrefixedBytes "payload" 2 .little
+  let mut binaryRng := PRNG.new 404
+  for _ in [:64] do
+    let (nextRng, payloadList) := binaryRng.nextByteList 32
+    binaryRng := nextRng
+    let payload := ByteArray.mk payloadList.toArray
+    let fields := [Radix.Binary.FieldValue.bytes "payload" payload]
+    match Radix.Binary.serializeFormat prefixedFmt fields with
+    | .ok encoded =>
+      match Radix.Binary.parseFormatExact encoded prefixedFmt with
+      | .ok parsed =>
+        match Radix.Binary.serializeFormat prefixedFmt parsed with
+        | .ok roundTrip => assert (roundTrip == encoded) "Binary length-prefixed round-trip"
+        | .error _ => assert false "Binary length-prefixed reserialize failed"
+      | .error _ => assert false "Binary length-prefixed parse failed"
+    | .error _ => assert false "Binary length-prefixed serialize failed"
+
+  let countedFmt := Radix.Binary.Format.countPrefixedArray "items" 1 .little (Radix.Binary.Format.byte "item")
+  let mut arrayRng := PRNG.new 405
+  for _ in [:64] do
+    let (nextRng, payloadList) := arrayRng.nextByteList 32
+    arrayRng := nextRng
+    let elems := payloadList.map (fun byte => [Radix.Binary.FieldValue.byte "item" ⟨byte⟩])
+    let fields := [Radix.Binary.FieldValue.array "items" elems]
+    match Radix.Binary.serializeFormat countedFmt fields with
+    | .ok encoded =>
+      match Radix.Binary.parseFormatExact encoded countedFmt with
+      | .ok parsed =>
+        match Radix.Binary.serializeFormat countedFmt parsed with
+        | .ok roundTrip => assert (roundTrip == encoded) "Binary count-prefixed array round-trip"
+        | .error _ => assert false "Binary count-prefixed array reserialize failed"
+      | .error _ => assert false "Binary count-prefixed array parse failed"
+    | .error _ => assert false "Binary count-prefixed array serialize failed"
 
   -- Complex: u16be + u32le + u64be + pad 2
   let complexFmt :=
@@ -1788,6 +1882,30 @@ private def testUTF8Properties : IO Unit := do
 
   assert (Radix.UTF8.ofNat? 0xD800 == none) "UTF8 surrogate lower bound rejected"
   assert (Radix.UTF8.ofNat? 0xDFFF == none) "UTF8 surrogate upper bound rejected"
+
+  let guaranteedInvalidSingles : List UInt8 := [0x80, 0xBF, 0xC0, 0xC1, 0xF5, 0xFE, 0xFF]
+  for bad in guaranteedInvalidSingles do
+    assertUTF8ReplacementResync bad
+
+  let mut rngBytes := PRNG.new 601
+  for _ in [:numIter] do
+    let (rng', bytes) := rngBytes.nextByteList 12
+    rngBytes := rng'
+    let specValid := Radix.UTF8.Spec.validateUTF8 bytes
+    let opsValid := Radix.UTF8.isWellFormedList bytes
+    assert (specValid == opsValid)
+      s!"UTF8 validateUTF8 matches isWellFormedList: {bytes}"
+
+    let replacing := Radix.UTF8.decodeListReplacing bytes
+    assert (replacing.length ≤ bytes.length)
+      s!"UTF8 replacement decode length bounded by input length: {bytes}"
+
+    match Radix.UTF8.decodeList? bytes with
+    | some decoded =>
+      assert (replacing == decoded)
+        s!"UTF8 replacement decode agrees on well-formed input: {bytes}"
+    | none =>
+      pure ()
 
 private def testECCProperties : IO Unit := do
   IO.println "  ECC properties..."
