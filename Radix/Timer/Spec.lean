@@ -395,4 +395,50 @@ theorem intervalReset_period (timer : IntervalTimer) :
     (intervalReset timer).period = timer.period := by
   simp [intervalReset]
 
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Theorems
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Monotonicity is antisymmetric on ticks. -/
+theorem monotonic_antisymm (a b : Clock) (hab : Monotonic a b) (hba : Monotonic b a) :
+    a.ticks = b.ticks := by
+  simp [Monotonic] at *; omega
+
+/-- Advancing by positive delta gives a strictly later clock. -/
+theorem advance_strict (clock : Clock) (delta : Nat) (h : 0 < delta) :
+    clock.ticks < (advance clock delta).ticks := by
+  simp [advance]; omega
+
+/-- Elapsed of advance is associative: elapsed a (advance (advance a d1) d2) = d1 + d2. -/
+theorem elapsed_advance_advance (clock : Clock) (d1 d2 : Nat) :
+    elapsed clock (advance (advance clock d1) d2) = d1 + d2 := by
+  simp [elapsed, advance]; omega
+
+/-- Deadline expired status is monotonic: if expired now, expired later. -/
+theorem expired_mono (c1 c2 : Clock) (d : Deadline) (hm : Monotonic c1 c2) (he : expired c1 d) :
+    expired c2 d := by
+  simp [expired, Monotonic] at *; omega
+
+/-- Remaining is zero iff expired. -/
+theorem remaining_eq_zero_iff (clock : Clock) (deadline : Deadline) :
+    remaining clock deadline = 0 ↔ expired clock deadline := by
+  simp [remaining, expired]; omega
+
+/-- Overdue is zero iff not strictly past deadline. -/
+theorem overdue_eq_zero_iff (clock : Clock) (deadline : Deadline) :
+    overdue clock deadline = 0 ↔ clock.ticks ≤ deadline.deadlineTick := by
+  simp [overdue]; omega
+
+/-- Interval timer fire count is positive when fired. -/
+theorem intervalFireCount_pos_of_fired (clock : Clock) (timer : IntervalTimer)
+    (h : intervalFired clock timer = true) :
+    0 < intervalFireCount clock timer := by
+  simp [intervalFired] at h
+  simp [intervalFireCount, h]
+
+/-- Watchdog timeout is preserved across kick. -/
+theorem watchdogKick_timeout (clock : Clock) (wd : Watchdog) :
+    (watchdogKick clock wd).timeout = wd.timeout := by
+  simp [watchdogKick]
+
 end Radix.Timer.Spec
