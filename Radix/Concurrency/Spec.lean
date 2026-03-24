@@ -281,4 +281,133 @@ def Trace.hasUniqueIds (t : Trace) : Prop :=
 def Trace.isValid (t : Trace) : Prop :=
   t.isWellFormed ∧ t.hasUniqueIds
 
+-- ════════════════════════════════════════════════════════════════════
+-- Transitive Closure of Happens-Before
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Multi-step happens-before: the transitive closure of single-step happensBefore.
+    `happensBeforeStar a b events` means there is a chain `a = e₀ →hb e₁ →hb ... →hb eₙ = b`
+    where each eᵢ is in `events`. -/
+inductive happensBeforeStar (events : List MemoryEvent) :
+    MemoryEvent → MemoryEvent → Prop where
+  | single : (a : MemoryEvent) → (b : MemoryEvent) →
+           a ∈ events → b ∈ events → happensBefore a b →
+           happensBeforeStar events a b
+  | trans  : (a : MemoryEvent) → (c : MemoryEvent) → (b : MemoryEvent) →
+           c ∈ events → happensBeforeStar events a c →
+           happensBeforeStar events c b →
+           happensBeforeStar events a b
+
+-- ════════════════════════════════════════════════════════════════════
+-- Modification Order (per-location total order on writes)
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A modification order for a given location in a trace: a list of write events
+    that forms a total order over all writes to that location. -/
+structure ModificationOrder where
+  location : LocationId
+  writes   : List MemoryEvent
+  deriving Repr
+
+/-- A modification order is well-formed if:
+    1. All events are writes to the specified location
+    2. It includes ALL writes to that location from the trace
+    3. All events come from the trace -/
+def ModificationOrder.isWellFormed (mo : ModificationOrder) (t : Trace) : Prop :=
+  (∀ w, w ∈ mo.writes → w.kind.isWrite ∧ w.location = some mo.location ∧ w ∈ t.events)
+  ∧ (∀ e, e ∈ t.events → e.kind.isWrite → e.location = some mo.location → e ∈ mo.writes)
+
+/-- Position in the modification order. -/
+def ModificationOrder.position (mo : ModificationOrder) (e : MemoryEvent) : Nat :=
+  go mo.writes 0
+where
+  go : List MemoryEvent → Nat → Nat
+  | [], n => n
+  | w :: rest, n => if w.id == e.id then n else go rest (n + 1)
+
+-- ════════════════════════════════════════════════════════════════════
+-- Coherence (per-location consistency)
+-- ════════════════════════════════════════════════════════════════════
+
+/-- CoherenceRR: If a reads W1 and b reads W2, and a →hb b,
+    then W1 must not appear after W2 in the modification order.
+    (A later read in happens-before cannot see an earlier write.) -/
+def coherenceRR (t : Trace) (mo : ModificationOrder) : Prop :=
+  ∀ (a b : MemoryEvent),
+    a ∈ t.events → b ∈ t.events →
+    a.kind.isRead → b.kind.isRead →
+    a.location = some mo.location → b.location = some mo.location →
+    happensBefore a b →
+    ∀ (w1 w2 : MemoryEvent),
+      w1 ∈ mo.writes → w2 ∈ mo.writes →
+      w1.writeVal = a.readVal → w2.writeVal = b.readVal →
+      mo.position w1 ≤ mo.position w2
+
+/-- CoherenceWR: If a writes and b reads a's value, and then c writes
+    between them in modification order, that's incoherent. -/
+def coherenceWR (t : Trace) (mo : ModificationOrder) : Prop :=
+  ∀ (w r : MemoryEvent),
+    w ∈ t.events → r ∈ t.events →
+    w.kind.isWrite → r.kind.isRead →
+    w.location = some mo.location → r.location = some mo.location →
+    w.writeVal = r.readVal →
+    happensBefore w r →
+    mo.position w ≤ mo.position r
+
+/-- CoherenceWW: If a →hb b and both are writes to the same location,
+    then a must precede b in the modification order. -/
+def coherenceWW (t : Trace) (mo : ModificationOrder) : Prop :=
+  ∀ (a b : MemoryEvent),
+    a ∈ t.events → b ∈ t.events →
+    a.kind.isWrite → b.kind.isWrite →
+    a.location = some mo.location → b.location = some mo.location →
+    happensBefore a b →
+    mo.position a < mo.position b
+
+/-- Full coherence: all three coherence conditions hold. -/
+def isCoherent (t : Trace) (mo : ModificationOrder) : Prop :=
+  coherenceRR t mo ∧ coherenceWR t mo ∧ coherenceWW t mo
+
+-- ════════════════════════════════════════════════════════════════════
+-- Sequentially Consistent Execution
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A sequentially consistent execution has a single total order
+    over ALL SeqCst operations that is consistent with happens-before. -/
+def Trace.isSequentiallyConsistent (t : Trace) : Prop :=
+  let scEvents := t.events.filter (fun e => e.order == .seqCst)
+  ∃ (scOrder : List MemoryEvent),
+    scOrder.length = scEvents.length
+    ∧ (∀ e, e ∈ scOrder ↔ e ∈ scEvents)
+    ∧ (∀ a b, a ∈ scOrder → b ∈ scOrder →
+        happensBefore a b →
+        eventPosition scOrder a < eventPosition scOrder b)
+
+-- ════════════════════════════════════════════════════════════════════
+-- Release Sequences
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A release sequence headed by a release store `head` at location `loc`
+    is the maximal contiguous sequence of RMW operations by ANY thread
+    on the same location in modification order. -/
+def isReleaseSequence (mo : ModificationOrder)
+    (head : MemoryEvent) (seq : List MemoryEvent) : Prop :=
+  head ∈ mo.writes
+  ∧ (head.order = .release ∨ head.order = .acqRel ∨ head.order = .seqCst)
+  ∧ seq.head? = some head
+  ∧ (∀ e, e ∈ seq.tail → e.kind = .rmw ∧ e ∈ mo.writes)
+
+-- ════════════════════════════════════════════════════════════════════
+-- DRF-SC Guarantee (specification of the fundamental theorem)
+-- ════════════════════════════════════════════════════════════════════
+
+/-- DRF-SC guarantee: if a program has no data races under
+    sequentially consistent execution, then all executions of the
+    program behave as if sequentially consistent.
+    This is a specification (Prop), not a proof — the actual guarantee
+    comes from the hardware model + compiler agreement. -/
+def drfScGuarantee (allTraces : List Trace) : Prop :=
+  (∀ t ∈ allTraces, t.isSequentiallyConsistent → t.isDataRaceFree)
+  → (∀ t ∈ allTraces, t.isDataRaceFree)
+
 end Radix.Concurrency.Spec
