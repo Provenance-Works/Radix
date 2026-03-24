@@ -41,6 +41,7 @@ match result with
 | Variant | Description |
 |---------|-------------|
 | `outOfBounds` | Attempted to read beyond the input ByteArray |
+| `trailingBytes` | The format parsed successfully but extra bytes remained |
 | `internal` | Internal parser inconsistency |
 
 ## Binary Serialization Errors (`Radix.Binary.Serial.SerialError`)
@@ -49,6 +50,7 @@ match result with
 |---------|-------------|
 | `missingField` | Required field not provided |
 | `typeMismatch` | Field value type doesn't match format |
+| `unexpectedField` | A provided field remained unused after serialization |
 
 ## LEB128 Decode Failures
 
