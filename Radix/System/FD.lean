@@ -78,6 +78,20 @@ def OpenMode.toFSMode : OpenMode → IO.FS.Mode
   | .readWrite => .readWrite
   | .append    => .append
 
+/-- Whether this mode permits reads. -/
+def OpenMode.canRead : OpenMode → Bool
+  | .read => true
+  | .write => false
+  | .readWrite => true
+  | .append => false
+
+/-- Whether this mode permits writes. -/
+def OpenMode.canWrite : OpenMode → Bool
+  | .read => false
+  | .write => true
+  | .readWrite => true
+  | .append => true
+
 /-! ## File Descriptor -/
 
 /-- A file descriptor wrapping a Lean 4 `IO.FS.Handle` with
@@ -85,16 +99,18 @@ def OpenMode.toFSMode : OpenMode → IO.FS.Mode
 structure FD where
   /-- The underlying Lean 4 file handle. -/
   handle : IO.FS.Handle
+  /-- The access mode used to open the handle. -/
+  mode : OpenMode
   /-- Ownership tag. -/
   ownership : Ownership
 
 /-- Create an owned FD from a handle. -/
-def FD.ofHandle (h : IO.FS.Handle) : FD :=
-  { handle := h, ownership := .owned }
+def FD.ofHandle (h : IO.FS.Handle) (mode : OpenMode) : FD :=
+  { handle := h, mode := mode, ownership := .owned }
 
 /-- Create a borrowed FD from a handle. -/
-def FD.borrow (h : IO.FS.Handle) : FD :=
-  { handle := h, ownership := .borrowed }
+def FD.borrow (h : IO.FS.Handle) (mode : OpenMode) : FD :=
+  { handle := h, mode := mode, ownership := .borrowed }
 
 /-- Check if this FD is owned. -/
 def FD.isOwned (fd : FD) : Bool :=
@@ -124,7 +140,7 @@ def withFile {α : Type} (path : String) (mode : OpenMode)
   match handleResult with
   | .error e => return .error e
   | .ok handle =>
-    let fd := FD.ofHandle handle
+    let fd := FD.ofHandle handle mode
     let result ← body fd
     -- Flush write buffers to ensure data persistence before GC
     match mode, result with
