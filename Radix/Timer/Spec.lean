@@ -441,4 +441,105 @@ theorem watchdogKick_timeout (clock : Clock) (wd : Watchdog) :
     (watchdogKick clock wd).timeout = wd.timeout := by
   simp [watchdogKick]
 
+-- ════════════════════════════════════════════════════════════════════
+-- MillisToTicks Bound
+-- ════════════════════════════════════════════════════════════════════
+
+/-- millisToTicks lower bound: the result * 1000 ≤ millis * freq.hz. -/
+theorem millisToTicks_le (freq : Frequency) (millis : Nat) :
+    millisToTicks freq millis * 1000 ≤ millis * freq.hz := by
+  simp [millisToTicks]
+  exact Nat.div_mul_le_self (millis * freq.hz) 1000
+
+/-- millisToTicks upper bound: millis * freq.hz < (result + 1) * 1000. -/
+theorem millisToTicks_lt (freq : Frequency) (millis : Nat) :
+    millis * freq.hz < (millisToTicks freq millis + 1) * 1000 := by
+  simp [millisToTicks]
+  have := Nat.div_add_mod (millis * freq.hz) 1000
+  have := Nat.mod_lt (millis * freq.hz) (by omega : 0 < 1000)
+  omega
+
+/-- Zero milliseconds converts to zero ticks. -/
+theorem millisToTicks_zero (freq : Frequency) : millisToTicks freq 0 = 0 := by
+  simp [millisToTicks]
+
+/-- millisToTicks is monotonic. -/
+theorem millisToTicks_mono (freq : Frequency) (a b : Nat) (h : a ≤ b) :
+    millisToTicks freq a ≤ millisToTicks freq b := by
+  simp [millisToTicks]
+  exact Nat.div_le_div_right (Nat.mul_le_mul_right freq.hz h)
+
+-- ════════════════════════════════════════════════════════════════════
+-- Watchdog Exact Expiration
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A watchdog kicked at time t expires at exactly t + timeout. -/
+theorem watchdogKick_expires_at (clock : Clock) (wd : Watchdog) :
+    (watchdogKick clock wd).deadline.deadlineTick = clock.ticks + wd.timeout := by
+  simp [watchdogKick, deadlineAfter]
+
+/-- A watchdog kicked at clock c is not expired at c. -/
+theorem watchdogKick_not_expired (clock : Clock) (wd : Watchdog) :
+    watchdogExpired clock (watchdogKick clock wd) = false := by
+  simp [watchdogExpired, watchdogKick, deadlineAfter]
+  have := wd.timeoutPos
+  omega
+
+-- ════════════════════════════════════════════════════════════════════
+-- AdvanceN Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Batch advance an array of deltas. -/
+def advanceN (clock : Clock) (deltas : List Nat) : Clock :=
+  deltas.foldl advance clock
+
+/-- advanceN with empty list is identity. -/
+theorem advanceN_nil (clock : Clock) : advanceN clock [] = clock := rfl
+
+/-- advanceN distributes over append. -/
+theorem advanceN_append (clock : Clock) (d1 d2 : List Nat) :
+    advanceN clock (d1 ++ d2) = advanceN (advanceN clock d1) d2 := by
+  simp [advanceN, List.foldl_append]
+
+/-- advanceN of a singleton equals advance. -/
+theorem advanceN_singleton (clock : Clock) (d : Nat) :
+    advanceN clock [d] = advance clock d := rfl
+
+/-- advanceN cons decomposition. -/
+theorem advanceN_cons (clock : Clock) (d : Nat) (ds : List Nat) :
+    advanceN clock (d :: ds) = advanceN (advance clock d) ds := rfl
+
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Clock at tick 100, advance by 50 = tick 150. -/
+example : (advance ⟨100⟩ 50).ticks = 150 := by native_decide
+
+/-- Elapsed from tick 100 to tick 250 = 150. -/
+example : elapsed ⟨100⟩ ⟨250⟩ = 150 := by native_decide
+
+/-- Deadline at tick 200: not expired at tick 150. -/
+example : ¬expired ⟨150⟩ ⟨200⟩ := by simp [expired]
+
+/-- Deadline at tick 200: expired at tick 200. -/
+example : expired ⟨200⟩ ⟨200⟩ := by simp [expired]
+
+/-- Deadline at tick 200: remaining at tick 180 = 20. -/
+example : remaining ⟨180⟩ ⟨200⟩ = 20 := by native_decide
+
+/-- 1MHz freq: 500ms = 500000 ticks. -/
+example : millisToTicks ⟨1000000, by omega⟩ 500 = 500000 := by native_decide
+
+/-- 1kHz freq: 1000ms = 1000 ticks (1 second). -/
+example : millisToTicks ⟨1000, by omega⟩ 1000 = 1000 := by native_decide
+
+/-- Interval timer: period 10, created at tick 0, fires at tick 10. -/
+example : intervalFired ⟨10⟩ { period := 10, nextTick := 10, periodPos := by omega } = true := by
+  native_decide
+
+/-- Interval timer: period 10, at tick 25, fire count = 2. -/
+example : intervalFireCount ⟨25⟩ { period := 10, nextTick := 10, periodPos := by omega } = 2 := by
+  native_decide
+
 end Radix.Timer.Spec
