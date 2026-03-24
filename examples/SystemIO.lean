@@ -1,4 +1,5 @@
 import Radix.System
+import Radix.Binary
 
 /-!
 # Example: System I/O Operations
@@ -16,6 +17,11 @@ namespace Examples.SystemIO
 
 open Radix.System
 open Radix.System.IO
+
+private def exampleFileFormat : Radix.Binary.Format :=
+  Radix.Binary.Format.constBytes (ByteArray.mk #[0x52, 0x44, 0x58, 0x21]) ++
+  Radix.Binary.Format.u16le "version" ++
+  Radix.Binary.Format.lengthPrefixedBytes "payload" 2 .little
 
 /-- Run an IO operation returning Except, throwing on error. -/
 private def runChecked {α : Type} (desc : String)
@@ -52,17 +58,17 @@ def run : IO Unit := do
   let readData ← runChecked "read binary" (readFileBytes binPath)
   IO.println s!"    Read back: {readData.size} bytes"
 
-  let readMagic := readData.extract 0 4
-  if readMagic != magic then throw (IO.userError "magic mismatch")
-  IO.println "    ✓ Magic verified (RDX!)"
+  match Radix.Binary.parseFormatExact readData exampleFileFormat with
+  | .error e => throw (IO.userError s!"binary parse mismatch: {e}")
+  | .ok fields =>
+    IO.println "    ✓ Magic verified (RDX!)"
+    IO.println s!"    ✓ Payload length verified ({payload.size} bytes)"
 
-  let pLen := readData.get! 6 |>.toNat
-  if pLen != payload.size then throw (IO.userError "payload length mismatch")
-  IO.println s!"    ✓ Payload length verified ({pLen} bytes)"
-
-  let readPayload := readData.extract 8 (8 + pLen)
-  if readPayload != payload then throw (IO.userError "payload mismatch")
-  IO.println "    ✓ Payload data verified"
+    match Radix.Binary.findField "payload" fields with
+    | some (.bytes _ readPayload) =>
+      if readPayload != payload then throw (IO.userError "payload mismatch")
+      IO.println "    ✓ Payload data verified"
+    | _ => throw (IO.userError "payload field missing")
   IO.println ""
 
   -- 2. Text file I/O
