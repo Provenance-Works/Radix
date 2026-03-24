@@ -246,4 +246,61 @@ structure WriteSpec where
   /-- Actual count must not exceed offered. -/
   hBound : actual ≤ offered
 
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Theorems
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Closed file state is not open. -/
+theorem FileState.closed_not_isOpen : FileState.closed.isOpen = false := rfl
+
+/-- Open file state is open. -/
+theorem FileState.open_isOpen (info : OpenFileState) : (FileState.open info).isOpen = true := rfl
+
+/-- readWrite mode permits both reading and writing. -/
+theorem FileAccessMode.readWrite_can_both :
+    FileAccessMode.readWrite.canRead = true ∧ FileAccessMode.readWrite.canWrite = true := ⟨rfl, rfl⟩
+
+/-- Every mode either can read or can write (or both). -/
+theorem FileAccessMode.canRead_or_canWrite (m : FileAccessMode) :
+    m.canRead = true ∨ m.canWrite = true := by
+  cases m <;> simp [FileAccessMode.canRead, FileAccessMode.canWrite]
+
+/-- Close transitions any state to closed. -/
+theorem nextState_close (s : FileState) : nextState s .close = .closed := rfl
+
+/-- Open transitions any state to open with fresh counters. -/
+theorem nextState_open_fresh (s : FileState) (path : String) (mode : FileAccessMode) :
+    nextState s (.open path mode) =
+      .open { position := 0, mode := mode, bytesRead := 0, bytesWritten := 0 } := by
+  rfl
+
+/-- Read on a closed file is a no-op. -/
+theorem nextState_read_closed (n : Nat) : nextState .closed (.read n) = .closed := rfl
+
+/-- Write on a closed file is a no-op. -/
+theorem nextState_write_closed (n : Nat) : nextState .closed (.write n) = .closed := rfl
+
+/-- Reading zero bytes preserves state. -/
+theorem nextState_read_zero (info : OpenFileState) :
+    nextState (.open info) (.read 0) = .open info := by
+  simp [nextState]
+
+/-- Writing zero bytes preserves state. -/
+theorem nextState_write_zero (info : OpenFileState) :
+    nextState (.open info) (.write 0) = .open info := by
+  simp [nextState]
+
+/-- An empty lifecycle is always valid. -/
+theorem validLifecycle_empty (s : FileState) : validLifecycle s [] = true := rfl
+
+/-- The readPost preserves write counter. -/
+theorem readPost_preserves_bytesWritten (infoPre infoPost : OpenFileState)
+    (count actual : Nat) (h : readPost (.open infoPre) (.open infoPost) count actual) :
+    infoPost.bytesWritten = infoPre.bytesWritten := h.2.2.2.2
+
+/-- The writePost preserves read counter. -/
+theorem writePost_preserves_bytesRead (infoPre infoPost : OpenFileState)
+    (count actual : Nat) (h : writePost (.open infoPre) (.open infoPost) count actual) :
+    infoPost.bytesRead = infoPre.bytesRead := h.2.2.2.2
+
 end Radix.System.Spec
