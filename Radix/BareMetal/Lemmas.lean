@@ -240,4 +240,44 @@ theorem StartupPhase.order_injective (a b : StartupPhase)
     (h : a.order = b.order) : a = b := by
   cases a <;> cases b <;> simp [StartupPhase.order] at h <;> first | rfl | omega
 
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A singleton memory map is always valid (non-overlapping trivially). -/
+theorem MemoryMap.singleton_isNonOverlapping (r : MemRegion) (p : Platform) :
+    (MemoryMap.mk [r] p).isNonOverlapping := by
+  intro a ha b hb hab
+  simp at ha hb
+  subst ha; subst hb; exact absurd rfl hab
+
+/-- Total size of a singleton map equals the region's size. -/
+theorem MemoryMap.singleton_totalSize (r : MemRegion) (p : Platform) :
+    (MemoryMap.mk [r] p).totalSize = r.size := by
+  simp [MemoryMap.totalSize]
+
+/-- A valid startup sequence step maintains phase consistency. -/
+theorem StartupStep.valid_target_order (s : StartupStep) (hs : s.isValid) :
+    s.target.order = s.source.order + 1 := hs
+
+/-- AllocProfile with non-heap strategy is GC-free compatible. -/
+theorem AllocProfile.gcfree_of_nonheap (p : AllocProfile) (h : p.strategy ≠ .heap) :
+    p.isGCFreeCompatible = true := by
+  simp [AllocProfile.isGCFreeCompatible]
+  exact AllocStrategy.gcfree_strategies_isGCFree p.strategy h
+
+/-- worstCaseStackDepth is nonneg. -/
+theorem worstCaseStackDepth_nonneg (fs : List StackFrame) :
+    0 ≤ worstCaseStackDepth fs := Nat.zero_le _
+
+/-- Aligned addresses are invariant under alignDown. -/
+theorem alignDown_of_aligned (addr align : Nat) (hA : align > 0)
+    (h : addr % align = 0) :
+    alignDown addr align = addr := by
+  unfold alignDown
+  simp [Nat.pos_iff_ne_zero.mp hA]
+  have heq := Nat.div_add_mod addr align
+  rw [h] at heq; simp at heq
+  rw [Nat.mul_comm]; exact heq
+
 end Radix.BareMetal
