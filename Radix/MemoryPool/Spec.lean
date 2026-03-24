@@ -457,4 +457,93 @@ theorem slab_alloc_info_size (s : SlabState) (s' : SlabState)
     simp [hfb] at hAlloc
     obtain ⟨_, rfl⟩ := hAlloc; rfl
 
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Bump Allocator Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Bump reset produces a valid state. -/
+theorem bump_reset_valid (s : BumpState) : s.reset.isValid := by
+  simp [BumpState.reset, BumpState.isValid]
+
+/-- Bump allocation offset is always less than capacity. -/
+theorem bump_alloc_offset_lt (s : BumpState) (size : Nat)
+    (s' : BumpState) (info : AllocInfo)
+    (hAlloc : s.alloc size = some (s', info)) :
+    info.offset < s.capacity := by
+  have hoffset : info.offset = s.cursor :=
+    bump_alloc_offset_eq_cursor s size s' info hAlloc
+  have hsize : 0 < size :=
+    bump_alloc_size_pos s size s' info hAlloc
+  unfold BumpState.alloc at hAlloc
+  split at hAlloc
+  · contradiction
+  · split at hAlloc
+    · contradiction
+    · rename_i _ hcap
+      simp at hcap
+      rw [hoffset]
+      omega
+
+/-- Bump allocation always returns allocated state. -/
+theorem bump_alloc_info_state (s : BumpState) (size : Nat)
+    (s' : BumpState) (info : AllocInfo)
+    (hAlloc : s.alloc size = some (s', info)) :
+    info.state = .allocated := by
+  unfold BumpState.alloc at hAlloc
+  split at hAlloc
+  · contradiction
+  · split at hAlloc
+    · contradiction
+    · injection hAlloc with hAlloc
+      have := congrArg Prod.snd hAlloc; simp at this; rw [← this]
+
+/-- Bump alloc increments allocCount. -/
+theorem bump_alloc_count (s : BumpState) (size : Nat)
+    (s' : BumpState) (info : AllocInfo)
+    (hAlloc : s.alloc size = some (s', info)) :
+    s'.allocCount = s.allocCount + 1 := by
+  unfold BumpState.alloc at hAlloc
+  split at hAlloc
+  · contradiction
+  · split at hAlloc
+    · contradiction
+    · injection hAlloc with hAlloc
+      have := congrArg Prod.fst hAlloc; simp at this; rw [← this]
+
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Slab Allocator Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Slab free returns the block to the free list. -/
+theorem slab_free_increases_freeCount (s : SlabState) (idx : Nat)
+    (s' : SlabState) (hFree : s.free idx = some s') :
+    s'.freeCount = s.freeCount + 1 := by
+  unfold SlabState.free at hFree
+  split at hFree
+  · injection hFree with hFree; subst hFree
+    simp [SlabState.freeCount]
+  · contradiction
+
+/-- Slab alloc preserves blockSize. -/
+theorem slab_alloc_blockSize (s : SlabState) (s' : SlabState)
+    (info : AllocInfo) (hAlloc : s.alloc = some (s', info)) :
+    s'.blockSize = s.blockSize := by
+  unfold SlabState.alloc at hAlloc
+  match hfb : s.freeBlocks with
+  | [] => simp [hfb] at hAlloc
+  | _ :: _ =>
+    simp [hfb] at hAlloc
+    obtain ⟨rfl, _⟩ := hAlloc; rfl
+
+/-- Slab alloc preserves blockCount. -/
+theorem slab_alloc_blockCount (s : SlabState) (s' : SlabState)
+    (info : AllocInfo) (hAlloc : s.alloc = some (s', info)) :
+    s'.blockCount = s.blockCount := by
+  unfold SlabState.alloc at hAlloc
+  match hfb : s.freeBlocks with
+  | [] => simp [hfb] at hAlloc
+  | _ :: _ =>
+    simp [hfb] at hAlloc
+    obtain ⟨rfl, _⟩ := hAlloc; rfl
+
 end Radix.MemoryPool.Spec
