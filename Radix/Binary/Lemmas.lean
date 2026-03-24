@@ -101,4 +101,138 @@ theorem Parser.parse_padding_ok (data : ByteArray) (offset n : Nat)
     Parser.parse data (.padding n) offset = .ok ([], offset + n) := by
   simp [Parser.parse, h]
 
+-- ════════════════════════════════════════════════════════════════════
+-- PrimType Byte Size Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- byteSize for byte type is exactly 1. -/
+theorem PrimType.byteSize_byte : PrimType.byte.byteSize = 1 := rfl
+
+/-- byteSize for uint16 is exactly 2 regardless of endianness. -/
+theorem PrimType.byteSize_uint16 (e : Spec.Endian) :
+    (PrimType.uint16 e).byteSize = 2 := rfl
+
+/-- byteSize for uint32 is exactly 4 regardless of endianness. -/
+theorem PrimType.byteSize_uint32 (e : Spec.Endian) :
+    (PrimType.uint32 e).byteSize = 4 := rfl
+
+/-- byteSize for uint64 is exactly 8 regardless of endianness. -/
+theorem PrimType.byteSize_uint64 (e : Spec.Endian) :
+    (PrimType.uint64 e).byteSize = 8 := rfl
+
+/-- All byte sizes are powers of 2 (or 1). -/
+theorem PrimType.byteSize_isPow2Or1 (p : PrimType) :
+    p.byteSize = 1 ∨ p.byteSize = 2 ∨ p.byteSize = 4 ∨ p.byteSize = 8 := by
+  cases p <;> simp [PrimType.byteSize]
+
+/-- byteSize is at most 8. -/
+theorem PrimType.byteSize_le_8 (p : PrimType) : p.byteSize ≤ 8 := by
+  cases p <;> simp [PrimType.byteSize]
+
+-- ════════════════════════════════════════════════════════════════════
+-- FormatSpec Validity Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A single-field format is valid when the field fits within totalSize. -/
+theorem FormatSpec.singleton_isValid (f : Spec.FieldSpec) (h : f.endOffset ≤ f.endOffset) :
+    FormatSpec.isValid { fields := [f], totalSize := f.endOffset } := by
+  constructor
+  · intro g hg
+    simp at hg; subst hg
+    exact Nat.le_refl _
+  · intro a ha b hb hab
+    simp at ha hb
+    subst ha; subst hb
+    exact absurd rfl hab
+
+/-- Fields in bounds is preserved when growing totalSize. -/
+theorem FormatSpec.fieldsInBounds_mono (spec : FormatSpec) (n : Nat)
+    (h : spec.fieldsInBounds) (hge : spec.totalSize ≤ n) :
+    (FormatSpec.mk spec.fields n).fieldsInBounds := by
+  intro f hf
+  exact Nat.le_trans (h f hf) hge
+
+-- ════════════════════════════════════════════════════════════════════
+-- BitField Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Extracting from zero always yields zero. -/
+theorem BitFieldSpec.extract_zero (bf : Spec.BitFieldSpec) :
+    bf.extract 0 = 0 := by
+  simp [Spec.BitFieldSpec.extract]
+
+/-- BitField disjointness is symmetric. -/
+theorem BitFieldSpec.disjoint_symm (a b : Spec.BitFieldSpec)
+    (h : Spec.BitFieldSpec.disjoint a b) :
+    Spec.BitFieldSpec.disjoint b a := by
+  cases h with
+  | inl h => exact Or.inr h
+  | inr h => exact Or.inl h
+
+/-- A register with no fields is trivially valid. -/
+theorem RegisterSpec.empty_isValid (w : Nat) :
+    Spec.RegisterSpec.isValid { bitWidth := w, fields := [] } := by
+  constructor
+  · intro nf hf; simp at hf
+  · intro a ha; simp at ha
+
+-- ════════════════════════════════════════════════════════════════════
+-- Padding and Alignment Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- paddingToAlign with alignment 0 or 1 is always 0. -/
+theorem paddingToAlign_trivial (offset : Nat) :
+    Spec.paddingToAlign offset 0 = 0 ∧ Spec.paddingToAlign offset 1 = 0 := by
+  simp [Spec.paddingToAlign]
+
+/-- Already-aligned offsets need no padding. -/
+theorem paddingToAlign_zero_of_aligned (n alignment : Nat) (ha : 1 < alignment)
+    (h : n % alignment = 0) :
+    Spec.paddingToAlign n alignment = 0 := by
+  unfold Spec.paddingToAlign
+  split
+  · omega
+  · rw [h]; simp
+
+/-- alignedOffset is at least the original offset. -/
+theorem alignedOffset_ge (offset alignment : Nat) :
+    offset ≤ Spec.alignedOffset offset alignment := by
+  unfold Spec.alignedOffset Spec.paddingToAlign
+  split <;> omega
+-- ════════════════════════════════════════════════════════════════════
+-- Format Sequence Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- fieldNames of a seq is the concatenation of sub-format fieldNames. -/
+theorem Format.fieldNames_seq (a b : Format) :
+    (Format.seq a b).fieldNames = a.fieldNames ++ b.fieldNames := rfl
+
+/-- fieldNames of uint16 contains just the field name. -/
+theorem Format.fieldNames_uint16 (name : String) (e : Spec.Endian) :
+    (Format.uint16 name e).fieldNames = [name] := rfl
+
+/-- fieldNames of uint32 contains just the field name. -/
+theorem Format.fieldNames_uint32 (name : String) (e : Spec.Endian) :
+    (Format.uint32 name e).fieldNames = [name] := rfl
+
+/-- fieldNames of uint64 contains just the field name. -/
+theorem Format.fieldNames_uint64 (name : String) (e : Spec.Endian) :
+    (Format.uint64 name e).fieldNames = [name] := rfl
+
+/-- fixedSize of a seq with two known sizes is their sum. -/
+theorem Format.fixedSize_seq (a b : Format) (sa sb : Nat)
+    (ha : a.fixedSize = some sa) (hb : b.fixedSize = some sb) :
+    (Format.seq a b).fixedSize = some (sa + sb) := by
+  simp [Format.fixedSize, ha, hb]
+
+/-- fieldCount of a singleton byte format is 1. -/
+theorem Format.fieldCount_uint16 (name : String) (e : Spec.Endian) :
+    (Format.uint16 name e).fieldCount = 1 := rfl
+
+theorem Format.fieldCount_uint32 (name : String) (e : Spec.Endian) :
+    (Format.uint32 name e).fieldCount = 1 := rfl
+
+theorem Format.fieldCount_uint64 (name : String) (e : Spec.Endian) :
+    (Format.uint64 name e).fieldCount = 1 := rfl
+
 end Radix.Binary
