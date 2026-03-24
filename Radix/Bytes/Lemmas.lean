@@ -523,4 +523,26 @@ theorem Bytes.Spec.fromBE_toBE_roundtrip64 (x : BitVec 64) :
   simp [fromBigEndian64, toBigEndian64]
   exact bswap64_invol x
 
+/-! ## Concrete Test Vectors -/
+
+open Bytes.Spec in
+/-- bswap16 of 0x1234 is 0x3412. -/
+example : bswap16 0x1234#16 = 0x3412#16 := by native_decide
+
+open Bytes.Spec in
+/-- bswap32 of 0x12345678 is 0x78563412. -/
+example : bswap32 0x12345678#32 = 0x78563412#32 := by native_decide
+
+open Bytes.Spec in
+/-- High nibble of 0xAB is 0xA. -/
+example : highNibble 0xAB#8 = 0xA#4 := by native_decide
+
+open Bytes.Spec in
+/-- Low nibble of 0xAB is 0xB. -/
+example : lowNibble 0xAB#8 = 0xB#4 := by native_decide
+
+open Bytes.Spec in
+/-- fromNibbles(0xA, 0xB) = 0xAB. -/
+example : fromNibbles 0xA#4 0xB#4 = 0xAB#8 := by native_decide
+
 end Radix
