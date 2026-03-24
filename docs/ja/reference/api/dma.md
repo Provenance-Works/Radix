@@ -64,6 +64,8 @@ def stepCount (d : Descriptor) : Nat
 def stepCopy (src dst : ByteArray) (d : Descriptor) (step : Nat) : Option ByteArray
 def simulateSteps (src dst : ByteArray) (d : Descriptor) : Option (Array ByteArray)
 def simulateCopy (src dst : ByteArray) (d : Descriptor) : Option ByteArray
+def chainSourcesDisjoint (chain : List Descriptor) : Bool
+def chainDestinationsDisjoint (chain : List Descriptor) : Bool
 ```
 
 ### シミュレーションの注意点
