@@ -315,4 +315,67 @@ theorem ops_alignUp_isAligned (offset align : Nat) (h : align > 0) :
 /-- `isPowerOfTwo` implies alignment value is positive. -/
 theorem isPowerOfTwo_pos (n : Nat) (h : Spec.isPowerOfTwo n) : 0 < n := h.1
 
+/-! ## Gap and Stride Lemmas -/
+
+/-- `alignUp` is idempotent. -/
+theorem alignUp_idempotent (offset align : Nat) (h : align > 0) :
+    Spec.alignUp (Spec.alignUp offset align) align = Spec.alignUp offset align :=
+  Spec.alignUp_of_isAligned _ _ (alignUp_isAligned offset align h)
+
+/-! ## Alignment Arithmetic at Ops Level -/
+
+/-- Adding aligned offsets preserves alignment (Ops). -/
+theorem ops_isAligned_add (a b align : Nat) (h : align > 0)
+    (ha : Alignment.isAligned a align = true)
+    (hb : Alignment.isAligned b align = true) :
+    Alignment.isAligned (a + b) align = true := by
+  rw [ops_isAligned_iff_spec _ _ h] at ha hb ⊢
+  exact Spec.isAligned_add a b align ha hb
+
+/-- Subtracting aligned offsets preserves alignment (Ops, when a ≥ b). -/
+theorem ops_isAligned_sub (a b align : Nat) (h : align > 0) (hab : b ≤ a)
+    (ha : Alignment.isAligned a align = true)
+    (hb : Alignment.isAligned b align = true) :
+    Alignment.isAligned (a - b) align = true := by
+  rw [ops_isAligned_iff_spec _ _ h] at ha hb ⊢
+  exact Spec.isAligned_sub a b align hab ha hb
+
+/-! ## Page Alignment Lemmas -/
+
+/-- Page-aligned address is also cache-line-aligned. -/
+theorem pageAligned_implies_cacheAligned (offset : Nat) (h : Spec.isAligned offset Spec.pageSize) :
+    Spec.isAligned offset Spec.cacheLineSize :=
+  Spec.isAligned_of_dvd offset Spec.cacheLineSize Spec.pageSize
+    ⟨by decide, by decide⟩ h
+
+/-- Concrete: alignUp 0x100 0x1000 = 0x1000. -/
+theorem alignUp_0x100_page : Spec.alignUp 0x100 0x1000 = 0x1000 := by native_decide
+
+/-- Concrete: alignDown 0x1234 0x1000 = 0x1000. -/
+theorem alignDown_0x1234_page : Spec.alignDown 0x1234 0x1000 = 0x1000 := by native_decide
+
+/-- Concrete: alignUp 0x1234 0x1000 = 0x2000. -/
+theorem alignUp_0x1234_page : Spec.alignUp 0x1234 0x1000 = 0x2000 := by native_decide
+
+/-- Concrete: alignPadding 0x1234 0x1000 = 0xDCC. -/
+theorem alignPadding_0x1234_page : Spec.alignPadding 0x1234 0x1000 = 0xDCC := by native_decide
+
+/-- Concrete: cache-line align 100 → 128. -/
+theorem alignUp_100_cacheLine : Spec.alignUp 100 64 = 128 := by native_decide
+
+/-- Concrete: cache-line alignDown 100 → 64. -/
+theorem alignDown_100_cacheLine : Spec.alignDown 100 64 = 64 := by native_decide
+
+/-- Concrete: alignPadding 100 64 = 28. -/
+theorem alignPadding_100_cacheLine : Spec.alignPadding 100 64 = 28 := by native_decide
+
+/-- Concrete: struct field after 12 bytes at 8-byte alignment starts at 16. -/
+theorem structFieldOffset_12_8 : Spec.structFieldOffset 12 8 = 16 := by native_decide
+
+/-- Concrete: struct field after 16 bytes at 8-byte alignment starts at 16. -/
+theorem structFieldOffset_16_8 : Spec.structFieldOffset 16 8 = 16 := by native_decide
+
+/-- Concrete: struct size for 20-byte body with 8-byte alignment is 24. -/
+theorem structSize_20_8 : Spec.structSize 20 8 = 24 := by native_decide
+
 end Radix.Alignment
