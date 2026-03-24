@@ -121,8 +121,7 @@ erDiagram
     }
     FieldSpec {
         String name
-        PrimType type
-        Endian endian
+        FieldType type
         Nat offset
     }
     Format {
@@ -130,7 +129,12 @@ erDiagram
         inductive uint16
         inductive uint32
         inductive uint64
+        inductive bytes
+        inductive lengthPrefixedBytes
+        inductive countPrefixedArray
+        inductive constBytes
         inductive padding
+        inductive align
         inductive array
         inductive seq
     }
@@ -139,6 +143,7 @@ erDiagram
         inductive uint16
         inductive uint32
         inductive uint64
+        inductive bytes
         inductive array
     }
 ```
