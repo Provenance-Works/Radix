@@ -243,4 +243,62 @@ theorem io_faithful_read (count : Nat) (info : OpenFileState) (hRead : info.mode
   have h := trust_lean_io_faithful (.open info) count (by simp [readPre, hRead])
   exact ⟨h.1, h.2 info rfl⟩
 
+-- ════════════════════════════════════════════════════════════════════
+-- Additional Lemmas
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Spec wrapper: readWrite mode permits both reading and writing. -/
+theorem spec_readWrite_can_both :
+    FileAccessMode.readWrite.canRead = true ∧ FileAccessMode.readWrite.canWrite = true :=
+  Spec.FileAccessMode.readWrite_can_both
+
+/-- Spec wrapper: every mode can read or can write. -/
+theorem spec_canRead_or_canWrite (m : FileAccessMode) :
+    m.canRead = true ∨ m.canWrite = true :=
+  Spec.FileAccessMode.canRead_or_canWrite m
+
+/-- Spec wrapper: close transitions any state to closed. -/
+theorem spec_nextState_close (s : FileState) :
+    Spec.nextState s .close = .closed :=
+  Spec.nextState_close s
+
+/-- Opening followed by closing always yields a valid two-step lifecycle. -/
+theorem lifecycle_open_close (path : String) (mode : FileAccessMode) :
+    Spec.validLifecycle .closed [.open path mode, .close] = true := by
+  simp [Spec.validLifecycle, Spec.validStep, FileState.isOpen, Spec.nextState]
+
+/-- Read on a readWrite file is always a valid step. -/
+theorem readWrite_read_valid (info : OpenFileState) (n : Nat)
+    (hMode : info.mode = FileAccessMode.readWrite) :
+    Spec.validStep (.open info) (.read n) = true := by
+  simp [Spec.validStep, hMode, FileAccessMode.canRead]
+
+/-- Write on a readWrite file is always a valid step. -/
+theorem readWrite_write_valid (info : OpenFileState) (n : Nat)
+    (hMode : info.mode = FileAccessMode.readWrite) :
+    Spec.validStep (.open info) (.write n) = true := by
+  simp [Spec.validStep, hMode, FileAccessMode.canWrite]
+
+/-- Spec wrapper: reading zero bytes preserves state. -/
+theorem spec_nextState_read_zero (info : OpenFileState) :
+    Spec.nextState (.open info) (.read 0) = .open info :=
+  Spec.nextState_read_zero info
+
+/-- Spec wrapper: writing zero bytes preserves state. -/
+theorem spec_nextState_write_zero (info : OpenFileState) :
+    Spec.nextState (.open info) (.write 0) = .open info :=
+  Spec.nextState_write_zero info
+
+/-- Spec wrapper: readPost preserves bytesWritten. -/
+theorem spec_readPost_preserves_bytesWritten (infoPre infoPost : OpenFileState)
+    (count actual : Nat) (h : Spec.readPost (.open infoPre) (.open infoPost) count actual) :
+    infoPost.bytesWritten = infoPre.bytesWritten :=
+  Spec.readPost_preserves_bytesWritten infoPre infoPost count actual h
+
+/-- Spec wrapper: writePost preserves bytesRead. -/
+theorem spec_writePost_preserves_bytesRead (infoPre infoPost : OpenFileState)
+    (count actual : Nat) (h : Spec.writePost (.open infoPre) (.open infoPost) count actual) :
+    infoPost.bytesRead = infoPre.bytesRead :=
+  Spec.writePost_preserves_bytesRead infoPre infoPost count actual h
+
 end Radix.System
