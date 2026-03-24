@@ -11,10 +11,10 @@ import Radix.Word.UInt
 This module defines the `Format` inductive type for describing binary data
 layouts, including:
 - Fixed-size primitive fields (Byte, UInt16, UInt32, UInt64 with endianness)
-- Padding / alignment
+- Fixed-size primitive and blob fields (Byte, UInt16, UInt32, UInt64, Bytes)
+- Padding and alignment-aware gaps
 - Fixed-length repeated fields
-- Variable-length arrays (length determined at parse time)
-- Conditional fields
+- Sequential composition of reusable sub-formats
 
 ## Architecture
 
@@ -43,13 +43,42 @@ inductive Format where
   | uint32  (name : String) (endian : Endian)
   /-- A 64-bit unsigned integer field with specified endianness. -/
   | uint64  (name : String) (endian : Endian)
+  /-- A fixed-size raw byte blob. -/
+  | bytes   (name : String) (count : Nat)
+  /-- A length-prefixed raw byte blob. -/
+  | lengthPrefixedBytes (name : String) (prefixBytes : Nat) (endian : Endian)
+  /-- A count-prefixed array of sub-formats. -/
+  | countPrefixedArray (name : String) (prefixBytes : Nat) (endian : Endian) (elem : Format)
+  /-- A fixed byte sequence that must match exactly during parsing. -/
+  | constBytes (value : ByteArray)
   /-- Padding bytes (filled with zeros on serialization, ignored on parse). -/
   | padding (count : Nat)
+  /-- Insert enough zero bytes to align the next field to the requested boundary. -/
+  | align   (alignment : Nat)
   /-- A fixed-length array of sub-formats. -/
   | array   (name : String) (len : Nat) (elem : Format)
   /-- A sequence of two format descriptions (concatenation). -/
   | seq     (fst snd : Format)
-  deriving Repr
+
+instance : Repr Format where
+  reprPrec fmt _ :=
+    match fmt with
+    | .byte name => Std.Format.text s!"Format.byte {repr name}"
+    | .uint16 name endian => Std.Format.text s!"Format.uint16 {repr name} {repr endian}"
+    | .uint32 name endian => Std.Format.text s!"Format.uint32 {repr name} {repr endian}"
+    | .uint64 name endian => Std.Format.text s!"Format.uint64 {repr name} {repr endian}"
+    | .bytes name count => Std.Format.text s!"Format.bytes {repr name} {count}"
+    | .lengthPrefixedBytes name prefixBytes endian =>
+      Std.Format.text s!"Format.lengthPrefixedBytes {repr name} {prefixBytes} {repr endian}"
+    | .countPrefixedArray name prefixBytes endian _ =>
+      Std.Format.text s!"Format.countPrefixedArray {repr name} {prefixBytes} {repr endian}"
+    | .constBytes value => Std.Format.text s!"Format.constBytes size={value.size}"
+    | .padding count => Std.Format.text s!"Format.padding {count}"
+    | .align alignment => Std.Format.text s!"Format.align {alignment}"
+    | .array name len _ =>
+      Std.Format.text s!"Format.array {repr name} {len}"
+    | .seq _ _ =>
+      Std.Format.text "Format.seq"
 
 namespace Format
 
@@ -57,17 +86,34 @@ namespace Format
 
 /-- Compute the fixed byte size of a format.
     Returns `none` for formats whose size cannot be determined statically. -/
-def fixedSize : Format → Option Nat
-  | .byte _          => some 1
-  | .uint16 _ _      => some 2
-  | .uint32 _ _      => some 4
-  | .uint64 _ _      => some 8
-  | .padding n       => some n
-  | .array _ len f   => (f.fixedSize).map (· * len)
-  | .seq a b         =>
-    match a.fixedSize, b.fixedSize with
-    | some sa, some sb => some (sa + sb)
-    | _, _ => none
+def fixedEndOffset : Nat → Format → Option Nat
+  | offset, .byte _        => some (offset + 1)
+  | offset, .uint16 _ _    => some (offset + 2)
+  | offset, .uint32 _ _    => some (offset + 4)
+  | offset, .uint64 _ _    => some (offset + 8)
+  | offset, .bytes _ n     => some (offset + n)
+  | _, .lengthPrefixedBytes _ _ _ => none
+  | _, .countPrefixedArray _ _ _ _ => none
+  | offset, .constBytes v  => some (offset + v.size)
+  | offset, .padding n     => some (offset + n)
+  | offset, .align n       => some (Spec.alignedOffset offset n)
+  | offset, .array _ len f =>
+    let rec go (remaining : Nat) (off : Nat) : Option Nat :=
+      match remaining with
+      | 0 => some off
+      | count + 1 =>
+        match fixedEndOffset off f with
+        | some off' => go count off'
+        | none => none
+    go len offset
+  | offset, .seq a b       =>
+    match fixedEndOffset offset a with
+    | some off => fixedEndOffset off b
+    | none => none
+
+/-- Compute the fixed byte size of a format from offset 0. -/
+def fixedSize (fmt : Format) : Option Nat :=
+  (fixedEndOffset 0 fmt).map (· - 0)
 
 /-! ## Field Names -/
 
@@ -77,7 +123,12 @@ def fieldNames : Format → List String
   | .uint16 name _   => [name]
   | .uint32 name _   => [name]
   | .uint64 name _   => [name]
+  | .bytes name _    => [name]
+  | .lengthPrefixedBytes name _ _ => [name]
+  | .countPrefixedArray name _ _ f => name :: f.fieldNames
+  | .constBytes _    => []
   | .padding _       => []
+  | .align _         => []
   | .array name _ f  => name :: f.fieldNames
   | .seq a b         => a.fieldNames ++ b.fieldNames
 
@@ -89,7 +140,12 @@ def fieldCount : Format → Nat
   | .uint16 _ _      => 1
   | .uint32 _ _      => 1
   | .uint64 _ _      => 1
+  | .bytes _ _       => 1
+  | .lengthPrefixedBytes _ _ _ => 1
+  | .countPrefixedArray _ _ _ f => 1 + f.fieldCount
+  | .constBytes _    => 0
   | .padding _       => 0
+  | .align _         => 0
   | .array _ _ f     => 1 + f.fieldCount
   | .seq a b         => a.fieldCount + b.fieldCount
 
@@ -99,19 +155,36 @@ def fieldCount : Format → Nat
     sequentially starting from `offset`. Returns `(spec, endOffset)`. -/
 def toFormatSpecAux (offset : Nat) : Format → FormatSpec × Nat
   | .byte name =>
-    let field : Spec.FieldSpec := ⟨name, offset, .byte⟩
+    let field : Spec.FieldSpec := ⟨name, offset, Spec.FieldType.prim Spec.PrimType.byte⟩
     (⟨[field], offset + 1⟩, offset + 1)
   | .uint16 name e =>
-    let field : Spec.FieldSpec := ⟨name, offset, .uint16 e⟩
+    let field : Spec.FieldSpec := ⟨name, offset, Spec.FieldType.prim (Spec.PrimType.uint16 e)⟩
     (⟨[field], offset + 2⟩, offset + 2)
   | .uint32 name e =>
-    let field : Spec.FieldSpec := ⟨name, offset, .uint32 e⟩
+    let field : Spec.FieldSpec := ⟨name, offset, Spec.FieldType.prim (Spec.PrimType.uint32 e)⟩
     (⟨[field], offset + 4⟩, offset + 4)
   | .uint64 name e =>
-    let field : Spec.FieldSpec := ⟨name, offset, .uint64 e⟩
+    let field : Spec.FieldSpec := ⟨name, offset, Spec.FieldType.prim (Spec.PrimType.uint64 e)⟩
     (⟨[field], offset + 8⟩, offset + 8)
+  | .bytes name n =>
+    let field : Spec.FieldSpec := ⟨name, offset, Spec.FieldType.prim (Spec.PrimType.bytes n)⟩
+    (⟨[field], offset + n⟩, offset + n)
+  | .lengthPrefixedBytes name prefixBytes endian =>
+    let field : Spec.FieldSpec :=
+      ⟨name, offset, Spec.FieldType.var (Spec.VarLenType.lengthPrefixed prefixBytes endian)⟩
+    (⟨[field], offset + prefixBytes⟩, offset + prefixBytes)
+  | .countPrefixedArray name prefixBytes endian elem =>
+    let elemMinSize := (toFormatSpecAux 0 elem).1.totalSize
+    let field : Spec.FieldSpec :=
+      ⟨name, offset, Spec.FieldType.var (Spec.VarLenType.countPrefixedArray prefixBytes endian elemMinSize)⟩
+    (⟨[field], offset + prefixBytes⟩, offset + prefixBytes)
+  | .constBytes value =>
+    (⟨[], offset + value.size⟩, offset + value.size)
   | .padding n =>
     (⟨[], offset + n⟩, offset + n)
+  | .align n =>
+    let off := Spec.alignedOffset offset n
+    (⟨[], off⟩, off)
   | .array _ len f =>
     let rec go (remaining : Nat) (acc : FormatSpec) (off : Nat) : FormatSpec × Nat :=
       match remaining with
