@@ -75,12 +75,12 @@ sequenceDiagram
     Buf-->>Ser: ByteArray
     Ser-->>App: ByteArray (serialized)
 
-    App->>Par: parseFormat format data
+    App->>Par: parseFormatExact data format
     Par->>Buf: Read fields with endianness
     Buf-->>Par: FieldValues
     Par-->>App: List FieldValue (parsed)
 
-    Note over Ser,Par: Proof: parse ∘ serialize = id
+    Note over Ser,Par: Exact parse rejects trailing bytes; prefix parsing uses parsePrefix
 ```
 
 ## LEB128 Encode/Decode Flow
