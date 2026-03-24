@@ -92,9 +92,14 @@ def run : IO Unit := do
     IO.println s!"    Payload: {payload.size} bytes"
     IO.println s!"    Total: {packet.size} bytes"
 
-    -- Parse it back
-    match Radix.Binary.parseFormat headerBytes udpHeaderFormat with
-    | .ok parsed =>
+    -- Parse the header from the full packet and keep the payload remainder.
+    match Radix.Binary.parseSplit packet udpHeaderFormat with
+    | .ok (parsed, remainder) =>
+      IO.println s!"    Parsed payload remainder: {remainder.size} bytes"
+      if remainder == payload then
+        IO.println "    Payload remainder matches original payload"
+      else
+        IO.println "    Payload remainder mismatch"
       for field in parsed do
         match field with
         | .uint16 name v => IO.println s!"    {name}: {v.toNat}"
