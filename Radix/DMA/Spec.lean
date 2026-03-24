@@ -507,4 +507,51 @@ theorem Priority.toNat_injective (p1 p2 : Priority) (h : p1.toNat = p2.toNat) : 
 theorem Priority.toNat_le_three (p : Priority) : p.toNat ≤ 3 := by
   cases p <;> simp [Priority.toNat]
 
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+private def testDesc1 : Descriptor :=
+  { source := { start := 0, size := 64 }
+    destination := { start := 0, size := 64 }
+    order := .relaxed
+    coherence := .coherent
+    atomicity := .whole }
+
+/-- A 64-byte coherent whole transfer is valid. -/
+example : testDesc1.valid := by native_decide
+
+/-- A 64-byte whole transfer has exactly 1 step. -/
+example : testDesc1.stepCount = 1 := by native_decide
+
+/-- A 64-byte whole transfer moves 64 bytes. -/
+example : testDesc1.bytesMoved = 64 := by native_decide
+
+private def testBurstDesc : Descriptor :=
+  { source := { start := 0, size := 256 }
+    destination := { start := 0, size := 256 }
+    order := .seqCst
+    coherence := .nonCoherent
+    atomicity := .burst 64 }
+
+/-- A 256-byte non-coherent burst descriptor with seqCst is valid. -/
+example : testBurstDesc.valid := by native_decide
+
+/-- A 256-byte burst(64) transfer has 4 steps. -/
+example : testBurstDesc.stepCount = 4 := by native_decide
+
+/-- A mismatched-size descriptor is invalid. -/
+example : ¬({ source := { start := 0, size := 32 }
+              destination := { start := 0, size := 64 }
+              order := .relaxed
+              coherence := .coherent
+              atomicity := .whole : Descriptor }).valid := by native_decide
+
+/-- A non-coherent descriptor with relaxed order is invalid. -/
+example : ¬({ source := { start := 0, size := 16 }
+              destination := { start := 0, size := 16 }
+              order := .relaxed
+              coherence := .nonCoherent
+              atomicity := .whole : Descriptor }).valid := by native_decide
+
 end Radix.DMA.Spec

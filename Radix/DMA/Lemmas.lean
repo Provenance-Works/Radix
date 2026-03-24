@@ -277,4 +277,44 @@ theorem spec_chainValid_reverse (c : List Descriptor) :
     Spec.chainValid c.reverse ↔ Spec.chainValid c :=
   Spec.chainValid_reverse c
 
+-- ════════════════════════════════════════════════════════════════════
+-- SimulateCopy Properties
+-- ════════════════════════════════════════════════════════════════════
+
+/-- SimulateCopy on invalid descriptor returns none. -/
+theorem simulateCopy_invalid (src dst : ByteArray) (d : Descriptor)
+    (h : canSimulate src dst d = false) :
+    simulateCopy src dst d = none := by
+  simp [simulateCopy, h]
+
+/-- SimulateChain preserves result on cons. -/
+theorem simulateChain_cons (src dst : ByteArray) (d : Descriptor) (rest : List Descriptor) :
+    simulateChain src dst (d :: rest) =
+      match simulateCopy src dst d with
+      | some dst' => simulateChain src dst' rest
+      | none => none := by
+  simp [simulateChain, List.foldlM]
+  cases simulateCopy src dst d with
+  | none => rfl
+  | some dst' => rfl
+
+-- ════════════════════════════════════════════════════════════════════
+-- Concrete Test Vectors
+-- ════════════════════════════════════════════════════════════════════
+
+/-- mkMemToMem 0 0 16 is valid. -/
+example : isValid (mkMemToMem 0 0 16) = true := by native_decide
+
+/-- mkMemToMem creates coherent descriptor. -/
+example : (mkMemToMem 0 0 16).coherence = .coherent := by rfl
+
+/-- mkBurstTransfer 0 0 64 16 is valid. -/
+example : isValid (mkBurstTransfer 0 0 64 16) = true := by native_decide
+
+/-- mkBurstTransfer 0 0 64 16 has 4 steps. -/
+example : stepCount (mkBurstTransfer 0 0 64 16) = 4 := by native_decide
+
+/-- An empty chain has zero step count. -/
+example : chainStepCount [] = 0 := by rfl
+
 end Radix.DMA
