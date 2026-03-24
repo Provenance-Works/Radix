@@ -215,4 +215,134 @@ theorem spec_slab_double_free (s : Spec.SlabState) (idx : Nat)
     s.free idx = none :=
   Spec.slab_double_free_fails s idx h
 
+/-! ================================================================ -/
+/-! ## Additional Bump Pool Properties                                -/
+/-! ================================================================ -/
+
+/-- Bump allocation preserves the buffer. -/
+theorem bump_alloc_buf (pool : BumpPool) (size : Nat) (off : Nat) (pool' : BumpPool)
+    (hAlloc : pool.alloc size = some (off, pool')) :
+    pool'.buf = pool.buf := by
+  unfold BumpPool.alloc at hAlloc
+  split at hAlloc
+  · contradiction
+  · split at hAlloc
+    · simp at hAlloc; obtain ⟨_, h⟩ := hAlloc; subst h; rfl
+    · contradiction
+
+/-- Allocated offset is strictly less than capacity. -/
+theorem bump_alloc_offset_lt_capacity (pool : BumpPool) (size : Nat) (off : Nat) (pool' : BumpPool)
+    (hAlloc : pool.alloc size = some (off, pool')) :
+    off < pool.capacity := by
+  have hOff := bump_alloc_offset pool size off pool' hAlloc
+  have hBound := bump_alloc_offset_in_bounds pool size off pool' hAlloc
+  unfold BumpPool.alloc at hAlloc
+  split at hAlloc
+  · contradiction
+  · split at hAlloc
+    · rename_i hSize _
+      subst hOff
+      simp [beq_iff_eq] at hSize
+      omega
+    · contradiction
+
+/-- Consecutive allocations return non-overlapping regions. -/
+theorem bump_alloc_nonoverlapping (pool : BumpPool) (s1 s2 : Nat)
+    (off1 : Nat) (pool1 : BumpPool)
+    (off2 : Nat) (pool2 : BumpPool)
+    (hAlloc1 : pool.alloc s1 = some (off1, pool1))
+    (hAlloc2 : pool1.alloc s2 = some (off2, pool2)) :
+    off1 + s1 ≤ off2 := by
+  have h1 := bump_alloc_offset pool s1 off1 pool1 hAlloc1
+  have h2 := bump_alloc_cursor pool s1 off1 pool1 hAlloc1
+  have h3 := bump_alloc_offset pool1 s2 off2 pool2 hAlloc2
+  subst h1; subst h3; omega
+
+/-- Allocation returns cursor strictly within capacity. -/
+theorem bump_alloc_cursor_le (pool : BumpPool) (size : Nat) (off : Nat) (pool' : BumpPool)
+    (_hAlloc : pool.alloc size = some (off, pool')) :
+    pool'.cursor ≤ pool'.capacity := pool'.hCursor
+
+/-- After reset, canAlloc returns true for any fitting size. -/
+theorem bump_reset_alloc_succeeds (pool : BumpPool) (size : Nat)
+    (hSize : size > 0) (hFit : size ≤ pool.capacity) :
+    (pool.reset.alloc size).isSome := by
+  have hNonzero : ¬ size == 0 := by
+    simp [beq_iff_eq]
+    omega
+  simp [BumpPool.reset, BumpPool.alloc, hNonzero, hFit]
+
+/-! ================================================================ -/
+/-! ## Additional Slab Pool Properties                                -/
+/-! ================================================================ -/
+
+/-- Slab allocation decreases free count by one. -/
+theorem slab_alloc_freeCount (pool : SlabPool) (blockIdx off : Nat) (pool' : SlabPool)
+    (hAlloc : pool.alloc = some (blockIdx, off, pool')) :
+    pool'.freeCount = pool.freeCount - 1 := by
+  unfold SlabPool.alloc at hAlloc
+  match hfl : pool.freeList with
+  | [] => simp [hfl] at hAlloc
+  | blockIdx' :: rest =>
+    simp [hfl] at hAlloc
+    obtain ⟨rfl, rfl, rfl⟩ := hAlloc
+    simp [SlabPool.freeCount, hfl]
+
+/-- Slab allocation increases allocated count by one. -/
+theorem slab_alloc_allocatedCount (pool : SlabPool) (blockIdx off : Nat) (pool' : SlabPool)
+    (hAlloc : pool.alloc = some (blockIdx, off, pool')) :
+    pool'.allocatedCount = pool.allocatedCount + 1 := by
+  unfold SlabPool.alloc at hAlloc
+  split at hAlloc
+  · contradiction
+  · next head rest =>
+    simp at hAlloc
+    obtain ⟨_, _, h3⟩ := hAlloc
+    subst h3
+    simp [SlabPool.allocatedCount]
+
+/-- Slab free preserves block size. -/
+theorem slab_free_blockSize (pool : SlabPool) (idx : Nat) (pool' : SlabPool)
+    (hFree : pool.free idx = some pool') :
+    pool'.blockSize = pool.blockSize := by
+  unfold SlabPool.free at hFree
+  split at hFree
+  · simp at hFree; subst hFree; rfl
+  · contradiction
+
+/-- Slab free preserves block count. -/
+theorem slab_free_blockCount (pool : SlabPool) (idx : Nat) (pool' : SlabPool)
+    (hFree : pool.free idx = some pool') :
+    pool'.blockCount = pool.blockCount := by
+  unfold SlabPool.free at hFree
+  split at hFree
+  · simp at hFree; subst hFree; rfl
+  · contradiction
+
+/-- Fresh slab pool can allocate if blockCount > 0. -/
+theorem slab_new_canAlloc (bs bc : Nat) (hBS : bs > 0) (hBC : bc > 0) :
+    (SlabPool.new bs bc hBS).canAlloc = true := by
+  cases bc with
+  | zero => omega
+  | succ n => simp [SlabPool.new, SlabPool.canAlloc]
+
+/-- (Spec) Bump reset produces a valid state. -/
+theorem spec_bump_reset_valid (s : Spec.BumpState) :
+    s.reset.isValid :=
+  Spec.bump_reset_valid s
+
+/-- (Spec) Bump alloc returns allocated state. -/
+theorem spec_bump_alloc_info_state (s : Spec.BumpState) (size : Nat)
+    (s' : Spec.BumpState) (info : Spec.AllocInfo)
+    (hAlloc : s.alloc size = some (s', info)) :
+    info.state = .allocated :=
+  Spec.bump_alloc_info_state s size s' info hAlloc
+
+/-- (Spec) Bump alloc offset is in bounds. -/
+theorem spec_bump_alloc_offset_lt (s : Spec.BumpState) (size : Nat)
+    (s' : Spec.BumpState) (info : Spec.AllocInfo)
+    (hAlloc : s.alloc size = some (s', info)) :
+    info.offset < s.capacity :=
+  Spec.bump_alloc_offset_lt s size s' info hAlloc
+
 end Radix.MemoryPool.Lemmas
