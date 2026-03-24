@@ -568,4 +568,27 @@ theorem hamming1511_correct_bit14 :
     Codeword1511.decode (Codeword1511.correct
       (Codeword1511.flipBit (Codeword1511.encode 42) 14)) = 42 := by native_decide
 
+-- ════════════════════════════════════════════════════════════════════
+-- Universal Hamming(15,11) Proofs
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Universal roundtrip: encoding then decoding any 11-bit word returns the original. -/
+theorem hamming1511_roundtrip_universal :
+    ∀ w : Word11, Codeword1511.decode (Codeword1511.encode w) = w := by native_decide
+
+/-- Universal syndrome: syndrome of any freshly encoded word is 0. -/
+theorem hamming1511_syndrome_clean_universal :
+    ∀ w : Word11, (Codeword1511.encode w).syndrome = 0 := by native_decide
+
+/-- Universal single-bit correction: flipping any bit and correcting recovers the data. -/
+theorem hamming1511_correct_universal :
+    ∀ (w : Word11) (i : Fin 15),
+      Codeword1511.decode (Codeword1511.correct
+        (Codeword1511.flipBit (Codeword1511.encode w) i)) = w := by native_decide
+
+/-- Encoding is injective: distinct words produce distinct codewords. -/
+theorem hamming1511_encode_injective :
+    ∀ (w1 w2 : Word11), Codeword1511.encode w1 = Codeword1511.encode w2 → w1 = w2 := by
+  native_decide
+
 end Radix.ECC.Spec
