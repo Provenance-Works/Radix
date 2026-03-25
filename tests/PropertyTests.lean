@@ -2323,6 +2323,71 @@ private def testUTF8Properties : IO Unit := do
     | none =>
       assert false s!"UTF8 arbitrary normalization scalar generation produced invalid scalars: {scalarNatList}"
 
+  let caseSamplePool : Array Nat :=
+    #[0x41, 0x43, 0x45, 0x4E, 0x4F, 0x55, 0x59,
+      0x61, 0x63, 0x65, 0x6E, 0x6F, 0x75, 0x79,
+      0x00C1, 0x00C7, 0x00D1, 0x00D6, 0x00DC, 0x00DD, 0x0178,
+      0x00E1, 0x00E7, 0x00F1, 0x00F6, 0x00FC, 0x00FD, 0x00FF,
+      0x0301, 0x0327, 0x1F642]
+
+  let mut rngCaseSamples := PRNG.new 614
+  for _ in [:numIter] do
+    let (rng', sampleCount0) := rngCaseSamples.nextNat 8
+    rngCaseSamples := rng'
+    let sampleCount := sampleCount0 + 1
+    let mut sampleAcc : List Nat := []
+    for _ in [:sampleCount] do
+      let (nextRng, sampleIndex) := rngCaseSamples.nextNat caseSamplePool.size
+      rngCaseSamples := nextRng
+      sampleAcc := caseSamplePool[sampleIndex]! :: sampleAcc
+    let sampleNats := sampleAcc.reverse
+    match Radix.UTF8.natsToScalars? sampleNats with
+    | some scalars =>
+      let lower := Radix.UTF8.lowercaseScalarsSimple scalars
+      let upper := Radix.UTF8.uppercaseScalarsSimple scalars
+      let folded := Radix.UTF8.caseFoldScalarsSimple scalars
+      assert (Radix.UTF8.lowercaseScalarsSimple lower == lower)
+        s!"UTF8 simple lowercase is idempotent on supported case samples: {sampleNats}"
+      assert (Radix.UTF8.uppercaseScalarsSimple upper == upper)
+        s!"UTF8 simple uppercase is idempotent on supported case samples: {sampleNats}"
+      assert (Radix.UTF8.caseFoldScalarsSimple folded == folded)
+        s!"UTF8 simple case fold is idempotent on supported case samples: {sampleNats}"
+      let encoded := Radix.UTF8.encodeScalars scalars
+      assert (Radix.UTF8.lowercaseBytesSimple? encoded == some (Radix.UTF8.encodeScalars lower))
+        s!"UTF8 lowercaseBytesSimple? matches scalar mapping: {sampleNats}"
+      assert (Radix.UTF8.uppercaseBytesSimple? encoded == some (Radix.UTF8.encodeScalars upper))
+        s!"UTF8 uppercaseBytesSimple? matches scalar mapping: {sampleNats}"
+      assert (Radix.UTF8.caseFoldBytesSimple? encoded == some (Radix.UTF8.encodeScalars folded))
+        s!"UTF8 caseFoldBytesSimple? matches scalar folding: {sampleNats}"
+      assert (Radix.UTF8.equalsCaseFoldSimpleBytes? encoded (Radix.UTF8.encodeScalars upper))
+        s!"UTF8 case-fold equality matches lowercase vs uppercase variants: {sampleNats}"
+    | none =>
+      assert false s!"UTF8 case sample generation produced invalid scalars: {sampleNats}"
+
+  let mut rngCaseEquivalent := PRNG.new 615
+  let uppercasePool : Array Nat := #[0x41, 0x43, 0x45, 0x4E, 0x4F, 0x55, 0x59, 0x00C1, 0x00C7, 0x00D1, 0x00D6, 0x00DC, 0x00DD, 0x0178]
+  for _ in [:numIter] do
+    let (rng', baseIndex) := rngCaseEquivalent.nextNat uppercasePool.size
+    rngCaseEquivalent := rng'
+    let baseNat := uppercasePool[baseIndex]!
+    match Radix.UTF8.ofNat? baseNat with
+    | some baseScalar =>
+      let acuteScalar? := Radix.UTF8.ofNat? 0x0301
+      match acuteScalar? with
+      | some acute =>
+        let foldedLeft := Radix.UTF8.caseFoldScalarsSimple [baseScalar]
+        let rightSource := Radix.UTF8.normalizeScalarsNFD [Radix.UTF8.caseFoldSimple baseScalar]
+        assert (Radix.UTF8.caselessEquivalentSimple [baseScalar] rightSource)
+          s!"UTF8 scalar caseless equivalence matches folded normalized form: {baseNat}"
+        assert (Radix.UTF8.equalsCaseFoldSimpleBytes? (Radix.UTF8.encodeScalars [baseScalar]) (Radix.UTF8.encodeScalars rightSource))
+          s!"UTF8 byte caseless equivalence matches folded normalized form: {baseNat}"
+        assert (Radix.UTF8.caseFoldScalarsSimple [baseScalar, acute] == Radix.UTF8.normalizeScalarsNFD [Radix.UTF8.caseFoldSimple baseScalar, acute])
+          s!"UTF8 case fold preserves canonical ordering after combining marks: {baseNat}"
+      | none =>
+        assert false "UTF8 case-fold test failed to construct acute accent"
+    | none =>
+      assert false s!"UTF8 case-fold sample base scalar invalid: {baseNat}"
+
 private def testECCProperties : IO Unit := do
   IO.println "  ECC properties..."
   let mut rng := PRNG.new 700

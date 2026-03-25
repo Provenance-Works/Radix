@@ -408,6 +408,57 @@ private def runUTF8NormalizationTests
   assert (Radix.UTF8.normalizeBytes? .nfkd precomposedBytes == none)
     "normalizeBytes? reports unsupported compatibility normalization forms"
 
+private def runUTF8CaseMappingTests
+    (assert : Bool → String → IO Unit) : IO Unit := do
+  let asciiA ← UTF8Test.scalar 0x41
+  let asciiC ← UTF8Test.scalar 0x43
+  let asciiLowerA ← UTF8Test.scalar 0x61
+  let asciiLowerC ← UTF8Test.scalar 0x63
+  let acute ← UTF8Test.scalar 0x0301
+  let cedilla ← UTF8Test.scalar 0x0327
+  let upperAAcute ← UTF8Test.scalar 0x00C1
+  let lowerAAcute ← UTF8Test.scalar 0x00E1
+  let upperCCedilla ← UTF8Test.scalar 0x00C7
+  let lowerCCedilla ← UTF8Test.scalar 0x00E7
+  let smile ← UTF8Test.scalar 0x1F642
+
+  assert (Radix.UTF8.toLowerSimple asciiA == asciiLowerA)
+    "toLowerSimple lowercases ASCII"
+  assert (Radix.UTF8.toUpperSimple asciiLowerA == asciiA)
+    "toUpperSimple uppercases ASCII"
+  assert (Radix.UTF8.toLowerSimple upperAAcute == lowerAAcute)
+    "toLowerSimple lowercases supported precomposed Latin letters"
+  assert (Radix.UTF8.toUpperSimple lowerCCedilla == upperCCedilla)
+    "toUpperSimple uppercases supported precomposed Latin letters"
+  assert (Radix.UTF8.caseFoldSimple upperAAcute == lowerAAcute)
+    "caseFoldSimple follows lowercase mapping on supported letters"
+  assert (Radix.UTF8.toLowerSimple smile == smile)
+    "toLowerSimple leaves unsupported scalars unchanged"
+
+  let mixedBytes := Radix.UTF8.encodeScalars [asciiA, upperAAcute, upperCCedilla, smile]
+  match Radix.UTF8.lowercaseBytesSimple? mixedBytes with
+  | some lowerBytes =>
+    assert (Radix.UTF8.decodeBytes? lowerBytes == some [asciiLowerA, lowerAAcute, lowerCCedilla, smile])
+      "lowercaseBytesSimple? lowercases supported UTF-8 scalars"
+  | none => assert false "lowercaseBytesSimple? rejected valid UTF-8 input"
+  match Radix.UTF8.uppercaseBytesSimple? (Radix.UTF8.encodeScalars [asciiLowerC, lowerAAcute, lowerCCedilla]) with
+  | some upperBytes =>
+    assert (Radix.UTF8.decodeBytes? upperBytes == some [asciiC, upperAAcute, upperCCedilla])
+      "uppercaseBytesSimple? uppercases supported UTF-8 scalars"
+  | none => assert false "uppercaseBytesSimple? rejected valid UTF-8 input"
+
+  let composedUpper := Radix.UTF8.encodeScalars [upperAAcute, upperCCedilla]
+  let decomposedLower := Radix.UTF8.encodeScalars [asciiLowerA, acute, asciiLowerC, cedilla]
+  match Radix.UTF8.caseFoldBytesSimple? composedUpper with
+  | some folded =>
+    assert (Radix.UTF8.decodeBytes? folded == some [asciiLowerA, acute, asciiLowerC, cedilla])
+      "caseFoldBytesSimple? lowers and canonically decomposes supported UTF-8 input"
+  | none => assert false "caseFoldBytesSimple? rejected valid UTF-8 input"
+  assert (Radix.UTF8.equalsCaseFoldSimpleBytes? composedUpper decomposedLower)
+    "equalsCaseFoldSimpleBytes? matches precomposed uppercase and decomposed lowercase forms"
+  assert (!Radix.UTF8.equalsCaseFoldSimpleBytes? composedUpper (Radix.UTF8.encodeScalars [asciiLowerA, acute]))
+    "equalsCaseFoldSimpleBytes? rejects unequal scalar sequences"
+
 private def runUTF8StreamingAndInteropTail
     (assert : Bool → String → IO Unit)
     (ascii twoByte threeByte fourByte : Radix.UTF8.Scalar) : IO Unit := do
@@ -512,6 +563,7 @@ private def runUTF8StreamingAndInteropTail
   UTF8Test.runUTF8GraphemeTests assert ascii
   UTF8Test.runUTF16InteropTests assert ascii threeByte fourByte
   UTF8Test.runUTF8NormalizationTests assert
+  UTF8Test.runUTF8CaseMappingTests assert
   UTF8Test.runUTF8TextOpTests assert ascii twoByte threeByte fourByte
 
 end UTF8Test
