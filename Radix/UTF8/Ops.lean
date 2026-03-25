@@ -30,7 +30,8 @@ export Spec (ByteClass classifyByte isLeadByte isAsciiByte isContinuationByte
              IsSurrogate IsHighSurrogate IsLowSurrogate IsNoncharacter
              IsSupplementary DecodeErrorKind DecodeError DecodeStep
              GraphemeBreakProperty classifyGraphemeBreak isGraphemeBreak
-             decodeNextStep? maximalSubpartLength firstDecodeError?)
+             decodeNextStep? maximalSubpartLength firstDecodeError?
+             toSurrogatePair fromSurrogatePair?)
 
 -- ════════════════════════════════════════════════════════════════════
 -- ByteArray Conversions
@@ -125,6 +126,153 @@ def scalarCountList? (bytes : List UInt8) : Option Nat :=
   (decodeList? bytes).map List.length
 
 -- ════════════════════════════════════════════════════════════════════
+-- UTF-16 Interop
+-- ════════════════════════════════════════════════════════════════════
+
+/-- UTF-16 code unit. -/
+abbrev UTF16CodeUnit := UInt16
+
+/-- Convert a UTF-16 array to a list of code units in order. -/
+def utf16ArrayToList (units : Array UTF16CodeUnit) : List UTF16CodeUnit :=
+  units.toList
+
+/-- Convert a UTF-16 code-unit list to an array. -/
+def listToUTF16Array (units : List UTF16CodeUnit) : Array UTF16CodeUnit :=
+  units.toArray
+
+/-- Detailed UTF-16 decoding error kind. -/
+inductive UTF16DecodeErrorKind where
+  | unexpectedLowSurrogate
+  | invalidLowSurrogate
+  | truncatedHighSurrogate
+  deriving DecidableEq, Repr
+
+/-- Detailed UTF-16 decoding error. -/
+structure UTF16DecodeError where
+  kind : UTF16DecodeErrorKind
+  expectedLength : Nat
+  consumed : Nat
+  deriving DecidableEq, Repr
+
+/-- Detailed UTF-16 decode step. -/
+inductive UTF16DecodeStep where
+  | scalar (scalar : Scalar) (consumed : Nat)
+  | error (error : UTF16DecodeError)
+  deriving DecidableEq, Repr
+
+/-- Encode one scalar to a UTF-16 code-unit list. -/
+def encodeScalarToUTF16List (s : Scalar) : List UTF16CodeUnit :=
+  if h : 0x10000 ≤ s.val then
+    let pair := Spec.toSurrogatePair s h
+    [pair.1.toUInt16, pair.2.toUInt16]
+  else
+    [s.val.toUInt16]
+
+/-- Encode one scalar to a UTF-16 array. -/
+def encodeScalarToUTF16 (s : Scalar) : Array UTF16CodeUnit :=
+  (encodeScalarToUTF16List s).toArray
+
+/-- Encode a scalar list to a UTF-16 code-unit list. -/
+def encodeScalarsToUTF16List (scalars : List Scalar) : List UTF16CodeUnit :=
+  scalars.foldr (fun scalar acc => encodeScalarToUTF16List scalar ++ acc) []
+
+/-- Encode a scalar list to a UTF-16 array. -/
+def encodeScalarsToUTF16 (scalars : List Scalar) : Array UTF16CodeUnit :=
+  (encodeScalarsToUTF16List scalars).toArray
+
+/-- Decode the next UTF-16 scalar or error from a code-unit list. -/
+def decodeNextUTF16ListStep? (units : List UTF16CodeUnit) : Option UTF16DecodeStep :=
+  match units with
+  | [] => none
+  | unit :: rest =>
+    let value := unit.toNat
+    if 0xD800 ≤ value && value ≤ 0xDBFF then
+      match rest with
+      | [] =>
+        some (.error { kind := .truncatedHighSurrogate, expectedLength := 2, consumed := 1 })
+      | next :: _ =>
+        let nextValue := next.toNat
+        if 0xDC00 ≤ nextValue && nextValue ≤ 0xDFFF then
+          match Spec.fromSurrogatePair? value nextValue with
+          | some scalar => some (.scalar scalar 2)
+          | none => some (.error { kind := .invalidLowSurrogate, expectedLength := 2, consumed := 1 })
+        else
+          some (.error { kind := .invalidLowSurrogate, expectedLength := 2, consumed := 1 })
+    else if 0xDC00 ≤ value && value ≤ 0xDFFF then
+      some (.error { kind := .unexpectedLowSurrogate, expectedLength := 1, consumed := 1 })
+    else
+      match Spec.Scalar.ofNat? value with
+      | some scalar => some (.scalar scalar 1)
+      | none => none
+
+/-- Decode the next UTF-16 scalar or error from a code-unit array. -/
+def decodeNextUTF16Step? (units : Array UTF16CodeUnit) : Option UTF16DecodeStep :=
+  decodeNextUTF16ListStep? (utf16ArrayToList units)
+
+/-- Decode a UTF-16 code-unit list strictly. -/
+def decodeUTF16List? (units : List UTF16CodeUnit) : Option (List Scalar) :=
+  go (units.length + 1) units []
+where
+  go (fuel : Nat) (remaining : List UTF16CodeUnit) (acc : List Scalar) : Option (List Scalar) :=
+    match fuel with
+    | 0 => none
+    | fuel + 1 =>
+      match decodeNextUTF16ListStep? remaining with
+      | none => some acc.reverse
+      | some (.scalar scalar consumed) =>
+        go fuel (remaining.drop consumed) (scalar :: acc)
+      | some (.error _) => none
+
+/-- Decode a UTF-16 code-unit array strictly. -/
+def decodeUTF16? (units : Array UTF16CodeUnit) : Option (List Scalar) :=
+  decodeUTF16List? (utf16ArrayToList units)
+
+/-- Decode a UTF-16 code-unit list with U+FFFD replacement for malformed surrogate usage. -/
+def decodeUTF16ListReplacing (units : List UTF16CodeUnit) : List Scalar :=
+  go (units.length + 1) units []
+where
+  go (fuel : Nat) (remaining : List UTF16CodeUnit) (acc : List Scalar) : List Scalar :=
+    match fuel with
+    | 0 => acc.reverse
+    | fuel + 1 =>
+      match decodeNextUTF16ListStep? remaining with
+      | none => acc.reverse
+      | some (.scalar scalar consumed) =>
+        go fuel (remaining.drop consumed) (scalar :: acc)
+      | some (.error err) =>
+        go fuel (remaining.drop err.consumed) (Spec.Scalar.replacement :: acc)
+
+/-- Decode a UTF-16 code-unit array with U+FFFD replacement for malformed surrogate usage. -/
+def decodeUTF16Replacing (units : Array UTF16CodeUnit) : List Scalar :=
+  decodeUTF16ListReplacing (utf16ArrayToList units)
+
+/-- Return the first UTF-16 decoding error from a code-unit list, if any. -/
+def firstUTF16DecodeErrorList? (units : List UTF16CodeUnit) : Option UTF16DecodeError :=
+  match decodeNextUTF16ListStep? units with
+  | some (.error err) => some err
+  | _ => none
+
+/-- Return the first UTF-16 decoding error from a code-unit array, if any. -/
+def firstUTF16DecodeError? (units : Array UTF16CodeUnit) : Option UTF16DecodeError :=
+  firstUTF16DecodeErrorList? (utf16ArrayToList units)
+
+/-- Count the number of scalars represented by a well-formed UTF-16 array. -/
+def utf16ScalarCount? (units : Array UTF16CodeUnit) : Option Nat :=
+  (decodeUTF16? units).map List.length
+
+/-- Transcode UTF-16 code units to UTF-8 strictly. -/
+def transcodeUTF16ToUTF8? (units : Array UTF16CodeUnit) : Option ByteArray :=
+  (decodeUTF16? units).map encodeScalars
+
+/-- Transcode UTF-16 code units to UTF-8 with replacement recovery. -/
+def transcodeUTF16ToUTF8Replacing (units : Array UTF16CodeUnit) : ByteArray :=
+  encodeScalars (decodeUTF16Replacing units)
+
+/-- Transcode UTF-8 bytes to UTF-16 strictly. -/
+def transcodeUTF8ToUTF16? (bytes : ByteArray) : Option (Array UTF16CodeUnit) :=
+  (decodeBytes? bytes).map encodeScalarsToUTF16
+
+-- ════════════════════════════════════════════════════════════════════
 -- Streaming Decoding
 -- ════════════════════════════════════════════════════════════════════
 
@@ -133,6 +281,12 @@ inductive ReplacementMode where
   | perByte
   | maximalSubpart
   deriving DecidableEq, Repr
+
+/-- Transcode UTF-8 bytes to UTF-16 with the selected UTF-8 replacement policy. -/
+def transcodeUTF8ToUTF16Replacing (mode : ReplacementMode) (bytes : ByteArray) : Array UTF16CodeUnit :=
+  match mode with
+  | .perByte => encodeScalarsToUTF16 (decodeBytesReplacing bytes)
+  | .maximalSubpart => encodeScalarsToUTF16 (decodeBytesReplacingMaximalSubparts bytes)
 
 /-- Incremental UTF-8 decoder state.
 
