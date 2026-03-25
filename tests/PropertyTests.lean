@@ -2007,6 +2007,61 @@ private def testUTF8Properties : IO Unit := do
     assert (streamingStrict == Radix.UTF8.decodeList? bytes)
       s!"UTF8 streaming strict success/failure matches one-shot decode: {bytes}"
 
+  let mut rngCursorValid := PRNG.new 604
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngCursorValid.nextNat 6
+    rngCursorValid := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarsAcc : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngCursorValid
+      rngCursorValid := nextRng
+      scalarsAcc := scalarNat :: scalarsAcc
+    let scalarNatList := scalarsAcc.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let encoded := Radix.UTF8.encodeScalars scalars
+      assert (Radix.UTF8.decodeWithCursor? encoded == some scalars)
+        s!"UTF8 cursor strict decode matches encode/decode on valid data: {scalarNatList}"
+
+      let byteList := Radix.UTF8.byteArrayToList encoded
+      let mut boundary := 0
+      for scalar in scalars do
+        match Radix.UTF8.Cursor.atOffset? encoded boundary with
+        | some cursor =>
+          assert (Radix.UTF8.Cursor.current? cursor == some scalar)
+            s!"UTF8 cursor boundary lookup returns expected scalar at offset {boundary}"
+        | none =>
+          assert false s!"UTF8 cursor boundary lookup rejected valid offset {boundary}"
+        boundary := boundary + scalar.byteCount
+      match Radix.UTF8.Cursor.atOffset? encoded boundary with
+      | some cursor =>
+        assert (Radix.UTF8.Cursor.byteOffset cursor == boundary)
+          "UTF8 cursor boundary lookup accepts final offset"
+      | none =>
+        assert false "UTF8 cursor boundary lookup rejected final offset"
+      for idx in List.range byteList.length do
+        let byte := byteList[idx]!
+        if Radix.UTF8.isContinuationByte byte then
+          assert (Radix.UTF8.Cursor.atOffset? encoded idx == none)
+            s!"UTF8 cursor boundary lookup rejects continuation-byte offset {idx}"
+    | none =>
+      assert false s!"UTF8 random cursor scalar generation produced invalid scalar list: {scalarNatList}"
+
+  let mut rngCursorBytes := PRNG.new 605
+  for _ in [:numIter] do
+    let (rng', bytes) := rngCursorBytes.nextByteList 16
+    rngCursorBytes := rng'
+    let byteArray := Radix.UTF8.listToByteArray bytes
+    let cursorStrict := Radix.UTF8.decodeWithCursor? byteArray
+    assert (cursorStrict == Radix.UTF8.decodeList? bytes)
+      s!"UTF8 cursor strict decode matches one-shot decode: {bytes}"
+    assert (Radix.UTF8.decodeWithCursorReplacing .perByte byteArray == Radix.UTF8.decodeListReplacing bytes)
+      s!"UTF8 cursor per-byte replacement matches one-shot decode: {bytes}"
+    assert (Radix.UTF8.decodeWithCursorReplacing .maximalSubpart byteArray ==
+      Radix.UTF8.decodeListReplacingMaximalSubparts bytes)
+      s!"UTF8 cursor maximal-subpart replacement matches one-shot decode: {bytes}"
+
 private def testECCProperties : IO Unit := do
   IO.println "  ECC properties..."
   let mut rng := PRNG.new 700

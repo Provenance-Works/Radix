@@ -26,6 +26,104 @@ private def replacementValue : Nat :=
 private def strictReplacementValues (bytes : List UInt8) : List Nat :=
   Radix.UTF8.scalarsToNats (Radix.UTF8.decodeListReplacingMaximalSubparts bytes)
 
+private def runUTF8CursorTests
+    (assert : Bool → String → IO Unit)
+    (ascii twoByte threeByte fourByte : Radix.UTF8.Scalar) : IO Unit := do
+  let cursorInput := Radix.UTF8.encodeScalars [ascii, twoByte, threeByte, fourByte]
+  let cursor0 := Radix.UTF8.Cursor.init cursorInput
+  assert (Radix.UTF8.Cursor.byteOffset cursor0 == 0) "cursor starts at offset zero"
+  assert ((Radix.UTF8.Cursor.current? cursor0).map (·.val) == some 0x41)
+    "cursor current? reads first scalar"
+
+  let cursor1 ←
+    match Radix.UTF8.Cursor.advance? cursor0 with
+    | some (s0, cursor1) => do
+      assert (s0.val == 0x41) "cursor advance decodes first ASCII scalar"
+      assert (Radix.UTF8.Cursor.byteOffset cursor1 == 1) "cursor advance moves by ASCII width"
+      pure cursor1
+    | none => do
+      assert false "cursor failed on first scalar"
+      pure cursor0
+  let cursor2 ←
+    match Radix.UTF8.Cursor.advance? cursor1 with
+    | some (s1, cursor2) => do
+      assert (s1.val == 0x00A2) "cursor advance decodes second scalar"
+      assert (Radix.UTF8.Cursor.byteOffset cursor2 == 3) "cursor advance moves by two-byte width"
+      pure cursor2
+    | none => do
+      assert false "cursor failed on second scalar"
+      pure cursor1
+  let cursor3 ←
+    match Radix.UTF8.Cursor.advance? cursor2 with
+    | some (s2, cursor3) => do
+      assert (s2.val == 0x20AC) "cursor advance decodes third scalar"
+      assert (Radix.UTF8.Cursor.byteOffset cursor3 == 6) "cursor advance moves by three-byte width"
+      pure cursor3
+    | none => do
+      assert false "cursor failed on third scalar"
+      pure cursor2
+  let cursor4 ←
+    match Radix.UTF8.Cursor.advance? cursor3 with
+    | some (s3, cursor4) => do
+      assert (s3.val == 0x1F642) "cursor advance decodes fourth scalar"
+      assert (Radix.UTF8.Cursor.byteOffset cursor4 == 10) "cursor reaches end after final scalar"
+      pure cursor4
+    | none => do
+      assert false "cursor failed on fourth scalar"
+      pure cursor3
+  assert (Radix.UTF8.Cursor.advance? cursor4 == none) "cursor cannot advance past end"
+
+  assert (Radix.UTF8.decodeWithCursor? cursorInput == Radix.UTF8.decodeBytes? cursorInput)
+    "decodeWithCursor? matches decodeBytes? on valid input"
+
+  match Radix.UTF8.Cursor.atOffset? cursorInput 0 with
+  | some cursor => assert (Radix.UTF8.Cursor.byteOffset cursor == 0) "Cursor.atOffset? accepts start boundary"
+  | none => assert false "Cursor.atOffset? rejected start boundary"
+  match Radix.UTF8.Cursor.atOffset? cursorInput 1 with
+  | some cursor => assert ((Radix.UTF8.Cursor.current? cursor).map (·.val) == some 0x00A2) "Cursor.atOffset? accepts next scalar boundary"
+  | none => assert false "Cursor.atOffset? rejected valid second boundary"
+  assert (Radix.UTF8.Cursor.atOffset? cursorInput 2 == none) "Cursor.atOffset? rejects interior continuation offset"
+  match Radix.UTF8.Cursor.atOffset? cursorInput 10 with
+  | some cursor => assert (Radix.UTF8.Cursor.byteOffset cursor == 10) "Cursor.atOffset? accepts end boundary"
+  | none => assert false "Cursor.atOffset? rejected end boundary"
+  assert (Radix.UTF8.Cursor.atOffset? cursorInput 11 == none)
+    "Cursor.atOffset? rejects out-of-range offset"
+
+  let cursorMalformed := UTF8Test.byteArray [0xE1, 0x80, 0x41]
+  let malformedCursor0 := Radix.UTF8.Cursor.init cursorMalformed
+  assert (Radix.UTF8.Cursor.current? malformedCursor0 == none) "cursor current? rejects malformed prefix"
+  match Radix.UTF8.Cursor.currentError? malformedCursor0 with
+  | some err => do
+    assert (err.kind == Radix.UTF8.Spec.DecodeErrorKind.invalidContinuationByte)
+      "cursor currentError? reports invalid continuation kind"
+    assert (err.consumed == 2) "cursor currentError? reports maximal subpart width"
+  | none => assert false "cursor currentError? missing malformed prefix error"
+  assert (Radix.UTF8.decodeWithCursor? cursorMalformed == none)
+    "decodeWithCursor? rejects malformed input"
+
+  let perByteCursorValues :=
+    Radix.UTF8.decodeWithCursorReplacing .perByte cursorMalformed |>.map (·.val)
+  assert (perByteCursorValues == [UTF8Test.replacementValue, UTF8Test.replacementValue, 0x41])
+    "cursor per-byte replacement matches legacy semantics"
+
+  let maximalCursorValues :=
+    Radix.UTF8.decodeWithCursorReplacing .maximalSubpart cursorMalformed |>.map (·.val)
+  assert (maximalCursorValues == [UTF8Test.replacementValue, 0x41])
+    "cursor maximal-subpart replacement collapses malformed prefix"
+
+  match Radix.UTF8.Cursor.advanceReplacing .maximalSubpart malformedCursor0 with
+  | some (replacementScalar, malformedCursor1) => do
+    assert (replacementScalar.val == UTF8Test.replacementValue)
+      "cursor maximal-subpart replacement returns replacement scalar"
+    assert (Radix.UTF8.Cursor.byteOffset malformedCursor1 == 2)
+      "cursor maximal-subpart replacement advances by maximal subpart length"
+    match Radix.UTF8.Cursor.advanceReplacing .maximalSubpart malformedCursor1 with
+    | some (asciiScalar, malformedCursor2) => do
+      assert (asciiScalar.val == 0x41) "cursor resumes at ASCII successor after replacement"
+      assert (Radix.UTF8.Cursor.byteOffset malformedCursor2 == 3) "cursor reaches end after successor scalar"
+    | none => assert false "cursor failed to resume after maximal-subpart replacement"
+  | none => assert false "cursor maximal-subpart replacement failed on malformed prefix"
+
 end UTF8Test
 
 def runUTF8Tests : IO Nat := do
@@ -491,5 +589,7 @@ def runUTF8Tests : IO Nat := do
   assert (UTF8Test.scalarValues (Radix.UTF8.decodeChunksReplacing .maximalSubpart
     [replacementChunk1, replacementChunk2]) == [UTF8Test.replacementValue, 0x41])
     "decodeChunksReplacing maximal-subpart matches manual streaming result"
+
+  UTF8Test.runUTF8CursorTests assert ascii twoByte threeByte fourByte
 
   c.get
