@@ -2062,6 +2062,52 @@ private def testUTF8Properties : IO Unit := do
       Radix.UTF8.decodeListReplacingMaximalSubparts bytes)
       s!"UTF8 cursor maximal-subpart replacement matches one-shot decode: {bytes}"
 
+  let mut rngGraphemeValid := PRNG.new 606
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngGraphemeValid.nextNat 6
+    rngGraphemeValid := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarsAcc : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngGraphemeValid
+      rngGraphemeValid := nextRng
+      scalarsAcc := scalarNat :: scalarsAcc
+    let scalarNatList := scalarsAcc.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let encoded := Radix.UTF8.encodeScalars scalars
+      match Radix.UTF8.decodeGraphemes? encoded with
+      | some graphemes =>
+        let flattened := graphemes.foldr (fun grapheme acc => grapheme.scalars ++ acc) []
+        let totalBytes := graphemes.foldl (fun acc grapheme => acc + grapheme.byteLength) 0
+        assert (flattened == scalars)
+          s!"UTF8 grapheme decode flattens back to original scalars: {scalarNatList}"
+        assert (totalBytes == encoded.size)
+          s!"UTF8 grapheme byte coverage matches encoded length: {scalarNatList}"
+        assert (Radix.UTF8.graphemeCount? encoded == some graphemes.length)
+          s!"UTF8 graphemeCount? matches decoded grapheme list: {scalarNatList}"
+      | none =>
+        assert false s!"UTF8 grapheme decode unexpectedly failed on valid input: {scalarNatList}"
+    | none =>
+      assert false s!"UTF8 random grapheme scalar generation produced invalid scalar list: {scalarNatList}"
+
+  let mut rngGraphemeBytes := PRNG.new 607
+  for _ in [:numIter] do
+    let (rng', bytes) := rngGraphemeBytes.nextByteList 16
+    rngGraphemeBytes := rng'
+    let byteArray := Radix.UTF8.listToByteArray bytes
+    let strictFlattened :=
+      match Radix.UTF8.decodeGraphemes? byteArray with
+      | some graphemes => some (graphemes.foldr (fun grapheme acc => grapheme.scalars ++ acc) [])
+      | none => none
+    assert (strictFlattened == Radix.UTF8.decodeWithCursor? byteArray)
+      s!"UTF8 grapheme strict decode matches strict cursor flattening: {bytes}"
+    let replacementFlattened :=
+      (Radix.UTF8.decodeGraphemesReplacing .maximalSubpart byteArray).foldr
+        (fun grapheme acc => grapheme.scalars ++ acc) []
+    assert (replacementFlattened == Radix.UTF8.decodeWithCursorReplacing .maximalSubpart byteArray)
+      s!"UTF8 grapheme maximal-subpart replacement matches cursor replacement flattening: {bytes}"
+
 private def testECCProperties : IO Unit := do
   IO.println "  ECC properties..."
   let mut rng := PRNG.new 700

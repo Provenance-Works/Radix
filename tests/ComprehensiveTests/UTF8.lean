@@ -20,6 +20,9 @@ private def byteArray (bytes : List UInt8) : ByteArray :=
 private def scalarValues (scalars : List Radix.UTF8.Scalar) : List Nat :=
   scalars.map (·.val)
 
+private def graphemeScalarValues (graphemes : List Radix.UTF8.Grapheme) : List (List Nat) :=
+  graphemes.map (fun grapheme => scalarValues grapheme.scalars)
+
 private def replacementValue : Nat :=
   Radix.UTF8.replacement.val
 
@@ -123,6 +126,93 @@ private def runUTF8CursorTests
       assert (Radix.UTF8.Cursor.byteOffset malformedCursor2 == 3) "cursor reaches end after successor scalar"
     | none => assert false "cursor failed to resume after maximal-subpart replacement"
   | none => assert false "cursor maximal-subpart replacement failed on malformed prefix"
+
+private def runUTF8GraphemeTests
+    (assert : Bool → String → IO Unit)
+    (ascii : Radix.UTF8.Scalar) : IO Unit := do
+  let acute ← UTF8Test.scalar 0x0301
+  let letterB ← UTF8Test.scalar 0x42
+  let carriageReturn ← UTF8Test.scalar 0x000D
+  let lineFeed ← UTF8Test.scalar 0x000A
+  let hangulL ← UTF8Test.scalar 0x1100
+  let hangulV ← UTF8Test.scalar 0x1161
+  let hangulT ← UTF8Test.scalar 0x11A8
+  let hangulLV ← UTF8Test.scalar 0xAC00
+  let regionalA ← UTF8Test.scalar 0x1F1E6
+  let regionalB ← UTF8Test.scalar 0x1F1E7
+  let regionalC ← UTF8Test.scalar 0x1F1E8
+
+  let combiningInput := Radix.UTF8.encodeScalars [ascii, acute, letterB]
+  match Radix.UTF8.decodeGraphemes? combiningInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0x41, 0x0301], [0x42]])
+      "grapheme decode groups base + combining mark"
+    match graphemes with
+    | [first, second] =>
+      assert (Radix.UTF8.Grapheme.byteLength first == 3) "first grapheme spans base + combining bytes"
+      assert (Radix.UTF8.Grapheme.byteLength second == 1) "second grapheme spans trailing ASCII byte"
+      assert (first.startOffset == 0 && first.endOffset == 3) "first grapheme offsets are correct"
+      assert (second.startOffset == 3 && second.endOffset == 4) "second grapheme offsets are correct"
+    | _ => assert false "unexpected grapheme decomposition for combining input"
+  | none => assert false "grapheme decode rejected valid combining-mark input"
+
+  let crlfInput := Radix.UTF8.encodeScalars [carriageReturn, lineFeed, ascii]
+  match Radix.UTF8.decodeGraphemes? crlfInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0x000D, 0x000A], [0x41]])
+      "grapheme decode keeps CRLF in one cluster"
+  | none => assert false "grapheme decode rejected valid CRLF input"
+
+  let hangulInput := Radix.UTF8.encodeScalars [hangulL, hangulV, hangulT, ascii]
+  match Radix.UTF8.decodeGraphemes? hangulInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0x1100, 0x1161, 0x11A8], [0x41]])
+      "grapheme decode groups Hangul jamo LVT sequence"
+  | none => assert false "grapheme decode rejected valid Hangul jamo input"
+
+  let precomposedHangulInput := Radix.UTF8.encodeScalars [hangulLV, hangulT, ascii]
+  match Radix.UTF8.decodeGraphemes? precomposedHangulInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0xAC00, 0x11A8], [0x41]])
+      "grapheme decode groups precomposed Hangul LV with trailing T"
+  | none => assert false "grapheme decode rejected valid precomposed Hangul input"
+
+  let regionalInput := Radix.UTF8.encodeScalars [regionalA, regionalB, regionalC]
+  match Radix.UTF8.decodeGraphemes? regionalInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0x1F1E6, 0x1F1E7], [0x1F1E8]])
+      "grapheme decode pairs regional indicators"
+    assert (Radix.UTF8.graphemeCount? regionalInput == some 2) "graphemeCount? matches regional-indicator pairing"
+  | none => assert false "grapheme decode rejected valid regional-indicator input"
+
+  let graphemeCursor := Radix.UTF8.Cursor.init combiningInput
+  match Radix.UTF8.Cursor.currentGrapheme? graphemeCursor with
+  | some grapheme =>
+    assert (UTF8Test.scalarValues grapheme.scalars == [0x41, 0x0301])
+      "currentGrapheme? inspects first grapheme"
+  | none => assert false "currentGrapheme? failed on valid combining-mark input"
+  match Radix.UTF8.Cursor.advanceGrapheme? graphemeCursor with
+  | some (first, cursor1) =>
+    assert (UTF8Test.scalarValues first.scalars == [0x41, 0x0301])
+      "advanceGrapheme? returns first grapheme"
+    assert (Radix.UTF8.Cursor.byteOffset cursor1 == 3) "advanceGrapheme? moves to the next grapheme boundary"
+    match Radix.UTF8.Cursor.currentGrapheme? cursor1 with
+    | some second =>
+      assert (UTF8Test.scalarValues second.scalars == [0x42])
+        "currentGrapheme? sees the second grapheme after advancing"
+    | none => assert false "currentGrapheme? failed after grapheme advance"
+  | none => assert false "advanceGrapheme? failed on valid combining-mark input"
+
+  let malformedGraphemeInput := UTF8Test.byteArray [0xE1, 0x80, 0x41, 0xCC, 0x81]
+  let replacedGraphemes := Radix.UTF8.decodeGraphemesReplacing .maximalSubpart malformedGraphemeInput
+  assert (UTF8Test.graphemeScalarValues replacedGraphemes ==
+    [[UTF8Test.replacementValue], [0x41, 0x0301]])
+    "replacement-aware grapheme decode preserves following combining cluster"
+  match Radix.UTF8.Cursor.currentGraphemeReplacing .maximalSubpart (Radix.UTF8.Cursor.init malformedGraphemeInput) with
+  | some grapheme =>
+    assert (UTF8Test.scalarValues grapheme.scalars == [UTF8Test.replacementValue])
+      "currentGraphemeReplacing inspects replacement cluster"
+  | none => assert false "currentGraphemeReplacing failed on malformed input"
 
 end UTF8Test
 
@@ -591,5 +681,6 @@ def runUTF8Tests : IO Nat := do
     "decodeChunksReplacing maximal-subpart matches manual streaming result"
 
   UTF8Test.runUTF8CursorTests assert ascii twoByte threeByte fourByte
+  UTF8Test.runUTF8GraphemeTests assert ascii
 
   c.get
