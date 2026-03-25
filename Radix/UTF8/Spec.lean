@@ -1205,6 +1205,7 @@ def canonicalCombiningClass (s : Scalar) : CombiningClass :=
   | 0x0301 => 230 -- COMBINING ACUTE ACCENT
   | 0x0302 => 230 -- COMBINING CIRCUMFLEX ACCENT
   | 0x0303 => 230 -- COMBINING TILDE
+  | 0x0304 => 230 -- COMBINING MACRON
   | 0x0308 => 230 -- COMBINING DIAERESIS
   | 0x030A => 230 -- COMBINING RING ABOVE
   | _ => 0
@@ -1246,8 +1247,7 @@ where
 /-- Whether a normalization form is currently implemented by the executable model. -/
 def supportsNormalizationForm (form : NormalizationForm) : Bool :=
   match form with
-  | .nfd | .nfc => true
-  | .nfkd | .nfkc => false
+  | .nfd | .nfc | .nfkd | .nfkc => true
 
 /-- Convert a Nat list to scalars, failing if any element is not a valid scalar. -/
 private def scalarListFromNats? (ns : List Nat) : Option (List Scalar) :=
@@ -1311,6 +1311,40 @@ private def canonicalDecompositionNats? (n : Nat) : Option (List Nat) :=
   | 0x00FF => some [0x0079, 0x0308]
   | 0x0178 => some [0x0059, 0x0308]
   | _ => none
+
+/-- Compatibility decomposition mappings for the supported practical subset. -/
+private def compatibilityDecompositionNats? (n : Nat) : Option (List Nat) :=
+  if n == 0x3000 then
+    some [0x0020]
+  else if 0xFF01 ≤ n && n ≤ 0xFF5E then
+    some [n - 0xFEE0]
+  else
+    match n with
+    | 0x00A0 => some [0x0020]
+    | 0x00A8 => some [0x0020, 0x0308]
+    | 0x00AA => some [0x0061]
+    | 0x00AF => some [0x0020, 0x0304]
+    | 0x00B2 => some [0x0032]
+    | 0x00B3 => some [0x0033]
+    | 0x00B4 => some [0x0020, 0x0301]
+    | 0x00B5 => some [0x03BC]
+    | 0x00B8 => some [0x0020, 0x0327]
+    | 0x00B9 => some [0x0031]
+    | 0x00BA => some [0x006F]
+    | 0x00BC => some [0x0031, 0x2044, 0x0034]
+    | 0x00BD => some [0x0031, 0x2044, 0x0032]
+    | 0x00BE => some [0x0033, 0x2044, 0x0034]
+    | 0x2126 => some [0x03A9]
+    | 0x212A => some [0x004B]
+    | 0x212B => some [0x00C5]
+    | 0xFB00 => some [0x0066, 0x0066]
+    | 0xFB01 => some [0x0066, 0x0069]
+    | 0xFB02 => some [0x0066, 0x006C]
+    | 0xFB03 => some [0x0066, 0x0066, 0x0069]
+    | 0xFB04 => some [0x0066, 0x0066, 0x006C]
+    | 0xFB05 => some [0x0073, 0x0074]
+    | 0xFB06 => some [0x0073, 0x0074]
+    | _ => none
 
 /-- Canonical composition mappings for the supported precomposed subset. -/
 private def canonicalCompositionNat? (starter mark : Nat) : Option Nat :=
@@ -1409,6 +1443,34 @@ def canonicalDecomposition? (s : Scalar) : Option (List Scalar) :=
     | some ns => scalarListFromNats? ns
     | none => none
 
+/-- One-step compatibility decomposition for the supported normalization subset. -/
+def compatibilityDecomposition? (s : Scalar) : Option (List Scalar) :=
+  match compatibilityDecompositionNats? s.val with
+  | some ns => scalarListFromNats? ns
+  | none => none
+
+/-- The supported decomposition tables are shallow, so a small total recursion bound is enough. -/
+private def normalizationDecompositionFuel : Nat := 4
+
+/-- Recursively decompose one scalar under the selected normalization regime. -/
+private def decomposeScalarRecursive (compatibility : Bool) (fuel : Nat) (s : Scalar) : List Scalar :=
+  match fuel with
+  | 0 => [s]
+  | fuel + 1 =>
+    let step? :=
+      if compatibility then
+        match compatibilityDecomposition? s with
+        | some decomposed => some decomposed
+        | none => canonicalDecomposition? s
+      else
+        canonicalDecomposition? s
+    match step? with
+    | some decomposed =>
+      decomposed.foldr
+        (fun scalar acc => decomposeScalarRecursive compatibility fuel scalar ++ acc)
+        []
+    | none => [s]
+
 /-- Algorithmic Hangul composition for L+V and LV+T pairs. -/
 private def composeHangulPair? (starter mark : Scalar) : Option Scalar :=
   if hangulLBase ≤ starter.val && starter.val < hangulLBase + hangulLCount &&
@@ -1435,15 +1497,24 @@ def canonicalComposePair? (starter mark : Scalar) : Option Scalar :=
 /-- Full canonical decomposition without canonical ordering. -/
 def canonicalDecomposeScalars (scalars : List Scalar) : List Scalar :=
   scalars.foldr
-    (fun scalar acc =>
-      match canonicalDecomposition? scalar with
-      | some decomposed => decomposed ++ acc
-      | none => scalar :: acc)
+    (fun scalar acc => decomposeScalarRecursive false normalizationDecompositionFuel scalar ++ acc)
+    []
+
+/-- Full compatibility decomposition without canonical ordering. -/
+def compatibilityDecomposeScalars (scalars : List Scalar) : List Scalar :=
+  scalars.foldr
+    (fun scalar acc => decomposeScalarRecursive true normalizationDecompositionFuel scalar ++ acc)
     []
 
 /-- Canonical decomposition followed by canonical ordering (NFD). -/
 def normalizeScalarsNFD (scalars : List Scalar) : List Scalar :=
   let decomposed := canonicalDecomposeScalars scalars
+  let annotated := decomposed.map (fun scalar => (scalar, canonicalCombiningClass scalar))
+  (canonicalOrder annotated).map Prod.fst
+
+/-- Compatibility decomposition followed by canonical ordering (NFKD). -/
+def normalizeScalarsNFKD (scalars : List Scalar) : List Scalar :=
+  let decomposed := compatibilityDecomposeScalars scalars
   let annotated := decomposed.map (fun scalar => (scalar, canonicalCombiningClass scalar))
   (canonicalOrder annotated).map Prod.fst
 
@@ -1489,12 +1560,17 @@ where
 def normalizeScalarsNFC (scalars : List Scalar) : List Scalar :=
   composeCanonicalOrdered (normalizeScalarsNFD scalars)
 
+/-- Compatibility decomposition, canonical ordering, and canonical composition (NFKC). -/
+def normalizeScalarsNFKC (scalars : List Scalar) : List Scalar :=
+  composeCanonicalOrdered (normalizeScalarsNFKD scalars)
+
 /-- Normalize a scalar list when the requested form is currently supported. -/
 def normalizeScalars? (form : NormalizationForm) (scalars : List Scalar) : Option (List Scalar) :=
   match form with
   | .nfd => some (normalizeScalarsNFD scalars)
   | .nfc => some (normalizeScalarsNFC scalars)
-  | .nfkd | .nfkc => none
+  | .nfkd => some (normalizeScalarsNFKD scalars)
+  | .nfkc => some (normalizeScalarsNFKC scalars)
 
 /-- Whether a scalar list is already in NFD. -/
 def isNormalizedNFD (scalars : List Scalar) : Bool :=
@@ -1503,6 +1579,14 @@ def isNormalizedNFD (scalars : List Scalar) : Bool :=
 /-- Whether a scalar list is already in NFC. -/
 def isNormalizedNFC (scalars : List Scalar) : Bool :=
   normalizeScalarsNFC scalars == scalars
+
+/-- Whether a scalar list is already in NFKD. -/
+def isNormalizedNFKD (scalars : List Scalar) : Bool :=
+  normalizeScalarsNFKD scalars == scalars
+
+/-- Whether a scalar list is already in NFKC. -/
+def isNormalizedNFKC (scalars : List Scalar) : Bool :=
+  normalizeScalarsNFKC scalars == scalars
 
 /-- Whether two scalar lists are canonically equivalent under NFD. -/
 def canonicallyEquivalent (left right : List Scalar) : Bool :=
