@@ -135,6 +135,17 @@ private def nextUTF8ScalarNat (rng : PRNG) : PRNG × Nat :=
     | _ => 0x10000 + offset
   (rng1, scalarNat)
 
+private def nextUTF16UnitList (rng : PRNG) (maxLen : Nat) : PRNG × List UInt16 :=
+  Id.run do
+    let (rng0, len) := rng.nextNat (maxLen + 1)
+    let mut state := rng0
+    let mut units : List UInt16 := []
+    for _ in [:len] do
+      let (nextState, unit) := state.nextUInt16
+      state := nextState
+      units := unit :: units
+    return (state, units.reverse)
+
 /-! ================================================================ -/
 /-! ## UInt8 Property Tests                                          -/
 /-! ================================================================ -/
@@ -2107,6 +2118,58 @@ private def testUTF8Properties : IO Unit := do
         (fun grapheme acc => grapheme.scalars ++ acc) []
     assert (replacementFlattened == Radix.UTF8.decodeWithCursorReplacing .maximalSubpart byteArray)
       s!"UTF8 grapheme maximal-subpart replacement matches cursor replacement flattening: {bytes}"
+
+  let mut rngUTF16Valid := PRNG.new 608
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngUTF16Valid.nextNat 6
+    rngUTF16Valid := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarsAcc : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngUTF16Valid
+      rngUTF16Valid := nextRng
+      scalarsAcc := scalarNat :: scalarsAcc
+    let scalarNatList := scalarsAcc.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let utf16Units := Radix.UTF8.encodeScalarsToUTF16 scalars
+      assert (Radix.UTF8.decodeUTF16? utf16Units == some scalars)
+        s!"UTF16 strict decode round-trips encoded scalars: {scalarNatList}"
+      assert (Radix.UTF8.utf16ScalarCount? utf16Units == some scalars.length)
+        s!"UTF16 scalar count matches scalar list length: {scalarNatList}"
+      match Radix.UTF8.transcodeUTF16ToUTF8? utf16Units with
+      | some utf8Bytes =>
+        assert (Radix.UTF8.decodeBytes? utf8Bytes == some scalars)
+          s!"UTF16 to UTF8 transcoding round-trips valid scalars: {scalarNatList}"
+      | none =>
+        assert false s!"UTF16 to UTF8 transcoding failed on valid scalars: {scalarNatList}"
+    | none =>
+      assert false s!"UTF16 random scalar generation produced invalid scalar list: {scalarNatList}"
+
+  let mut rngUTF16Units := PRNG.new 609
+  for _ in [:numIter] do
+    let (rng', units) := nextUTF16UnitList rngUTF16Units 16
+    rngUTF16Units := rng'
+    let utf16Array := Radix.UTF8.listToUTF16Array units
+    let strictUTF16 := Radix.UTF8.decodeUTF16? utf16Array
+    let replacingUTF16 := Radix.UTF8.decodeUTF16Replacing utf16Array
+    match strictUTF16 with
+    | some scalars =>
+      assert (replacingUTF16 == scalars)
+        s!"UTF16 replacement decode agrees on well-formed input: {units.map UInt16.toNat}"
+    | none =>
+      pure ()
+    let replacementUTF8 := Radix.UTF8.transcodeUTF16ToUTF8Replacing utf16Array
+    assert (Radix.UTF8.decodeBytes? replacementUTF8 == some replacingUTF16)
+      s!"UTF16 replacement transcoding emits decodable UTF8: {units.map UInt16.toNat}"
+    let firstError := Radix.UTF8.firstUTF16DecodeErrorList? units
+    match Radix.UTF8.decodeNextUTF16ListStep? units with
+    | some (.error err) =>
+      assert (firstError == some err)
+        s!"UTF16 first error matches detailed step: {units.map UInt16.toNat}"
+    | _ =>
+      assert (firstError == none)
+        s!"UTF16 first error absent on non-error first step: {units.map UInt16.toNat}"
 
 private def testECCProperties : IO Unit := do
   IO.println "  ECC properties..."
