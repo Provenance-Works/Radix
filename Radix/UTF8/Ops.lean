@@ -285,6 +285,144 @@ where
       go result.decoder (result.scalars.reverse ++ acc) rest
 
 -- ════════════════════════════════════════════════════════════════════
+-- Cursor Traversal
+-- ════════════════════════════════════════════════════════════════════
+
+/-- UTF-8 cursor over a byte array.
+
+The cursor offset is measured in bytes from the start of the original buffer. -/
+structure Cursor where
+  bytes : ByteArray
+  offset : Nat := 0
+  deriving DecidableEq
+
+/-- Cursor positioned at the start of a byte array. -/
+def Cursor.init (bytes : ByteArray) : Cursor :=
+  { bytes := bytes }
+
+/-- Current byte offset from the start of the original buffer. -/
+def Cursor.byteOffset (cursor : Cursor) : Nat :=
+  cursor.offset
+
+/-- Number of bytes remaining from the cursor to the end of the buffer. -/
+def Cursor.remainingByteCount (cursor : Cursor) : Nat :=
+  cursor.bytes.size - cursor.offset
+
+/-- Whether the cursor has reached the end of the buffer. -/
+def Cursor.isAtEnd (cursor : Cursor) : Bool :=
+  cursor.offset == cursor.bytes.size
+
+/-- Remaining suffix starting at the cursor position. -/
+def Cursor.remainingBytes (cursor : Cursor) : ByteArray :=
+  listToByteArray ((byteArrayToList cursor.bytes).drop cursor.offset)
+
+/-- Construct a cursor only if the requested offset is a well-formed scalar boundary. -/
+def Cursor.atOffset? (bytes : ByteArray) (offset : Nat) : Option Cursor :=
+  if offset ≤ bytes.size then
+    match decodeList? ((byteArrayToList bytes).take offset) with
+    | some _ =>
+      some { bytes := bytes, offset := offset }
+    | none =>
+      none
+  else
+    none
+
+/-- Detailed decode step at the current cursor position. -/
+def Cursor.currentStep? (cursor : Cursor) : Option Spec.DecodeStep :=
+  if cursor.offset ≤ cursor.bytes.size then
+    decodeNextBytesStep? cursor.remainingBytes
+  else
+    none
+
+/-- Current scalar at the cursor position, if the remaining suffix starts with a valid scalar. -/
+def Cursor.current? (cursor : Cursor) : Option Scalar :=
+  match cursor.currentStep? with
+  | some (.scalar scalar _) => some scalar
+  | _ => none
+
+/-- Current detailed decoding error at the cursor position, if any. -/
+def Cursor.currentError? (cursor : Cursor) : Option Spec.DecodeError :=
+  match cursor.currentStep? with
+  | some (.error err) => some err
+  | _ => none
+
+/-- Advance the cursor by one valid scalar. -/
+def Cursor.advance? (cursor : Cursor) : Option (Scalar × Cursor) :=
+  match cursor.currentStep? with
+  | some (.scalar scalar consumed) =>
+    some (scalar, { cursor with offset := cursor.offset + consumed })
+  | _ => none
+
+/-- Advance the cursor by one scalar or replacement marker using the selected recovery mode. -/
+def Cursor.advanceReplacing (mode : ReplacementMode) (cursor : Cursor) : Option (Scalar × Cursor) :=
+  if cursor.offset ≤ cursor.bytes.size then
+    if cursor.offset == cursor.bytes.size then
+      none
+    else
+      match cursor.currentStep? with
+      | some (.scalar scalar consumed) =>
+        some (scalar, { cursor with offset := cursor.offset + consumed })
+      | some (.error err) =>
+        let consumed :=
+          match mode with
+          | .perByte => 1
+          | .maximalSubpart => err.consumed
+        some (Spec.Scalar.replacement, { cursor with offset := cursor.offset + consumed })
+      | none => none
+  else
+    none
+
+/-- Decode all remaining scalars from the cursor position strictly. -/
+def Cursor.decodeRemaining? (cursor : Cursor) : Option (List Scalar) :=
+  decodeBytes? cursor.remainingBytes
+
+/-- Decode all remaining scalars from the cursor position with replacement recovery. -/
+def Cursor.decodeRemainingReplacing (mode : ReplacementMode) (cursor : Cursor) : List Scalar :=
+  match mode with
+  | .perByte => decodeBytesReplacing cursor.remainingBytes
+  | .maximalSubpart => decodeBytesReplacingMaximalSubparts cursor.remainingBytes
+
+/-- Walk the entire buffer with a strict cursor. Returns `none` on the first malformed subsequence. -/
+def decodeWithCursor? (bytes : ByteArray) : Option (List Scalar) :=
+  go bytes.size (Cursor.init bytes) []
+where
+  go (fuel : Nat) (cursor : Cursor) (acc : List Scalar) : Option (List Scalar) :=
+    match fuel with
+    | 0 =>
+      if cursor.isAtEnd then
+        some acc.reverse
+      else
+        match cursor.decodeRemaining? with
+        | some tail => some (acc.reverse ++ tail)
+        | none => none
+    | fuel + 1 =>
+      if cursor.isAtEnd then
+        some acc.reverse
+      else
+        match cursor.advance? with
+        | some (scalar, nextCursor) => go fuel nextCursor (scalar :: acc)
+        | none => none
+
+/-- Walk the entire buffer with a replacement-aware cursor. -/
+def decodeWithCursorReplacing (mode : ReplacementMode) (bytes : ByteArray) : List Scalar :=
+  go bytes.size (Cursor.init bytes) []
+where
+  go (fuel : Nat) (cursor : Cursor) (acc : List Scalar) : List Scalar :=
+    match fuel with
+    | 0 =>
+      if cursor.isAtEnd then
+        acc.reverse
+      else
+        acc.reverse ++ cursor.decodeRemainingReplacing mode
+    | fuel + 1 =>
+      if cursor.isAtEnd then
+        acc.reverse
+      else
+        match cursor.advanceReplacing mode with
+        | some (scalar, nextCursor) => go fuel nextCursor (scalar :: acc)
+        | none => acc.reverse
+
+-- ════════════════════════════════════════════════════════════════════
 -- Byte Classification
 -- ════════════════════════════════════════════════════════════════════
 
