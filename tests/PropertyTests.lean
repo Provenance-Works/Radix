@@ -2257,6 +2257,72 @@ private def testUTF8Properties : IO Unit := do
     | _, _, _ =>
       assert false "UTF8 scalar search property generated invalid scalar sequence"
 
+  let normalizationSamplePool : Array Nat :=
+    #[0x41, 0x43, 0x45, 0x4E, 0x4F, 0x55, 0x59,
+      0x61, 0x63, 0x65, 0x6E, 0x6F, 0x75, 0x79,
+      0x0300, 0x0301, 0x0302, 0x0303, 0x0308, 0x030A, 0x0327,
+      0x00C1, 0x00C7, 0x00D1, 0x00D6, 0x00DC,
+      0x00E1, 0x00E7, 0x00F1, 0x00F6, 0x00FC,
+      0x0178, 0x00FF,
+      0x1100, 0x1161, 0x11A8, 0xAC00, 0xAC01]
+
+  let mut rngNormalizationSamples := PRNG.new 612
+  for _ in [:numIter] do
+    let (rng', sampleCount0) := rngNormalizationSamples.nextNat 8
+    rngNormalizationSamples := rng'
+    let sampleCount := sampleCount0 + 1
+    let mut sampleAcc : List Nat := []
+    for _ in [:sampleCount] do
+      let (nextRng, sampleIndex) := rngNormalizationSamples.nextNat normalizationSamplePool.size
+      rngNormalizationSamples := nextRng
+      sampleAcc := normalizationSamplePool[sampleIndex]! :: sampleAcc
+    let sampleNats := sampleAcc.reverse
+    match Radix.UTF8.natsToScalars? sampleNats with
+    | some scalars =>
+      let nfd := Radix.UTF8.normalizeScalarsNFD scalars
+      let nfc := Radix.UTF8.normalizeScalarsNFC scalars
+      assert (Radix.UTF8.normalizeScalarsNFD nfd == nfd)
+        s!"UTF8 NFD is idempotent on normalization sample sequences: {sampleNats}"
+      assert (Radix.UTF8.normalizeScalarsNFC nfc == nfc)
+        s!"UTF8 NFC is idempotent on normalization sample sequences: {sampleNats}"
+      assert (Radix.UTF8.canonicallyEquivalent scalars nfd)
+        s!"UTF8 canonical equivalence accepts original vs NFD: {sampleNats}"
+      assert (Radix.UTF8.canonicallyEquivalent scalars nfc)
+        s!"UTF8 canonical equivalence accepts original vs NFC: {sampleNats}"
+      let encoded := Radix.UTF8.encodeScalars scalars
+      assert (Radix.UTF8.normalizeBytesNFD? encoded == some (Radix.UTF8.encodeScalars nfd))
+        s!"UTF8 byte-level NFD matches scalar-level NFD: {sampleNats}"
+      assert (Radix.UTF8.normalizeBytesNFC? encoded == some (Radix.UTF8.encodeScalars nfc))
+        s!"UTF8 byte-level NFC matches scalar-level NFC: {sampleNats}"
+      assert (Radix.UTF8.normalizeBytes? .nfkd encoded == none)
+        s!"UTF8 compatibility normalization remains explicitly unsupported: {sampleNats}"
+    | none =>
+      assert false s!"UTF8 normalization sample generation produced invalid scalars: {sampleNats}"
+
+  let mut rngNormalizationAny := PRNG.new 613
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngNormalizationAny.nextNat 6
+    rngNormalizationAny := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarsAcc : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngNormalizationAny
+      rngNormalizationAny := nextRng
+      scalarsAcc := scalarNat :: scalarsAcc
+    let scalarNatList := scalarsAcc.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let nfd := Radix.UTF8.normalizeScalarsNFD scalars
+      let nfc := Radix.UTF8.normalizeScalarsNFC scalars
+      assert (Radix.UTF8.normalizeScalarsNFD nfd == nfd)
+        s!"UTF8 NFD is idempotent on arbitrary scalar sequences: {scalarNatList}"
+      assert (Radix.UTF8.normalizeScalarsNFC nfc == nfc)
+        s!"UTF8 NFC is idempotent on arbitrary scalar sequences: {scalarNatList}"
+      assert (Radix.UTF8.canonicallyEquivalent nfd nfc)
+        s!"UTF8 NFD and NFC remain canonically equivalent: {scalarNatList}"
+    | none =>
+      assert false s!"UTF8 arbitrary normalization scalar generation produced invalid scalars: {scalarNatList}"
+
 private def testECCProperties : IO Unit := do
   IO.println "  ECC properties..."
   let mut rng := PRNG.new 700

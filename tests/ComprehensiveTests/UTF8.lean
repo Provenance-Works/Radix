@@ -353,6 +353,61 @@ private def runUTF8TextOpTests
   assert (Radix.UTF8.containsGraphemes graphemeInput graphemeNeedle)
     "containsGraphemes reports grapheme-sequence containment"
 
+private def runUTF8NormalizationTests
+    (assert : Bool → String → IO Unit) : IO Unit := do
+  let asciiA ← UTF8Test.scalar 0x41
+  let asciiC ← UTF8Test.scalar 0x43
+  let acute ← UTF8Test.scalar 0x0301
+  let cedilla ← UTF8Test.scalar 0x0327
+  let precomposedAAcute ← UTF8Test.scalar 0x00C1
+  let precomposedCCedilla ← UTF8Test.scalar 0x00C7
+  let hangulL ← UTF8Test.scalar 0x1100
+  let hangulV ← UTF8Test.scalar 0x1161
+  let hangulT ← UTF8Test.scalar 0x11A8
+  let hangulLV ← UTF8Test.scalar 0xAC00
+  let hangulLVT ← UTF8Test.scalar 0xAC01
+
+  assert (UTF8Test.scalarValues (Radix.UTF8.normalizeScalarsNFD [precomposedAAcute]) == [0x41, 0x0301])
+    "normalizeScalarsNFD decomposes supported precomposed Latin characters"
+  assert (Radix.UTF8.normalizeScalarsNFC [asciiA, acute] == [precomposedAAcute])
+    "normalizeScalarsNFC composes supported precomposed Latin characters"
+  assert (UTF8Test.scalarValues (Radix.UTF8.normalizeScalarsNFD [asciiC, acute, cedilla]) == [0x43, 0x0327, 0x0301])
+    "normalizeScalarsNFD applies canonical ordering within a segment"
+  assert (UTF8Test.scalarValues (Radix.UTF8.normalizeScalarsNFC [asciiC, acute, cedilla]) == [0x00C7, 0x0301])
+    "normalizeScalarsNFC composes after canonical reordering without violating blocking"
+
+  assert (UTF8Test.scalarValues (Radix.UTF8.normalizeScalarsNFD [hangulLV]) == [0x1100, 0x1161])
+    "normalizeScalarsNFD decomposes Hangul LV syllables algorithmically"
+  assert (UTF8Test.scalarValues (Radix.UTF8.normalizeScalarsNFD [hangulLVT]) == [0x1100, 0x1161, 0x11A8])
+    "normalizeScalarsNFD decomposes Hangul LVT syllables algorithmically"
+  assert (Radix.UTF8.normalizeScalarsNFC [hangulL, hangulV] == [hangulLV])
+    "normalizeScalarsNFC composes Hangul L+V pairs"
+  assert (Radix.UTF8.normalizeScalarsNFC [hangulL, hangulV, hangulT] == [hangulLVT])
+    "normalizeScalarsNFC composes Hangul LV+T triples"
+
+  let precomposedBytes := Radix.UTF8.encodeScalars [precomposedAAcute, precomposedCCedilla]
+  let decomposedBytes := Radix.UTF8.encodeScalars [asciiA, acute, asciiC, cedilla]
+  match Radix.UTF8.normalizeBytesNFD? precomposedBytes with
+  | some normalized =>
+    assert (Radix.UTF8.decodeBytes? normalized == some [asciiA, acute, asciiC, cedilla])
+      "normalizeBytesNFD? decodes to the expected canonical decomposition"
+  | none => assert false "normalizeBytesNFD? rejected valid UTF-8 input"
+  match Radix.UTF8.normalizeBytesNFC? decomposedBytes with
+  | some normalized =>
+    assert (Radix.UTF8.decodeBytes? normalized == some [precomposedAAcute, precomposedCCedilla])
+      "normalizeBytesNFC? decodes to the expected canonical composition"
+  | none => assert false "normalizeBytesNFC? rejected valid UTF-8 input"
+  assert (Radix.UTF8.isNormalizedBytesNFD? decomposedBytes == some true)
+    "isNormalizedBytesNFD? accepts canonically decomposed UTF-8"
+  assert (Radix.UTF8.isNormalizedBytesNFD? precomposedBytes == some false)
+    "isNormalizedBytesNFD? rejects canonically composed UTF-8"
+  assert (Radix.UTF8.isNormalizedBytesNFC? precomposedBytes == some true)
+    "isNormalizedBytesNFC? accepts canonically composed UTF-8"
+  assert (Radix.UTF8.canonicallyEquivalentBytes? precomposedBytes decomposedBytes)
+    "canonicallyEquivalentBytes? matches precomposed and decomposed forms"
+  assert (Radix.UTF8.normalizeBytes? .nfkd precomposedBytes == none)
+    "normalizeBytes? reports unsupported compatibility normalization forms"
+
 private def runUTF8StreamingAndInteropTail
     (assert : Bool → String → IO Unit)
     (ascii twoByte threeByte fourByte : Radix.UTF8.Scalar) : IO Unit := do
@@ -456,6 +511,7 @@ private def runUTF8StreamingAndInteropTail
   UTF8Test.runUTF8CursorTests assert ascii twoByte threeByte fourByte
   UTF8Test.runUTF8GraphemeTests assert ascii
   UTF8Test.runUTF16InteropTests assert ascii threeByte fourByte
+  UTF8Test.runUTF8NormalizationTests assert
   UTF8Test.runUTF8TextOpTests assert ascii twoByte threeByte fourByte
 
 end UTF8Test
