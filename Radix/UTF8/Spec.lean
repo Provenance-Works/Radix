@@ -941,6 +941,122 @@ def IsC1Control (n : Nat) : Prop := 0x80 ≤ n ∧ n ≤ 0x9F
 instance (n : Nat) : Decidable (IsC1Control n) :=
   inferInstanceAs (Decidable (_ ∧ _))
 
+/-- Supported simple uppercase-to-lowercase mapping over ASCII and selected Latin precomposed scalars. -/
+def simpleLowerNat? (n : Nat) : Option Nat :=
+  match n with
+  | 0x41 => some 0x61
+  | 0x42 => some 0x62
+  | 0x43 => some 0x63
+  | 0x44 => some 0x64
+  | 0x45 => some 0x65
+  | 0x46 => some 0x66
+  | 0x47 => some 0x67
+  | 0x48 => some 0x68
+  | 0x49 => some 0x69
+  | 0x4A => some 0x6A
+  | 0x4B => some 0x6B
+  | 0x4C => some 0x6C
+  | 0x4D => some 0x6D
+  | 0x4E => some 0x6E
+  | 0x4F => some 0x6F
+  | 0x50 => some 0x70
+  | 0x51 => some 0x71
+  | 0x52 => some 0x72
+  | 0x53 => some 0x73
+  | 0x54 => some 0x74
+  | 0x55 => some 0x75
+  | 0x56 => some 0x76
+  | 0x57 => some 0x77
+  | 0x58 => some 0x78
+  | 0x59 => some 0x79
+  | 0x5A => some 0x7A
+  | 0x00C0 => some 0x00E0
+  | 0x00C1 => some 0x00E1
+  | 0x00C2 => some 0x00E2
+  | 0x00C3 => some 0x00E3
+  | 0x00C4 => some 0x00E4
+  | 0x00C5 => some 0x00E5
+  | 0x00C7 => some 0x00E7
+  | 0x00C8 => some 0x00E8
+  | 0x00C9 => some 0x00E9
+  | 0x00CA => some 0x00EA
+  | 0x00CB => some 0x00EB
+  | 0x00CC => some 0x00EC
+  | 0x00CD => some 0x00ED
+  | 0x00CE => some 0x00EE
+  | 0x00CF => some 0x00EF
+  | 0x00D1 => some 0x00F1
+  | 0x00D2 => some 0x00F2
+  | 0x00D3 => some 0x00F3
+  | 0x00D4 => some 0x00F4
+  | 0x00D5 => some 0x00F5
+  | 0x00D6 => some 0x00F6
+  | 0x00D9 => some 0x00F9
+  | 0x00DA => some 0x00FA
+  | 0x00DB => some 0x00FB
+  | 0x00DC => some 0x00FC
+  | 0x00DD => some 0x00FD
+  | 0x0178 => some 0x00FF
+  | _ => none
+
+/-- Supported simple lowercase-to-uppercase mapping over ASCII and selected Latin precomposed scalars. -/
+def simpleUpperNat? (n : Nat) : Option Nat :=
+  match n with
+  | 0x61 => some 0x41
+  | 0x62 => some 0x42
+  | 0x63 => some 0x43
+  | 0x64 => some 0x44
+  | 0x65 => some 0x45
+  | 0x66 => some 0x46
+  | 0x67 => some 0x47
+  | 0x68 => some 0x48
+  | 0x69 => some 0x49
+  | 0x6A => some 0x4A
+  | 0x6B => some 0x4B
+  | 0x6C => some 0x4C
+  | 0x6D => some 0x4D
+  | 0x6E => some 0x4E
+  | 0x6F => some 0x4F
+  | 0x70 => some 0x50
+  | 0x71 => some 0x51
+  | 0x72 => some 0x52
+  | 0x73 => some 0x53
+  | 0x74 => some 0x54
+  | 0x75 => some 0x55
+  | 0x76 => some 0x56
+  | 0x77 => some 0x57
+  | 0x78 => some 0x58
+  | 0x79 => some 0x59
+  | 0x7A => some 0x5A
+  | 0x00E0 => some 0x00C0
+  | 0x00E1 => some 0x00C1
+  | 0x00E2 => some 0x00C2
+  | 0x00E3 => some 0x00C3
+  | 0x00E4 => some 0x00C4
+  | 0x00E5 => some 0x00C5
+  | 0x00E7 => some 0x00C7
+  | 0x00E8 => some 0x00C8
+  | 0x00E9 => some 0x00C9
+  | 0x00EA => some 0x00CA
+  | 0x00EB => some 0x00CB
+  | 0x00EC => some 0x00CC
+  | 0x00ED => some 0x00CD
+  | 0x00EE => some 0x00CE
+  | 0x00EF => some 0x00CF
+  | 0x00F1 => some 0x00D1
+  | 0x00F2 => some 0x00D2
+  | 0x00F3 => some 0x00D3
+  | 0x00F4 => some 0x00D4
+  | 0x00F5 => some 0x00D5
+  | 0x00F6 => some 0x00D6
+  | 0x00F9 => some 0x00D9
+  | 0x00FA => some 0x00DA
+  | 0x00FB => some 0x00DB
+  | 0x00FC => some 0x00DC
+  | 0x00FD => some 0x00DD
+  | 0x00FF => some 0x0178
+  | _ => none
+
 namespace Scalar
 
 /-- Whether the scalar is a control character. -/
@@ -957,6 +1073,12 @@ def isAlpha (s : Scalar) : Bool := decide (IsAlpha s.val)
 
 /-- Whether the scalar is printable. -/
 def isPrintable (s : Scalar) : Bool := decide (IsPrintable s.val)
+
+/-- Whether the scalar is an ASCII uppercase letter. -/
+def isUppercase (s : Scalar) : Bool := decide (IsUppercase s.val)
+
+/-- Whether the scalar is an ASCII lowercase letter. -/
+def isLowercase (s : Scalar) : Bool := decide (IsLowercase s.val)
 
 /-- Simple ASCII uppercase → lowercase mapping. Returns None for non-uppercase. -/
 def toLowerAscii? (s : Scalar) : Option Scalar :=
@@ -977,6 +1099,28 @@ def toUpperAscii? (s : Scalar) : Option Scalar :=
       · omega
       · intro ⟨hl, hr⟩; omega⟩
   else none
+
+/-- Supported simple uppercase → lowercase mapping. Returns the original scalar when no mapping is defined. -/
+def toLowerSimple (s : Scalar) : Scalar :=
+  match simpleLowerNat? s.val with
+  | some lower =>
+    match ofNat? lower with
+    | some lowered => lowered
+    | none => s
+  | none => s
+
+/-- Supported simple lowercase → uppercase mapping. Returns the original scalar when no mapping is defined. -/
+def toUpperSimple (s : Scalar) : Scalar :=
+  match simpleUpperNat? s.val with
+  | some upper =>
+    match ofNat? upper with
+    | some uppered => uppered
+    | none => s
+  | none => s
+
+/-- Supported simple case folding. This currently follows the lowercase mapping subset. -/
+def caseFoldSimple (s : Scalar) : Scalar :=
+  toLowerSimple s
 
 /-- Successor scalar (next valid scalar, skipping surrogates). -/
 def succ? (s : Scalar) : Option Scalar :=
@@ -1363,6 +1507,22 @@ def isNormalizedNFC (scalars : List Scalar) : Bool :=
 /-- Whether two scalar lists are canonically equivalent under NFD. -/
 def canonicallyEquivalent (left right : List Scalar) : Bool :=
   normalizeScalarsNFD left == normalizeScalarsNFD right
+
+/-- Apply supported simple lowercase mapping to a scalar list. -/
+def lowercaseScalarsSimple (scalars : List Scalar) : List Scalar :=
+  scalars.map Scalar.toLowerSimple
+
+/-- Apply supported simple uppercase mapping to a scalar list. -/
+def uppercaseScalarsSimple (scalars : List Scalar) : List Scalar :=
+  scalars.map Scalar.toUpperSimple
+
+/-- Apply supported simple case folding and canonical decomposition to a scalar list. -/
+def caseFoldScalarsSimple (scalars : List Scalar) : List Scalar :=
+  normalizeScalarsNFD (scalars.map Scalar.caseFoldSimple)
+
+/-- Whether two scalar lists are equal under the supported simple case-folding subset. -/
+def caselessEquivalentSimple (left right : List Scalar) : Bool :=
+  caseFoldScalarsSimple left == caseFoldScalarsSimple right
 
 -- ════════════════════════════════════════════════════════════════════
 -- Grapheme Cluster Break Properties

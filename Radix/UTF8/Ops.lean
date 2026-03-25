@@ -30,13 +30,17 @@ export Spec (ByteClass classifyByte isLeadByte isAsciiByte isContinuationByte
              IsSurrogate IsHighSurrogate IsLowSurrogate IsNoncharacter
              IsSupplementary DecodeErrorKind DecodeError DecodeStep
              CombiningClass DecompositionEntry NormalizationForm
+             simpleLowerNat? simpleUpperNat?
              isStarter isCombining canonicalCombiningClass supportsNormalizationForm
              canonicalDecomposition? canonicalComposePair?
              normalizeScalarsNFD normalizeScalarsNFC normalizeScalars?
              isNormalizedNFD isNormalizedNFC canonicallyEquivalent
+             lowercaseScalarsSimple uppercaseScalarsSimple caseFoldScalarsSimple
+             caselessEquivalentSimple
              GraphemeBreakProperty classifyGraphemeBreak isGraphemeBreak
              decodeNextStep? maximalSubpartLength firstDecodeError?
              toSurrogatePair fromSurrogatePair?)
+export Spec.Scalar (isUppercase isLowercase toLowerAscii? toUpperAscii? toLowerSimple toUpperSimple caseFoldSimple)
 
 -- ════════════════════════════════════════════════════════════════════
 -- ByteArray Conversions
@@ -793,6 +797,40 @@ def isNormalizedBytesNFC? (bytes : ByteArray) : Option Bool :=
 def canonicallyEquivalentBytes? (left right : ByteArray) : Bool :=
   match decodeBytes? left, decodeBytes? right with
   | some leftScalars, some rightScalars => Spec.canonicallyEquivalent leftScalars rightScalars
+  | _, _ => false
+
+-- ════════════════════════════════════════════════════════════════════
+-- Case Mapping
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Apply supported simple lowercase mapping to a well-formed UTF-8 byte array. -/
+def lowercaseBytesSimple? (bytes : ByteArray) : Option ByteArray :=
+  (decodeBytes? bytes).map (fun scalars => encodeScalars (Spec.lowercaseScalarsSimple scalars))
+
+/-- Apply supported simple uppercase mapping to a well-formed UTF-8 byte array. -/
+def uppercaseBytesSimple? (bytes : ByteArray) : Option ByteArray :=
+  (decodeBytes? bytes).map (fun scalars => encodeScalars (Spec.uppercaseScalarsSimple scalars))
+
+/-- Apply supported simple case folding to a well-formed UTF-8 byte array. -/
+def caseFoldBytesSimple? (bytes : ByteArray) : Option ByteArray :=
+  (decodeBytes? bytes).map (fun scalars => encodeScalars (Spec.caseFoldScalarsSimple scalars))
+
+/-- Apply supported simple lowercase mapping to a well-formed UTF-8 byte list. -/
+def lowercaseListSimple? (bytes : List UInt8) : Option (List UInt8) :=
+  (decodeList? bytes).map (fun scalars => encodeAllToList (Spec.lowercaseScalarsSimple scalars))
+
+/-- Apply supported simple uppercase mapping to a well-formed UTF-8 byte list. -/
+def uppercaseListSimple? (bytes : List UInt8) : Option (List UInt8) :=
+  (decodeList? bytes).map (fun scalars => encodeAllToList (Spec.uppercaseScalarsSimple scalars))
+
+/-- Apply supported simple case folding to a well-formed UTF-8 byte list. -/
+def caseFoldListSimple? (bytes : List UInt8) : Option (List UInt8) :=
+  (decodeList? bytes).map (fun scalars => encodeAllToList (Spec.caseFoldScalarsSimple scalars))
+
+/-- Whether two well-formed UTF-8 byte arrays are equal under the supported simple case-folding subset. -/
+def equalsCaseFoldSimpleBytes? (left right : ByteArray) : Bool :=
+  match decodeBytes? left, decodeBytes? right with
+  | some leftScalars, some rightScalars => Spec.caselessEquivalentSimple leftScalars rightScalars
   | _, _ => false
 
 -- ════════════════════════════════════════════════════════════════════
