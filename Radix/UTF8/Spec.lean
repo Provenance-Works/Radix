@@ -1608,6 +1608,16 @@ def caseFoldScalarsSimple (scalars : List Scalar) : List Scalar :=
 def caselessEquivalentSimple (left right : List Scalar) : Bool :=
   caseFoldScalarsSimple left == caseFoldScalarsSimple right
 
+/-- Apply compatibility decomposition plus supported simple case folding to a scalar list.
+    This is a practical approximation of compatibility-aware caseless matching. -/
+def caseFoldScalarsCompatibility (scalars : List Scalar) : List Scalar :=
+  let compatibilityDecomposed := normalizeScalarsNFKD scalars
+  normalizeScalarsNFKD (compatibilityDecomposed.map Scalar.caseFoldSimple)
+
+/-- Whether two scalar lists are equal under the supported compatibility-aware case-folding subset. -/
+def caselessEquivalentCompatibility (left right : List Scalar) : Bool :=
+  caseFoldScalarsCompatibility left == caseFoldScalarsCompatibility right
+
 -- ════════════════════════════════════════════════════════════════════
 -- Grapheme Cluster Break Properties
 -- ════════════════════════════════════════════════════════════════════

@@ -36,7 +36,7 @@ export Spec (ByteClass classifyByte isLeadByte isAsciiByte isContinuationByte
              normalizeScalarsNFD normalizeScalarsNFC normalizeScalarsNFKD normalizeScalarsNFKC normalizeScalars?
              isNormalizedNFD isNormalizedNFC isNormalizedNFKD isNormalizedNFKC canonicallyEquivalent
              lowercaseScalarsSimple uppercaseScalarsSimple caseFoldScalarsSimple
-             caselessEquivalentSimple
+             caseFoldScalarsCompatibility caselessEquivalentSimple caselessEquivalentCompatibility
              GraphemeBreakProperty classifyGraphemeBreak isGraphemeBreak
              decodeNextStep? maximalSubpartLength firstDecodeError?
              toSurrogatePair fromSurrogatePair?)
@@ -878,6 +878,10 @@ def uppercaseBytesSimple? (bytes : ByteArray) : Option ByteArray :=
 def caseFoldBytesSimple? (bytes : ByteArray) : Option ByteArray :=
   (decodeBytes? bytes).map (fun scalars => encodeScalars (Spec.caseFoldScalarsSimple scalars))
 
+/-- Apply compatibility-aware simple case folding to a well-formed UTF-8 byte array. -/
+def caseFoldBytesCompatibility? (bytes : ByteArray) : Option ByteArray :=
+  (decodeBytes? bytes).map (fun scalars => encodeScalars (Spec.caseFoldScalarsCompatibility scalars))
+
 /-- Apply supported simple lowercase mapping to a well-formed UTF-8 byte list. -/
 def lowercaseListSimple? (bytes : List UInt8) : Option (List UInt8) :=
   (decodeList? bytes).map (fun scalars => encodeAllToList (Spec.lowercaseScalarsSimple scalars))
@@ -890,10 +894,20 @@ def uppercaseListSimple? (bytes : List UInt8) : Option (List UInt8) :=
 def caseFoldListSimple? (bytes : List UInt8) : Option (List UInt8) :=
   (decodeList? bytes).map (fun scalars => encodeAllToList (Spec.caseFoldScalarsSimple scalars))
 
+/-- Apply compatibility-aware simple case folding to a well-formed UTF-8 byte list. -/
+def caseFoldListCompatibility? (bytes : List UInt8) : Option (List UInt8) :=
+  (decodeList? bytes).map (fun scalars => encodeAllToList (Spec.caseFoldScalarsCompatibility scalars))
+
 /-- Whether two well-formed UTF-8 byte arrays are equal under the supported simple case-folding subset. -/
 def equalsCaseFoldSimpleBytes? (left right : ByteArray) : Bool :=
   match decodeBytes? left, decodeBytes? right with
   | some leftScalars, some rightScalars => Spec.caselessEquivalentSimple leftScalars rightScalars
+  | _, _ => false
+
+/-- Whether two well-formed UTF-8 byte arrays are equal under the supported compatibility-aware case-folding subset. -/
+def equalsCaseFoldCompatibilityBytes? (left right : ByteArray) : Bool :=
+  match decodeBytes? left, decodeBytes? right with
+  | some leftScalars, some rightScalars => Spec.caselessEquivalentCompatibility leftScalars rightScalars
   | _, _ => false
 
 -- ════════════════════════════════════════════════════════════════════
