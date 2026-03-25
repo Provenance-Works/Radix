@@ -72,6 +72,20 @@ def main : IO Unit := do
   IO.println s!"  Slice scalars [1, 3): {Radix.UTF8.sliceScalars? textOpsInput 1 3 |>.map ByteArray.toList}"
   IO.println s!"  Find scalar subsequence [smile, euro]: {Radix.UTF8.findScalars? textOpsInput (Radix.UTF8.encodeScalars [smile, euro])}"
 
+  let aAcute ← scalar 0x00C1
+  let letterC ← scalar 0x43
+  let cedilla ← scalar 0x0327
+  let cCedilla ← scalar 0x00C7
+  let hangulL ← scalar 0x1100
+  let hangulV ← scalar 0x1161
+  let hangulT ← scalar 0x11A8
+  let normalizationInput := Radix.UTF8.encodeScalars [aAcute, ascii, acute, cedilla]
+  IO.println s!"  NFD bytes: {Radix.UTF8.normalizeBytesNFD? normalizationInput |>.map ByteArray.toList}"
+  IO.println s!"  NFC bytes: {Radix.UTF8.normalizeBytesNFC? normalizationInput |>.map ByteArray.toList}"
+  IO.println s!"  Canonical equivalence (Á vs A + acute): {Radix.UTF8.canonicallyEquivalent [aAcute] [ascii, acute]}"
+  IO.println s!"  Canonical composition (Ç): {Radix.UTF8.normalizeScalarsNFC [letterC, cedilla] == [cCedilla]}"
+  IO.println s!"  Hangul NFC: {Radix.UTF8.normalizeScalarsNFC [hangulL, hangulV, hangulT] |>.map (·.val)}"
+
   let utf16Units := Radix.UTF8.encodeScalarsToUTF16 [ascii, smile]
   IO.println s!"  UTF-16 units: {utf16Units.toList.map UInt16.toNat}"
   match Radix.UTF8.decodeUTF16? utf16Units with

@@ -29,6 +29,11 @@ export Spec (ByteClass classifyByte isLeadByte isAsciiByte isContinuationByte
              sequenceLength bom hasBOM isOverlong IsScalar IsAscii IsBMP
              IsSurrogate IsHighSurrogate IsLowSurrogate IsNoncharacter
              IsSupplementary DecodeErrorKind DecodeError DecodeStep
+             CombiningClass DecompositionEntry NormalizationForm
+             isStarter isCombining canonicalCombiningClass supportsNormalizationForm
+             canonicalDecomposition? canonicalComposePair?
+             normalizeScalarsNFD normalizeScalarsNFC normalizeScalars?
+             isNormalizedNFD isNormalizedNFC canonicallyEquivalent
              GraphemeBreakProperty classifyGraphemeBreak isGraphemeBreak
              decodeNextStep? maximalSubpartLength firstDecodeError?
              toSurrogatePair fromSurrogatePair?)
@@ -743,6 +748,52 @@ def decodeGraphemesReplacing (mode : ReplacementMode) (bytes : ByteArray) : List
 /-- Count grapheme clusters in a well-formed byte array. -/
 def graphemeCount? (bytes : ByteArray) : Option Nat :=
   (decodeGraphemes? bytes).map List.length
+
+-- ════════════════════════════════════════════════════════════════════
+-- Normalization
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Normalize a well-formed UTF-8 byte array to NFD. -/
+def normalizeBytesNFD? (bytes : ByteArray) : Option ByteArray :=
+  (decodeBytes? bytes).map (fun scalars => encodeScalars (Spec.normalizeScalarsNFD scalars))
+
+/-- Normalize a well-formed UTF-8 byte array to NFC. -/
+def normalizeBytesNFC? (bytes : ByteArray) : Option ByteArray :=
+  (decodeBytes? bytes).map (fun scalars => encodeScalars (Spec.normalizeScalarsNFC scalars))
+
+/-- Normalize a well-formed UTF-8 byte list to NFD. -/
+def normalizeListNFD? (bytes : List UInt8) : Option (List UInt8) :=
+  (decodeList? bytes).map (fun scalars => encodeAllToList (Spec.normalizeScalarsNFD scalars))
+
+/-- Normalize a well-formed UTF-8 byte list to NFC. -/
+def normalizeListNFC? (bytes : List UInt8) : Option (List UInt8) :=
+  (decodeList? bytes).map (fun scalars => encodeAllToList (Spec.normalizeScalarsNFC scalars))
+
+/-- Normalize a well-formed UTF-8 byte array when the requested form is supported. -/
+def normalizeBytes? (form : NormalizationForm) (bytes : ByteArray) : Option ByteArray := do
+  let scalars ← decodeBytes? bytes
+  let normalized ← Spec.normalizeScalars? form scalars
+  pure (encodeScalars normalized)
+
+/-- Normalize a well-formed UTF-8 byte list when the requested form is supported. -/
+def normalizeList? (form : NormalizationForm) (bytes : List UInt8) : Option (List UInt8) := do
+  let scalars ← decodeList? bytes
+  let normalized ← Spec.normalizeScalars? form scalars
+  pure (encodeAllToList normalized)
+
+/-- Whether a well-formed UTF-8 byte array is already in NFD. -/
+def isNormalizedBytesNFD? (bytes : ByteArray) : Option Bool :=
+  (decodeBytes? bytes).map Spec.isNormalizedNFD
+
+/-- Whether a well-formed UTF-8 byte array is already in NFC. -/
+def isNormalizedBytesNFC? (bytes : ByteArray) : Option Bool :=
+  (decodeBytes? bytes).map Spec.isNormalizedNFC
+
+/-- Whether two well-formed UTF-8 byte arrays are canonically equivalent. -/
+def canonicallyEquivalentBytes? (left right : ByteArray) : Bool :=
+  match decodeBytes? left, decodeBytes? right with
+  | some leftScalars, some rightScalars => Spec.canonicallyEquivalent leftScalars rightScalars
+  | _, _ => false
 
 -- ════════════════════════════════════════════════════════════════════
 -- Text Search and Slicing

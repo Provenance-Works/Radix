@@ -1053,12 +1053,316 @@ def isStarter (ccc : CombiningClass) : Bool := ccc == 0
 /-- Whether a scalar is a combining mark (CCC > 0). -/
 def isCombining (ccc : CombiningClass) : Bool := ccc > 0
 
+/-- Canonical combining class for the supported normalization subset. -/
+def canonicalCombiningClass (s : Scalar) : CombiningClass :=
+  match s.val with
+  | 0x0327 => 202 -- COMBINING CEDILLA
+  | 0x0300 => 230 -- COMBINING GRAVE ACCENT
+  | 0x0301 => 230 -- COMBINING ACUTE ACCENT
+  | 0x0302 => 230 -- COMBINING CIRCUMFLEX ACCENT
+  | 0x0303 => 230 -- COMBINING TILDE
+  | 0x0308 => 230 -- COMBINING DIAERESIS
+  | 0x030A => 230 -- COMBINING RING ABOVE
+  | _ => 0
+
+/-- Insert a combining-mark entry into a stable ascending CCC order. -/
+private def insertByCombiningClass (entry : Scalar × CombiningClass) :
+    List (Scalar × CombiningClass) → List (Scalar × CombiningClass)
+  | [] => [entry]
+  | head :: tail =>
+    if entry.2 < head.2 then
+      entry :: head :: tail
+    else
+      head :: insertByCombiningClass entry tail
+
+/-- Flush one canonical-order segment into the accumulated output. -/
+private def flushCanonicalSegment
+    (starter? : Option (Scalar × CombiningClass))
+    (marks : List (Scalar × CombiningClass)) : List (Scalar × CombiningClass) :=
+  match starter? with
+  | some starter => starter :: marks
+  | none => marks
+
 /-- Canonical ordering: reorder combining marks by their CCC values.
     This is a specification-level sort by CCC for the Canonical Ordering Algorithm. -/
 def canonicalOrder (chars : List (Scalar × CombiningClass)) : List (Scalar × CombiningClass) :=
-  -- Stable sort by CCC among consecutive combining marks
-  -- Starters (CCC=0) act as barriers
-  chars.mergeSort (fun a b => a.2 ≤ b.2)
+  go chars none []
+where
+  go (remaining : List (Scalar × CombiningClass))
+      (starter? : Option (Scalar × CombiningClass))
+      (marks : List (Scalar × CombiningClass)) : List (Scalar × CombiningClass) :=
+    match remaining with
+    | [] => flushCanonicalSegment starter? marks
+    | char :: rest =>
+      if isStarter char.2 then
+        flushCanonicalSegment starter? marks ++ go rest (some char) []
+      else
+        go rest starter? (insertByCombiningClass char marks)
+
+/-- Whether a normalization form is currently implemented by the executable model. -/
+def supportsNormalizationForm (form : NormalizationForm) : Bool :=
+  match form with
+  | .nfd | .nfc => true
+  | .nfkd | .nfkc => false
+
+/-- Convert a Nat list to scalars, failing if any element is not a valid scalar. -/
+private def scalarListFromNats? (ns : List Nat) : Option (List Scalar) :=
+  ns.mapM Scalar.ofNat?
+
+/-- Canonical decomposition mappings for the supported precomposed subset. -/
+private def canonicalDecompositionNats? (n : Nat) : Option (List Nat) :=
+  match n with
+  | 0x00C0 => some [0x0041, 0x0300]
+  | 0x00C1 => some [0x0041, 0x0301]
+  | 0x00C2 => some [0x0041, 0x0302]
+  | 0x00C3 => some [0x0041, 0x0303]
+  | 0x00C4 => some [0x0041, 0x0308]
+  | 0x00C5 => some [0x0041, 0x030A]
+  | 0x00C7 => some [0x0043, 0x0327]
+  | 0x00C8 => some [0x0045, 0x0300]
+  | 0x00C9 => some [0x0045, 0x0301]
+  | 0x00CA => some [0x0045, 0x0302]
+  | 0x00CB => some [0x0045, 0x0308]
+  | 0x00CC => some [0x0049, 0x0300]
+  | 0x00CD => some [0x0049, 0x0301]
+  | 0x00CE => some [0x0049, 0x0302]
+  | 0x00CF => some [0x0049, 0x0308]
+  | 0x00D1 => some [0x004E, 0x0303]
+  | 0x00D2 => some [0x004F, 0x0300]
+  | 0x00D3 => some [0x004F, 0x0301]
+  | 0x00D4 => some [0x004F, 0x0302]
+  | 0x00D5 => some [0x004F, 0x0303]
+  | 0x00D6 => some [0x004F, 0x0308]
+  | 0x00D9 => some [0x0055, 0x0300]
+  | 0x00DA => some [0x0055, 0x0301]
+  | 0x00DB => some [0x0055, 0x0302]
+  | 0x00DC => some [0x0055, 0x0308]
+  | 0x00DD => some [0x0059, 0x0301]
+  | 0x00E0 => some [0x0061, 0x0300]
+  | 0x00E1 => some [0x0061, 0x0301]
+  | 0x00E2 => some [0x0061, 0x0302]
+  | 0x00E3 => some [0x0061, 0x0303]
+  | 0x00E4 => some [0x0061, 0x0308]
+  | 0x00E5 => some [0x0061, 0x030A]
+  | 0x00E7 => some [0x0063, 0x0327]
+  | 0x00E8 => some [0x0065, 0x0300]
+  | 0x00E9 => some [0x0065, 0x0301]
+  | 0x00EA => some [0x0065, 0x0302]
+  | 0x00EB => some [0x0065, 0x0308]
+  | 0x00EC => some [0x0069, 0x0300]
+  | 0x00ED => some [0x0069, 0x0301]
+  | 0x00EE => some [0x0069, 0x0302]
+  | 0x00EF => some [0x0069, 0x0308]
+  | 0x00F1 => some [0x006E, 0x0303]
+  | 0x00F2 => some [0x006F, 0x0300]
+  | 0x00F3 => some [0x006F, 0x0301]
+  | 0x00F4 => some [0x006F, 0x0302]
+  | 0x00F5 => some [0x006F, 0x0303]
+  | 0x00F6 => some [0x006F, 0x0308]
+  | 0x00F9 => some [0x0075, 0x0300]
+  | 0x00FA => some [0x0075, 0x0301]
+  | 0x00FB => some [0x0075, 0x0302]
+  | 0x00FC => some [0x0075, 0x0308]
+  | 0x00FD => some [0x0079, 0x0301]
+  | 0x00FF => some [0x0079, 0x0308]
+  | 0x0178 => some [0x0059, 0x0308]
+  | _ => none
+
+/-- Canonical composition mappings for the supported precomposed subset. -/
+private def canonicalCompositionNat? (starter mark : Nat) : Option Nat :=
+  match starter, mark with
+  | 0x0041, 0x0300 => some 0x00C0
+  | 0x0041, 0x0301 => some 0x00C1
+  | 0x0041, 0x0302 => some 0x00C2
+  | 0x0041, 0x0303 => some 0x00C3
+  | 0x0041, 0x0308 => some 0x00C4
+  | 0x0041, 0x030A => some 0x00C5
+  | 0x0043, 0x0327 => some 0x00C7
+  | 0x0045, 0x0300 => some 0x00C8
+  | 0x0045, 0x0301 => some 0x00C9
+  | 0x0045, 0x0302 => some 0x00CA
+  | 0x0045, 0x0308 => some 0x00CB
+  | 0x0049, 0x0300 => some 0x00CC
+  | 0x0049, 0x0301 => some 0x00CD
+  | 0x0049, 0x0302 => some 0x00CE
+  | 0x0049, 0x0308 => some 0x00CF
+  | 0x004E, 0x0303 => some 0x00D1
+  | 0x004F, 0x0300 => some 0x00D2
+  | 0x004F, 0x0301 => some 0x00D3
+  | 0x004F, 0x0302 => some 0x00D4
+  | 0x004F, 0x0303 => some 0x00D5
+  | 0x004F, 0x0308 => some 0x00D6
+  | 0x0055, 0x0300 => some 0x00D9
+  | 0x0055, 0x0301 => some 0x00DA
+  | 0x0055, 0x0302 => some 0x00DB
+  | 0x0055, 0x0308 => some 0x00DC
+  | 0x0059, 0x0301 => some 0x00DD
+  | 0x0059, 0x0308 => some 0x0178
+  | 0x0061, 0x0300 => some 0x00E0
+  | 0x0061, 0x0301 => some 0x00E1
+  | 0x0061, 0x0302 => some 0x00E2
+  | 0x0061, 0x0303 => some 0x00E3
+  | 0x0061, 0x0308 => some 0x00E4
+  | 0x0061, 0x030A => some 0x00E5
+  | 0x0063, 0x0327 => some 0x00E7
+  | 0x0065, 0x0300 => some 0x00E8
+  | 0x0065, 0x0301 => some 0x00E9
+  | 0x0065, 0x0302 => some 0x00EA
+  | 0x0065, 0x0308 => some 0x00EB
+  | 0x0069, 0x0300 => some 0x00EC
+  | 0x0069, 0x0301 => some 0x00ED
+  | 0x0069, 0x0302 => some 0x00EE
+  | 0x0069, 0x0308 => some 0x00EF
+  | 0x006E, 0x0303 => some 0x00F1
+  | 0x006F, 0x0300 => some 0x00F2
+  | 0x006F, 0x0301 => some 0x00F3
+  | 0x006F, 0x0302 => some 0x00F4
+  | 0x006F, 0x0303 => some 0x00F5
+  | 0x006F, 0x0308 => some 0x00F6
+  | 0x0075, 0x0300 => some 0x00F9
+  | 0x0075, 0x0301 => some 0x00FA
+  | 0x0075, 0x0302 => some 0x00FB
+  | 0x0075, 0x0308 => some 0x00FC
+  | 0x0079, 0x0301 => some 0x00FD
+  | 0x0079, 0x0308 => some 0x00FF
+  | _, _ => none
+
+private def hangulSBase : Nat := 0xAC00
+private def hangulLBase : Nat := 0x1100
+private def hangulVBase : Nat := 0x1161
+private def hangulTBase : Nat := 0x11A7
+private def hangulLCount : Nat := 19
+private def hangulVCount : Nat := 21
+private def hangulTCount : Nat := 28
+private def hangulNCount : Nat := hangulVCount * hangulTCount
+private def hangulSCount : Nat := hangulLCount * hangulNCount
+
+/-- Algorithmic canonical decomposition for Hangul syllables. -/
+private def decomposeHangul? (s : Scalar) : Option (List Scalar) :=
+  if hangulSBase ≤ s.val && s.val < hangulSBase + hangulSCount then
+    let sIndex := s.val - hangulSBase
+    let lIndex := sIndex / hangulNCount
+    let vIndex := (sIndex % hangulNCount) / hangulTCount
+    let tIndex := sIndex % hangulTCount
+    match Scalar.ofNat? (hangulLBase + lIndex), Scalar.ofNat? (hangulVBase + vIndex) with
+    | some l, some v =>
+      if tIndex == 0 then
+        some [l, v]
+      else
+        match Scalar.ofNat? (hangulTBase + tIndex) with
+        | some t => some [l, v, t]
+        | none => none
+    | _, _ => none
+  else
+    none
+
+/-- One-step canonical decomposition for the supported normalization subset. -/
+def canonicalDecomposition? (s : Scalar) : Option (List Scalar) :=
+  match decomposeHangul? s with
+  | some decomposed => some decomposed
+  | none =>
+    match canonicalDecompositionNats? s.val with
+    | some ns => scalarListFromNats? ns
+    | none => none
+
+/-- Algorithmic Hangul composition for L+V and LV+T pairs. -/
+private def composeHangulPair? (starter mark : Scalar) : Option Scalar :=
+  if hangulLBase ≤ starter.val && starter.val < hangulLBase + hangulLCount &&
+      hangulVBase ≤ mark.val && mark.val < hangulVBase + hangulVCount then
+    let lIndex := starter.val - hangulLBase
+    let vIndex := mark.val - hangulVBase
+    Scalar.ofNat? (hangulSBase + (lIndex * hangulVCount + vIndex) * hangulTCount)
+  else if hangulSBase ≤ starter.val && starter.val < hangulSBase + hangulSCount &&
+      (starter.val - hangulSBase) % hangulTCount == 0 &&
+      hangulTBase < mark.val && mark.val < hangulTBase + hangulTCount then
+    Scalar.ofNat? (starter.val + (mark.val - hangulTBase))
+  else
+    none
+
+/-- Canonical composition for the supported normalization subset. -/
+def canonicalComposePair? (starter mark : Scalar) : Option Scalar :=
+  match composeHangulPair? starter mark with
+  | some composed => some composed
+  | none =>
+    match canonicalCompositionNat? starter.val mark.val with
+    | some n => Scalar.ofNat? n
+    | none => none
+
+/-- Full canonical decomposition without canonical ordering. -/
+def canonicalDecomposeScalars (scalars : List Scalar) : List Scalar :=
+  scalars.foldr
+    (fun scalar acc =>
+      match canonicalDecomposition? scalar with
+      | some decomposed => decomposed ++ acc
+      | none => scalar :: acc)
+    []
+
+/-- Canonical decomposition followed by canonical ordering (NFD). -/
+def normalizeScalarsNFD (scalars : List Scalar) : List Scalar :=
+  let decomposed := canonicalDecomposeScalars scalars
+  let annotated := decomposed.map (fun scalar => (scalar, canonicalCombiningClass scalar))
+  (canonicalOrder annotated).map Prod.fst
+
+/-- Compose one canonically ordered scalar list segment. -/
+private def composeCanonicalOrdered (scalars : List Scalar) : List Scalar :=
+  go scalars none [] 0
+where
+  flush (starter? : Option Scalar) (marksRev : List Scalar) : List Scalar :=
+    match starter? with
+    | some starter => starter :: marksRev.reverse
+    | none => marksRev.reverse
+
+  go (remaining : List Scalar) (starter? : Option Scalar) (marksRev : List Scalar)
+      (lastCCC : CombiningClass) : List Scalar :=
+    match remaining with
+    | [] => flush starter? marksRev
+    | scalar :: rest =>
+      let ccc := canonicalCombiningClass scalar
+      if ccc == 0 then
+        match starter? with
+        | some starter =>
+          if marksRev.isEmpty then
+            match canonicalComposePair? starter scalar with
+            | some composed => go rest (some composed) [] 0
+            | none => flush starter? marksRev ++ go rest (some scalar) [] 0
+          else
+            flush starter? marksRev ++ go rest (some scalar) [] 0
+        | none =>
+          flush starter? marksRev ++ go rest (some scalar) [] 0
+      else
+        match starter? with
+        | some starter =>
+          if lastCCC < ccc then
+            match canonicalComposePair? starter scalar with
+            | some composed => go rest (some composed) marksRev lastCCC
+            | none => go rest starter? (scalar :: marksRev) ccc
+          else
+            go rest starter? (scalar :: marksRev) ccc
+        | none =>
+          go rest none (scalar :: marksRev) ccc
+
+/-- Canonical decomposition, canonical ordering, and canonical composition (NFC). -/
+def normalizeScalarsNFC (scalars : List Scalar) : List Scalar :=
+  composeCanonicalOrdered (normalizeScalarsNFD scalars)
+
+/-- Normalize a scalar list when the requested form is currently supported. -/
+def normalizeScalars? (form : NormalizationForm) (scalars : List Scalar) : Option (List Scalar) :=
+  match form with
+  | .nfd => some (normalizeScalarsNFD scalars)
+  | .nfc => some (normalizeScalarsNFC scalars)
+  | .nfkd | .nfkc => none
+
+/-- Whether a scalar list is already in NFD. -/
+def isNormalizedNFD (scalars : List Scalar) : Bool :=
+  normalizeScalarsNFD scalars == scalars
+
+/-- Whether a scalar list is already in NFC. -/
+def isNormalizedNFC (scalars : List Scalar) : Bool :=
+  normalizeScalarsNFC scalars == scalars
+
+/-- Whether two scalar lists are canonically equivalent under NFD. -/
+def canonicallyEquivalent (left right : List Scalar) : Bool :=
+  normalizeScalarsNFD left == normalizeScalarsNFD right
 
 -- ════════════════════════════════════════════════════════════════════
 -- Grapheme Cluster Break Properties
