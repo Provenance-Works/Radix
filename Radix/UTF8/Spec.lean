@@ -336,6 +336,171 @@ def decodeAllReplacing (bytes : List UInt8) : List Scalar :=
   decodeReplacing bytes.length bytes
 
 -- ════════════════════════════════════════════════════════════════════
+-- Detailed Decoding and Unicode Conformance Helpers
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Classification of the first malformed UTF-8 subsequence. -/
+inductive DecodeErrorKind where
+  | invalidStartByte
+  | unexpectedContinuationByte
+  | invalidContinuationByte
+  | overlongSequence
+  | surrogateSequence
+  | outOfRangeSequence
+  | truncatedSequence
+  deriving DecidableEq, Repr
+
+/-- Information about the first malformed UTF-8 subsequence.
+
+`consumed` is the Unicode maximal subpart length from the current offset, as
+described in Unicode Standard Chapter 3, D93b. -/
+structure DecodeError where
+  kind : DecodeErrorKind
+  expectedLength : Nat
+  consumed : Nat
+  deriving DecidableEq, Repr
+
+/-- Result of decoding the next UTF-8 chunk from a byte stream. -/
+inductive DecodeStep where
+  | scalar (scalar : Scalar) (consumed : Nat)
+  | error (error : DecodeError)
+  deriving DecidableEq, Repr
+
+/-- Construct a detailed decoding error. -/
+private def mkDecodeError (kind : DecodeErrorKind) (expectedLength consumed : Nat) : DecodeError :=
+  { kind := kind, expectedLength := expectedLength, consumed := consumed }
+
+/-- Whether the second byte satisfies the Unicode 17 Table 3-7 bounds for the given lead byte. -/
+private def secondBytePermitted (lead second : Nat) : Bool :=
+  if lead == 0xE0 then 0xA0 ≤ second && second < 0xC0
+  else if lead == 0xED then 0x80 ≤ second && second < 0xA0
+  else if lead == 0xF0 then 0x90 ≤ second && second < 0xC0
+  else if lead == 0xF4 then 0x80 ≤ second && second < 0x90
+  else 0x80 ≤ second && second < 0xC0
+
+/-- Explain why the second byte is not permitted for the given lead byte. -/
+private def secondByteErrorKind (lead second : Nat) : DecodeErrorKind :=
+  if second < 0x80 || 0xC0 ≤ second then .invalidContinuationByte
+  else if lead == 0xE0 && second < 0xA0 then .overlongSequence
+  else if lead == 0xED && 0xA0 ≤ second then .surrogateSequence
+  else if lead == 0xF0 && second < 0x90 then .overlongSequence
+  else if lead == 0xF4 && 0x90 ≤ second then .outOfRangeSequence
+  else .invalidContinuationByte
+
+/-- Classify the first malformed UTF-8 subsequence in a non-empty byte list. -/
+private def classifyDecodeError : List UInt8 → DecodeError
+  | [] => mkDecodeError .truncatedSequence 1 0
+  | b0 :: rest =>
+    let lead := b0.toNat
+    if lead < 0x80 then
+      mkDecodeError .invalidStartByte 1 1
+    else if lead < 0xC0 then
+      mkDecodeError .unexpectedContinuationByte 1 1
+    else if lead < 0xC2 then
+      mkDecodeError .overlongSequence 2 1
+    else if lead < 0xE0 then
+      match rest with
+      | [] => mkDecodeError .truncatedSequence 2 1
+      | b1 :: _ =>
+        if isContinuationByte b1 then
+          mkDecodeError .invalidStartByte 2 1
+        else
+          mkDecodeError .invalidContinuationByte 2 1
+    else if lead < 0xF0 then
+      match rest with
+      | [] => mkDecodeError .truncatedSequence 3 1
+      | [b1] =>
+        if secondBytePermitted lead b1.toNat then
+          mkDecodeError .truncatedSequence 3 2
+        else
+          mkDecodeError (secondByteErrorKind lead b1.toNat) 3 1
+      | b1 :: b2 :: _ =>
+        if secondBytePermitted lead b1.toNat then
+          if isContinuationByte b2 then
+            mkDecodeError .invalidStartByte 3 2
+          else
+            mkDecodeError .invalidContinuationByte 3 2
+        else
+          mkDecodeError (secondByteErrorKind lead b1.toNat) 3 1
+    else if lead < 0xF5 then
+      match rest with
+      | [] => mkDecodeError .truncatedSequence 4 1
+      | [b1] =>
+        if secondBytePermitted lead b1.toNat then
+          mkDecodeError .truncatedSequence 4 2
+        else
+          mkDecodeError (secondByteErrorKind lead b1.toNat) 4 1
+      | [b1, b2] =>
+        if secondBytePermitted lead b1.toNat then
+          if isContinuationByte b2 then
+            mkDecodeError .truncatedSequence 4 3
+          else
+            mkDecodeError .invalidContinuationByte 4 2
+        else
+          mkDecodeError (secondByteErrorKind lead b1.toNat) 4 1
+      | b1 :: b2 :: b3 :: _ =>
+        if secondBytePermitted lead b1.toNat then
+          if isContinuationByte b2 then
+            if isContinuationByte b3 then
+              mkDecodeError .invalidStartByte 4 3
+            else
+              mkDecodeError .invalidContinuationByte 4 3
+          else
+            mkDecodeError .invalidContinuationByte 4 2
+        else
+          mkDecodeError (secondByteErrorKind lead b1.toNat) 4 1
+    else
+      mkDecodeError .invalidStartByte 1 1
+
+/-- Decode the next UTF-8 chunk, returning either a scalar or a detailed error.
+
+On malformed input, the returned error reports the Unicode maximal subpart
+length starting at the current offset. -/
+def decodeNextStep? (bytes : List UInt8) : Option DecodeStep :=
+  match decodeNext? bytes with
+  | some (scalar, consumed) => some (.scalar scalar consumed)
+  | none =>
+    match bytes with
+    | [] => none
+    | _ => some (.error (classifyDecodeError bytes))
+
+/-- Unicode maximal subpart length at the current offset.
+
+Returns `0` for the empty input, the scalar byte width for well-formed input,
+and the maximal subpart length for malformed input. -/
+def maximalSubpartLength (bytes : List UInt8) : Nat :=
+  match decodeNextStep? bytes with
+  | none => 0
+  | some (.scalar _ consumed) => consumed
+  | some (.error err) => err.consumed
+
+/-- Return the first UTF-8 decoding error, if any. -/
+def firstDecodeError? (bytes : List UInt8) : Option DecodeError :=
+  match decodeNextStep? bytes with
+  | some (.error err) => some err
+  | _ => none
+
+/-- Decode with U+FFFD replacement using Unicode maximal subparts.
+
+This follows the Unicode Standard Chapter 3 replacement guidance instead of the
+legacy one-replacement-per-invalid-byte policy. -/
+def decodeReplacingMaximalSubparts : Nat → List UInt8 → List Scalar
+  | 0, [] => []
+  | 0, _ => []
+  | _ + 1, [] => []
+  | fuel + 1, bytes =>
+    match decodeNextStep? bytes with
+    | none => []
+    | some (.scalar scalar consumed) =>
+      scalar :: decodeReplacingMaximalSubparts fuel (bytes.drop consumed)
+    | some (.error err) =>
+      Scalar.replacement :: decodeReplacingMaximalSubparts fuel (bytes.drop err.consumed)
+
+/-- Decode a byte list with Unicode maximal-subpart replacement semantics. -/
+def decodeAllReplacingMaximalSubparts (bytes : List UInt8) : List Scalar :=
+  decodeReplacingMaximalSubparts bytes.length bytes
+
+-- ════════════════════════════════════════════════════════════════════
 -- Validation Helpers
 -- ════════════════════════════════════════════════════════════════════
 

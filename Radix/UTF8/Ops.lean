@@ -28,7 +28,8 @@ export Spec.Scalar (ofNat? replacement null maxScalar byteCount)
 export Spec (ByteClass classifyByte isLeadByte isAsciiByte isContinuationByte
              sequenceLength bom hasBOM isOverlong IsScalar IsAscii IsBMP
              IsSurrogate IsHighSurrogate IsLowSurrogate IsNoncharacter
-             IsSupplementary)
+             IsSupplementary DecodeErrorKind DecodeError DecodeStep
+             decodeNextStep? maximalSubpartLength firstDecodeError?)
 
 -- ════════════════════════════════════════════════════════════════════
 -- ByteArray Conversions
@@ -77,6 +78,30 @@ def decodeBytesReplacing (bytes : ByteArray) : List Scalar :=
 /-- Decode a byte list with U+FFFD replacement for invalid sequences. -/
 def decodeListReplacing (bytes : List UInt8) : List Scalar :=
   Spec.decodeAllReplacing bytes
+
+/-- Decode the first UTF-8 chunk from a byte array with detailed errors. -/
+def decodeNextBytesStep? (bytes : ByteArray) : Option Spec.DecodeStep :=
+  Spec.decodeNextStep? (byteArrayToList bytes)
+
+/-- Decode the first UTF-8 chunk from a byte list with detailed errors. -/
+def decodeNextListStep? (bytes : List UInt8) : Option Spec.DecodeStep :=
+  Spec.decodeNextStep? bytes
+
+/-- Decode a byte array with Unicode maximal-subpart replacement semantics. -/
+def decodeBytesReplacingMaximalSubparts (bytes : ByteArray) : List Scalar :=
+  Spec.decodeAllReplacingMaximalSubparts (byteArrayToList bytes)
+
+/-- Decode a byte list with Unicode maximal-subpart replacement semantics. -/
+def decodeListReplacingMaximalSubparts (bytes : List UInt8) : List Scalar :=
+  Spec.decodeAllReplacingMaximalSubparts bytes
+
+/-- Return the first detailed decoding error from a byte array, if any. -/
+def firstDecodeErrorBytes? (bytes : ByteArray) : Option Spec.DecodeError :=
+  Spec.firstDecodeError? (byteArrayToList bytes)
+
+/-- Return the first detailed decoding error from a byte list, if any. -/
+def firstDecodeErrorList? (bytes : List UInt8) : Option Spec.DecodeError :=
+  Spec.firstDecodeError? bytes
 
 /-- Check whether a byte array is well-formed UTF-8. -/
 def isWellFormed (bytes : ByteArray) : Bool :=

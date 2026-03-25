@@ -23,4 +23,11 @@ def main : IO Unit := do
   | some scalars => IO.println s!"  Decoded scalars: {scalars.map (·.val)}"
   | none => throw (IO.userError "decode failed")
 
+  let malformed := ByteArray.mk #[0xE1, 0x80, 0x41]
+  let detailedStep := Radix.UTF8.decodeNextBytesStep? malformed
+  IO.println s!"  Malformed bytes: {malformed.toList}"
+  IO.println s!"  Detailed step: {reprStr detailedStep}"
+  IO.println s!"  Legacy replacement: {Radix.UTF8.decodeBytesReplacing malformed |>.map (·.val)}"
+  IO.println s!"  Strict replacement: {Radix.UTF8.decodeBytesReplacingMaximalSubparts malformed |>.map (·.val)}"
+
 end Examples.UTF8Demo
