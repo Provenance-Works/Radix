@@ -399,9 +399,18 @@ private def runUTF8NormalizationTests
   let asciiA ← UTF8Test.scalar 0x41
   let asciiC ← UTF8Test.scalar 0x43
   let acute ← UTF8Test.scalar 0x0301
+  let ringAbove ← UTF8Test.scalar 0x030A
   let cedilla ← UTF8Test.scalar 0x0327
+  let asciiF ← UTF8Test.scalar 0x66
+  let asciiI ← UTF8Test.scalar 0x69
+  let asciiSpace ← UTF8Test.scalar 0x20
+  let noBreakSpace ← UTF8Test.scalar 0x00A0
   let precomposedAAcute ← UTF8Test.scalar 0x00C1
+  let precomposedARing ← UTF8Test.scalar 0x00C5
   let precomposedCCedilla ← UTF8Test.scalar 0x00C7
+  let angstromSign ← UTF8Test.scalar 0x212B
+  let ligatureFFI ← UTF8Test.scalar 0xFB03
+  let fullwidthA ← UTF8Test.scalar 0xFF21
   let hangulL ← UTF8Test.scalar 0x1100
   let hangulV ← UTF8Test.scalar 0x1161
   let hangulT ← UTF8Test.scalar 0x11A8
@@ -425,9 +434,16 @@ private def runUTF8NormalizationTests
     "normalizeScalarsNFC composes Hangul L+V pairs"
   assert (Radix.UTF8.normalizeScalarsNFC [hangulL, hangulV, hangulT] == [hangulLVT])
     "normalizeScalarsNFC composes Hangul LV+T triples"
+  assert (Radix.UTF8.normalizeScalarsNFKD [noBreakSpace, ligatureFFI, angstromSign, fullwidthA] ==
+      [asciiSpace, asciiF, asciiF, asciiI, asciiA, ringAbove, asciiA])
+    "normalizeScalarsNFKD decomposes supported compatibility characters"
+  assert (Radix.UTF8.normalizeScalarsNFKC [noBreakSpace, ligatureFFI, angstromSign, fullwidthA] ==
+      [asciiSpace, asciiF, asciiF, asciiI, precomposedARing, asciiA])
+    "normalizeScalarsNFKC recomposes the supported compatibility subset"
 
   let precomposedBytes := Radix.UTF8.encodeScalars [precomposedAAcute, precomposedCCedilla]
   let decomposedBytes := Radix.UTF8.encodeScalars [asciiA, acute, asciiC, cedilla]
+  let compatibilityBytes := Radix.UTF8.encodeScalars [noBreakSpace, ligatureFFI, angstromSign, fullwidthA]
   match Radix.UTF8.normalizeBytesNFD? precomposedBytes with
   | some normalized =>
     assert (Radix.UTF8.decodeBytes? normalized == some [asciiA, acute, asciiC, cedilla])
@@ -446,8 +462,26 @@ private def runUTF8NormalizationTests
     "isNormalizedBytesNFC? accepts canonically composed UTF-8"
   assert (Radix.UTF8.canonicallyEquivalentBytes? precomposedBytes decomposedBytes)
     "canonicallyEquivalentBytes? matches precomposed and decomposed forms"
-  assert (Radix.UTF8.normalizeBytes? .nfkd precomposedBytes == none)
-    "normalizeBytes? reports unsupported compatibility normalization forms"
+  match Radix.UTF8.normalizeBytesNFKD? compatibilityBytes with
+  | some normalized =>
+    assert (Radix.UTF8.decodeBytes? normalized == some [asciiSpace, asciiF, asciiF, asciiI, asciiA, ringAbove, asciiA])
+      "normalizeBytesNFKD? decodes to the expected compatibility decomposition"
+  | none => assert false "normalizeBytesNFKD? rejected valid UTF-8 input"
+  match Radix.UTF8.normalizeBytesNFKC? compatibilityBytes with
+  | some normalized =>
+    assert (Radix.UTF8.decodeBytes? normalized == some [asciiSpace, asciiF, asciiF, asciiI, precomposedARing, asciiA])
+      "normalizeBytesNFKC? decodes to the expected compatibility composition"
+  | none => assert false "normalizeBytesNFKC? rejected valid UTF-8 input"
+  assert (Radix.UTF8.normalizeBytes? .nfkd compatibilityBytes ==
+      some (Radix.UTF8.encodeScalars [asciiSpace, asciiF, asciiF, asciiI, asciiA, ringAbove, asciiA]))
+    "normalizeBytes? dispatches NFKD to the compatibility-normalization implementation"
+  assert (Radix.UTF8.normalizeBytes? .nfkc compatibilityBytes ==
+      some (Radix.UTF8.encodeScalars [asciiSpace, asciiF, asciiF, asciiI, precomposedARing, asciiA]))
+    "normalizeBytes? dispatches NFKC to the compatibility-normalization implementation"
+  assert (Radix.UTF8.isNormalizedBytesNFKD? compatibilityBytes == some false)
+    "isNormalizedBytesNFKD? rejects non-normalized compatibility forms"
+  assert (Radix.UTF8.isNormalizedBytesNFKC? (Radix.UTF8.encodeScalars [asciiSpace, asciiF, asciiF, asciiI, precomposedARing, asciiA]) == some true)
+    "isNormalizedBytesNFKC? accepts compatibility-composed UTF-8"
 
 private def runUTF8CaseMappingTests
     (assert : Bool → String → IO Unit) : IO Unit := do

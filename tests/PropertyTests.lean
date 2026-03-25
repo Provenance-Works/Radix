@@ -2286,6 +2286,11 @@ private def testUTF8Properties : IO Unit := do
       0x00C1, 0x00C7, 0x00D1, 0x00D6, 0x00DC,
       0x00E1, 0x00E7, 0x00F1, 0x00F6, 0x00FC,
       0x0178, 0x00FF,
+      0x00A0, 0x00A8, 0x00AA, 0x00AF, 0x00B2, 0x00B3, 0x00B4, 0x00B5,
+      0x00B8, 0x00B9, 0x00BA, 0x00BC, 0x00BD, 0x00BE,
+      0x2126, 0x212A, 0x212B,
+      0x3000, 0xFB00, 0xFB01, 0xFB02, 0xFB03, 0xFB04, 0xFB05, 0xFB06,
+      0xFF01, 0xFF21, 0xFF3A, 0xFF5A,
       0x1100, 0x1161, 0x11A8, 0xAC00, 0xAC01]
 
   let mut rngNormalizationSamples := PRNG.new 612
@@ -2303,10 +2308,20 @@ private def testUTF8Properties : IO Unit := do
     | some scalars =>
       let nfd := Radix.UTF8.normalizeScalarsNFD scalars
       let nfc := Radix.UTF8.normalizeScalarsNFC scalars
+      let nfkd := Radix.UTF8.normalizeScalarsNFKD scalars
+      let nfkc := Radix.UTF8.normalizeScalarsNFKC scalars
       assert (Radix.UTF8.normalizeScalarsNFD nfd == nfd)
         s!"UTF8 NFD is idempotent on normalization sample sequences: {sampleNats}"
       assert (Radix.UTF8.normalizeScalarsNFC nfc == nfc)
         s!"UTF8 NFC is idempotent on normalization sample sequences: {sampleNats}"
+      assert (Radix.UTF8.normalizeScalarsNFKD nfkd == nfkd)
+        s!"UTF8 NFKD is idempotent on normalization sample sequences: {sampleNats}"
+      assert (Radix.UTF8.normalizeScalarsNFKC nfkc == nfkc)
+        s!"UTF8 NFKC is idempotent on normalization sample sequences: {sampleNats}"
+      assert (Radix.UTF8.normalizeScalarsNFKC nfkd == nfkc)
+        s!"UTF8 NFKC composed from NFKD matches direct NFKC: {sampleNats}"
+      assert (Radix.UTF8.normalizeScalarsNFKD nfkc == nfkd)
+        s!"UTF8 NFKD of NFKC matches direct NFKD: {sampleNats}"
       assert (Radix.UTF8.canonicallyEquivalent scalars nfd)
         s!"UTF8 canonical equivalence accepts original vs NFD: {sampleNats}"
       assert (Radix.UTF8.canonicallyEquivalent scalars nfc)
@@ -2316,8 +2331,14 @@ private def testUTF8Properties : IO Unit := do
         s!"UTF8 byte-level NFD matches scalar-level NFD: {sampleNats}"
       assert (Radix.UTF8.normalizeBytesNFC? encoded == some (Radix.UTF8.encodeScalars nfc))
         s!"UTF8 byte-level NFC matches scalar-level NFC: {sampleNats}"
-      assert (Radix.UTF8.normalizeBytes? .nfkd encoded == none)
-        s!"UTF8 compatibility normalization remains explicitly unsupported: {sampleNats}"
+      assert (Radix.UTF8.normalizeBytesNFKD? encoded == some (Radix.UTF8.encodeScalars nfkd))
+        s!"UTF8 byte-level NFKD matches scalar-level NFKD: {sampleNats}"
+      assert (Radix.UTF8.normalizeBytesNFKC? encoded == some (Radix.UTF8.encodeScalars nfkc))
+        s!"UTF8 byte-level NFKC matches scalar-level NFKC: {sampleNats}"
+      assert (Radix.UTF8.normalizeBytes? .nfkd encoded == some (Radix.UTF8.encodeScalars nfkd))
+        s!"UTF8 generic normalization dispatches NFKD correctly: {sampleNats}"
+      assert (Radix.UTF8.normalizeBytes? .nfkc encoded == some (Radix.UTF8.encodeScalars nfkc))
+        s!"UTF8 generic normalization dispatches NFKC correctly: {sampleNats}"
     | none =>
       assert false s!"UTF8 normalization sample generation produced invalid scalars: {sampleNats}"
 
@@ -2336,10 +2357,18 @@ private def testUTF8Properties : IO Unit := do
     | some scalars =>
       let nfd := Radix.UTF8.normalizeScalarsNFD scalars
       let nfc := Radix.UTF8.normalizeScalarsNFC scalars
+      let nfkd := Radix.UTF8.normalizeScalarsNFKD scalars
+      let nfkc := Radix.UTF8.normalizeScalarsNFKC scalars
       assert (Radix.UTF8.normalizeScalarsNFD nfd == nfd)
         s!"UTF8 NFD is idempotent on arbitrary scalar sequences: {scalarNatList}"
       assert (Radix.UTF8.normalizeScalarsNFC nfc == nfc)
         s!"UTF8 NFC is idempotent on arbitrary scalar sequences: {scalarNatList}"
+      assert (Radix.UTF8.normalizeScalarsNFKD nfkd == nfkd)
+        s!"UTF8 NFKD is idempotent on arbitrary scalar sequences: {scalarNatList}"
+      assert (Radix.UTF8.normalizeScalarsNFKC nfkc == nfkc)
+        s!"UTF8 NFKC is idempotent on arbitrary scalar sequences: {scalarNatList}"
+      assert (Radix.UTF8.normalizeScalarsNFKC nfkd == nfkc)
+        s!"UTF8 NFKC composed from arbitrary NFKD matches direct NFKC: {scalarNatList}"
       assert (Radix.UTF8.canonicallyEquivalent nfd nfc)
         s!"UTF8 NFD and NFC remain canonically equivalent: {scalarNatList}"
     | none =>
