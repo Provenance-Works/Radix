@@ -288,6 +288,71 @@ private def runUTF16InteropTests
   assert (UTF8Test.utf16Values utf16Replacing == [0xFFFD, 0x0041])
     "UTF-8 replacement transcoding produces UTF-16 replacement code units"
 
+private def runUTF8TextOpTests
+    (assert : Bool → String → IO Unit)
+    (ascii twoByte threeByte fourByte : Radix.UTF8.Scalar) : IO Unit := do
+  let scalarInput := Radix.UTF8.encodeScalars [ascii, twoByte, threeByte, fourByte]
+  assert (Radix.UTF8.scalarBoundaryOffsets? scalarInput == some [0, 1, 3, 6, 10])
+    "scalarBoundaryOffsets? reports all scalar starts and final end"
+  assert (Radix.UTF8.byteOffsetOfScalarIndex? scalarInput 2 == some 3)
+    "byteOffsetOfScalarIndex? resolves scalar boundary"
+  assert ((Radix.UTF8.scalarAtIndex? scalarInput 1).map (·.val) == some 0x00A2)
+    "scalarAtIndex? returns the scalar at the requested index"
+
+  match Radix.UTF8.sliceBytes? scalarInput 1 6 with
+  | some sliced =>
+    assert (Radix.UTF8.decodeBytes? sliced == some [twoByte, threeByte])
+      "sliceBytes? extracts a boundary-safe byte range"
+  | none => assert false "sliceBytes? rejected valid scalar boundaries"
+  assert (Radix.UTF8.sliceBytes? scalarInput 2 6 == none)
+    "sliceBytes? rejects continuation-byte start offsets"
+  match Radix.UTF8.sliceScalars? scalarInput 1 3 with
+  | some sliced =>
+    assert (Radix.UTF8.decodeBytes? sliced == some [twoByte, threeByte])
+      "sliceScalars? extracts the requested scalar range"
+  | none => assert false "sliceScalars? rejected valid scalar indices"
+
+  let scalarNeedle := Radix.UTF8.encodeScalars [twoByte, threeByte]
+  assert (Radix.UTF8.startsWithScalars scalarInput (Radix.UTF8.encodeScalars [ascii, twoByte]))
+    "startsWithScalars accepts scalar-aligned prefix"
+  assert (Radix.UTF8.endsWithScalars scalarInput (Radix.UTF8.encodeScalars [threeByte, fourByte]))
+    "endsWithScalars accepts scalar-aligned suffix"
+  assert (Radix.UTF8.findScalars? scalarInput scalarNeedle == some 1)
+    "findScalars? returns the byte offset of the first scalar match"
+  assert (Radix.UTF8.containsScalars scalarInput scalarNeedle)
+    "containsScalars reports scalar-sequence containment"
+
+  let acute ← UTF8Test.scalar 0x0301
+  let letterB ← UTF8Test.scalar 0x42
+  let graphemeInput := Radix.UTF8.encodeScalars [ascii, acute, letterB, ascii, acute]
+  assert (Radix.UTF8.graphemeBoundaryOffsets? graphemeInput == some [0, 3, 4, 7])
+    "graphemeBoundaryOffsets? reports grapheme boundaries and final end"
+  assert (Radix.UTF8.byteOffsetOfGraphemeIndex? graphemeInput 2 == some 4)
+    "byteOffsetOfGraphemeIndex? resolves grapheme boundary"
+  match Radix.UTF8.graphemeAtIndex? graphemeInput 0 with
+  | some grapheme =>
+    assert (UTF8Test.scalarValues grapheme.scalars == [0x41, 0x0301])
+      "graphemeAtIndex? returns the grapheme at the requested index"
+  | none => assert false "graphemeAtIndex? rejected valid grapheme index"
+  match Radix.UTF8.sliceGraphemes? graphemeInput 0 1 with
+  | some sliced =>
+    match Radix.UTF8.decodeGraphemes? sliced with
+    | some graphemes =>
+      assert (UTF8Test.graphemeScalarValues graphemes == [[0x41, 0x0301]])
+        "sliceGraphemes? extracts the requested grapheme range"
+    | none => assert false "sliceGraphemes? returned non-decodable UTF-8"
+  | none => assert false "sliceGraphemes? rejected valid grapheme indices"
+
+  let graphemeNeedle := Radix.UTF8.encodeScalars [letterB, ascii, acute]
+  assert (Radix.UTF8.startsWithGraphemes graphemeInput (Radix.UTF8.encodeScalars [ascii, acute]))
+    "startsWithGraphemes accepts grapheme-aligned prefix"
+  assert (Radix.UTF8.endsWithGraphemes graphemeInput (Radix.UTF8.encodeScalars [ascii, acute]))
+    "endsWithGraphemes accepts grapheme-aligned suffix"
+  assert (Radix.UTF8.findGraphemes? graphemeInput graphemeNeedle == some 3)
+    "findGraphemes? returns the byte offset of the first grapheme match"
+  assert (Radix.UTF8.containsGraphemes graphemeInput graphemeNeedle)
+    "containsGraphemes reports grapheme-sequence containment"
+
 private def runUTF8StreamingAndInteropTail
     (assert : Bool → String → IO Unit)
     (ascii twoByte threeByte fourByte : Radix.UTF8.Scalar) : IO Unit := do
@@ -391,6 +456,7 @@ private def runUTF8StreamingAndInteropTail
   UTF8Test.runUTF8CursorTests assert ascii twoByte threeByte fourByte
   UTF8Test.runUTF8GraphemeTests assert ascii
   UTF8Test.runUTF16InteropTests assert ascii threeByte fourByte
+  UTF8Test.runUTF8TextOpTests assert ascii twoByte threeByte fourByte
 
 end UTF8Test
 

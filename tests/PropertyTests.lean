@@ -2171,6 +2171,92 @@ private def testUTF8Properties : IO Unit := do
       assert (firstError == none)
         s!"UTF16 first error absent on non-error first step: {units.map UInt16.toNat}"
 
+  let mut rngTextOps := PRNG.new 610
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngTextOps.nextNat 6
+    rngTextOps := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarsAcc : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngTextOps
+      rngTextOps := nextRng
+      scalarsAcc := scalarNat :: scalarsAcc
+    let scalarNatList := scalarsAcc.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let encoded := Radix.UTF8.encodeScalars scalars
+      match Radix.UTF8.scalarBoundaryOffsets? encoded with
+      | some scalarOffsets =>
+        assert (scalarOffsets.head? == some 0)
+          s!"UTF8 scalar boundaries start at zero: {scalarNatList}"
+        assert (scalarOffsets.getLast? == some encoded.size)
+          s!"UTF8 scalar boundaries end at byte size: {scalarNatList}"
+        assert (scalarOffsets.length == scalars.length + 1)
+          s!"UTF8 scalar boundary count matches scalar count: {scalarNatList}"
+        let (rng', i0) := rngTextOps.nextNat (scalars.length + 1)
+        rngTextOps := rng'
+        let (rng', j0) := rngTextOps.nextNat (scalars.length + 1)
+        rngTextOps := rng'
+        let startIndex := Nat.min i0 j0
+        let endIndex := Nat.max i0 j0
+        match Radix.UTF8.sliceScalars? encoded startIndex endIndex with
+        | some sliced =>
+          let expected := scalars.drop startIndex |>.take (endIndex - startIndex)
+          assert (Radix.UTF8.decodeBytes? sliced == some expected)
+            s!"UTF8 scalar slicing matches decoded subset: {scalarNatList}"
+        | none =>
+          assert false s!"UTF8 scalar slicing rejected valid scalar bounds: {scalarNatList}"
+      | none =>
+        assert false s!"UTF8 scalar boundaries failed on valid input: {scalarNatList}"
+    | none =>
+      assert false s!"UTF8 random text-op scalar generation produced invalid scalars: {scalarNatList}"
+
+  let mut rngFindScalars := PRNG.new 611
+  for _ in [:numIter] do
+    let (rng', prefixCount0) := rngFindScalars.nextNat 4
+    rngFindScalars := rng'
+    let (rng', needleCount0) := rngFindScalars.nextNat 4
+    rngFindScalars := rng'
+    let (rng', suffixCount0) := rngFindScalars.nextNat 4
+    rngFindScalars := rng'
+    let prefixCount := prefixCount0 + 1
+    let needleCount := needleCount0 + 1
+    let suffixCount := suffixCount0 + 1
+    let mut prefixAcc : List Nat := []
+    let mut needleAcc : List Nat := []
+    let mut suffixAcc : List Nat := []
+    for _ in [:prefixCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngFindScalars
+      rngFindScalars := nextRng
+      prefixAcc := scalarNat :: prefixAcc
+    for _ in [:needleCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngFindScalars
+      rngFindScalars := nextRng
+      needleAcc := scalarNat :: needleAcc
+    for _ in [:suffixCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngFindScalars
+      rngFindScalars := nextRng
+      suffixAcc := scalarNat :: suffixAcc
+    let prefixNats := prefixAcc.reverse
+    let needleNats := needleAcc.reverse
+    let suffixNats := suffixAcc.reverse
+    match Radix.UTF8.natsToScalars? prefixNats, Radix.UTF8.natsToScalars? needleNats, Radix.UTF8.natsToScalars? suffixNats with
+    | some prefixScalars, some needleScalars, some suffixScalars =>
+      let haystackScalars := prefixScalars ++ needleScalars ++ suffixScalars
+      let haystack := Radix.UTF8.encodeScalars haystackScalars
+      let needle := Radix.UTF8.encodeScalars needleScalars
+      let expectedOffset := (Radix.UTF8.encodeScalars prefixScalars).size
+      assert (Radix.UTF8.findScalars? haystack needle == some expectedOffset)
+        s!"UTF8 scalar search finds the inserted needle: prefix={prefixNats} needle={needleNats} suffix={suffixNats}"
+      assert (Radix.UTF8.containsScalars haystack needle)
+        s!"UTF8 scalar containment reports the inserted needle: prefix={prefixNats} needle={needleNats} suffix={suffixNats}"
+      assert (Radix.UTF8.startsWithScalars haystack (Radix.UTF8.encodeScalars prefixScalars) == true)
+        s!"UTF8 scalar prefix check accepts valid prefix: {prefixNats}"
+      assert (Radix.UTF8.endsWithScalars haystack (Radix.UTF8.encodeScalars suffixScalars) == true)
+        s!"UTF8 scalar suffix check accepts valid suffix: {suffixNats}"
+    | _, _, _ =>
+      assert false "UTF8 scalar search property generated invalid scalar sequence"
+
 private def testECCProperties : IO Unit := do
   IO.println "  ECC properties..."
   let mut rng := PRNG.new 700
