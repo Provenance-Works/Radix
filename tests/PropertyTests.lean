@@ -2119,6 +2119,28 @@ private def testUTF8Properties : IO Unit := do
     assert (replacementFlattened == Radix.UTF8.decodeWithCursorReplacing .maximalSubpart byteArray)
       s!"UTF8 grapheme maximal-subpart replacement matches cursor replacement flattening: {bytes}"
 
+  let emojiSequences : List (List Nat × Nat) :=
+    [ ([0x1F44D, 0x1F3FD], 1)
+    , ([0x1F468, 0x200D, 0x1F469, 0x200D, 0x1F467, 0x200D, 0x1F466], 1)
+    , ([0x2764, 0xFE0F, 0x200D, 0x1F525], 1)
+    , ([0x1F44D, 0x1F3FD, 0x41], 2)
+    ]
+  for (emojiNats, expectedCount) in emojiSequences do
+    match Radix.UTF8.natsToScalars? emojiNats with
+    | some emojiScalars =>
+      let encoded := Radix.UTF8.encodeScalars emojiScalars
+      match Radix.UTF8.decodeGraphemes? encoded with
+      | some graphemes =>
+        let flattened := graphemes.foldr (fun grapheme acc => grapheme.scalars ++ acc) []
+        assert (flattened == emojiScalars)
+          s!"UTF8 emoji grapheme sequences flatten back to their source scalars: {emojiNats}"
+        assert (graphemes.length == expectedCount)
+          s!"UTF8 emoji grapheme sequences get expected grapheme count: {emojiNats}"
+      | none =>
+        assert false s!"UTF8 emoji grapheme decode unexpectedly failed: {emojiNats}"
+    | none =>
+      assert false s!"UTF8 emoji grapheme sample generation produced invalid scalars: {emojiNats}"
+
   let mut rngUTF16Valid := PRNG.new 608
   for _ in [:numIter] do
     let (rng', scalarCount0) := rngUTF16Valid.nextNat 6
@@ -2375,7 +2397,6 @@ private def testUTF8Properties : IO Unit := do
       let acuteScalar? := Radix.UTF8.ofNat? 0x0301
       match acuteScalar? with
       | some acute =>
-        let foldedLeft := Radix.UTF8.caseFoldScalarsSimple [baseScalar]
         let rightSource := Radix.UTF8.normalizeScalarsNFD [Radix.UTF8.caseFoldSimple baseScalar]
         assert (Radix.UTF8.caselessEquivalentSimple [baseScalar] rightSource)
           s!"UTF8 scalar caseless equivalence matches folded normalized form: {baseNat}"

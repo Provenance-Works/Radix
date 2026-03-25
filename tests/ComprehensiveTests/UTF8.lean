@@ -144,6 +144,16 @@ private def runUTF8GraphemeTests
   let regionalA ← UTF8Test.scalar 0x1F1E6
   let regionalB ← UTF8Test.scalar 0x1F1E7
   let regionalC ← UTF8Test.scalar 0x1F1E8
+  let thumbsUp ← UTF8Test.scalar 0x1F44D
+  let mediumSkinTone ← UTF8Test.scalar 0x1F3FD
+  let man ← UTF8Test.scalar 0x1F468
+  let woman ← UTF8Test.scalar 0x1F469
+  let girl ← UTF8Test.scalar 0x1F467
+  let boy ← UTF8Test.scalar 0x1F466
+  let redHeart ← UTF8Test.scalar 0x2764
+  let variationSelector16 ← UTF8Test.scalar 0xFE0F
+  let fire ← UTF8Test.scalar 0x1F525
+  let zwj ← UTF8Test.scalar 0x200D
 
   let combiningInput := Radix.UTF8.encodeScalars [ascii, acute, letterB]
   match Radix.UTF8.decodeGraphemes? combiningInput with
@@ -188,6 +198,29 @@ private def runUTF8GraphemeTests
     assert (Radix.UTF8.graphemeCount? regionalInput == some 2) "graphemeCount? matches regional-indicator pairing"
   | none => assert false "grapheme decode rejected valid regional-indicator input"
 
+  let emojiModifierInput := Radix.UTF8.encodeScalars [thumbsUp, mediumSkinTone, ascii]
+  match Radix.UTF8.decodeGraphemes? emojiModifierInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0x1F44D, 0x1F3FD], [0x41]])
+      "grapheme decode keeps emoji modifier sequences in one cluster"
+  | none => assert false "grapheme decode rejected valid emoji modifier input"
+
+  let familyInput := Radix.UTF8.encodeScalars [man, zwj, woman, zwj, girl, zwj, boy, ascii]
+  match Radix.UTF8.decodeGraphemes? familyInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0x1F468, 0x200D, 0x1F469, 0x200D, 0x1F467, 0x200D, 0x1F466], [0x41]])
+      "grapheme decode keeps emoji family ZWJ sequences in one cluster"
+    assert (Radix.UTF8.graphemeCount? familyInput == some 2)
+      "graphemeCount? treats emoji family ZWJ sequence as one cluster"
+  | none => assert false "grapheme decode rejected valid emoji family input"
+
+  let heartOnFireInput := Radix.UTF8.encodeScalars [redHeart, variationSelector16, zwj, fire]
+  match Radix.UTF8.decodeGraphemes? heartOnFireInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0x2764, 0xFE0F, 0x200D, 0x1F525]])
+      "grapheme decode keeps emoji variation-selector ZWJ sequences in one cluster"
+  | none => assert false "grapheme decode rejected valid emoji variation-selector input"
+
   let graphemeCursor := Radix.UTF8.Cursor.init combiningInput
   match Radix.UTF8.Cursor.currentGrapheme? graphemeCursor with
   | some grapheme =>
@@ -205,6 +238,14 @@ private def runUTF8GraphemeTests
         "currentGrapheme? sees the second grapheme after advancing"
     | none => assert false "currentGrapheme? failed after grapheme advance"
   | none => assert false "advanceGrapheme? failed on valid combining-mark input"
+
+  match Radix.UTF8.Cursor.advanceGrapheme? (Radix.UTF8.Cursor.init familyInput) with
+  | some (familyGrapheme, familyCursor) =>
+    assert (UTF8Test.scalarValues familyGrapheme.scalars == [0x1F468, 0x200D, 0x1F469, 0x200D, 0x1F467, 0x200D, 0x1F466])
+      "advanceGrapheme? returns the full emoji family cluster"
+    assert (Radix.UTF8.Cursor.byteOffset familyCursor == familyInput.size - 1)
+      "advanceGrapheme? advances past the full emoji family cluster"
+  | none => assert false "advanceGrapheme? failed on valid emoji family input"
 
   let malformedGraphemeInput := UTF8Test.byteArray [0xE1, 0x80, 0x41, 0xCC, 0x81]
   let replacedGraphemes := Radix.UTF8.decodeGraphemesReplacing .maximalSubpart malformedGraphemeInput
