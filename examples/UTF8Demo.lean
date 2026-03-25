@@ -83,18 +83,27 @@ def main : IO Unit := do
   IO.println s!"  Find scalar subsequence [smile, euro]: {Radix.UTF8.findScalars? textOpsInput (Radix.UTF8.encodeScalars [smile, euro])}"
 
   let aAcute ← scalar 0x00C1
+  let aRing ← scalar 0x00C5
   let letterC ← scalar 0x43
   let cedilla ← scalar 0x0327
   let cCedilla ← scalar 0x00C7
   let lowerAAcute ← scalar 0x00E1
+  let noBreakSpace ← scalar 0x00A0
+  let ligatureFFI ← scalar 0xFB03
+  let angstromSign ← scalar 0x212B
+  let fullwidthA ← scalar 0xFF21
   let hangulL ← scalar 0x1100
   let hangulV ← scalar 0x1161
   let hangulT ← scalar 0x11A8
   let normalizationInput := Radix.UTF8.encodeScalars [aAcute, ascii, acute, cedilla]
+  let compatibilityInput := Radix.UTF8.encodeScalars [noBreakSpace, ligatureFFI, angstromSign, fullwidthA]
   IO.println s!"  NFD bytes: {Radix.UTF8.normalizeBytesNFD? normalizationInput |>.map ByteArray.toList}"
   IO.println s!"  NFC bytes: {Radix.UTF8.normalizeBytesNFC? normalizationInput |>.map ByteArray.toList}"
+  IO.println s!"  NFKD bytes: {Radix.UTF8.normalizeBytesNFKD? compatibilityInput |>.map ByteArray.toList}"
+  IO.println s!"  NFKC bytes: {Radix.UTF8.normalizeBytesNFKC? compatibilityInput |>.map ByteArray.toList}"
   IO.println s!"  Canonical equivalence (Á vs A + acute): {Radix.UTF8.canonicallyEquivalent [aAcute] [ascii, acute]}"
   IO.println s!"  Canonical composition (Ç): {Radix.UTF8.normalizeScalarsNFC [letterC, cedilla] == [cCedilla]}"
+  IO.println s!"  Compatibility composition (angstrom sign): {Radix.UTF8.normalizeScalarsNFKC [angstromSign] == [aRing]}"
   IO.println s!"  Hangul NFC: {Radix.UTF8.normalizeScalarsNFC [hangulL, hangulV, hangulT] |>.map (·.val)}"
   IO.println s!"  Simple lowercase (Á): {(Radix.UTF8.toLowerSimple aAcute).val}"
   IO.println s!"  Simple uppercase (á): {(Radix.UTF8.toUpperSimple lowerAAcute).val}"

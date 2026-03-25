@@ -235,25 +235,36 @@ def canonicalCombiningClass (s : Scalar) : CombiningClass
 def supportsNormalizationForm (form : NormalizationForm) : Bool
 
 def canonicalDecomposition? (s : Scalar) : Option (List Scalar)
+def compatibilityDecomposition? (s : Scalar) : Option (List Scalar)
 def canonicalComposePair? (starter mark : Scalar) : Option Scalar
 
 def normalizeScalarsNFD (scalars : List Scalar) : List Scalar
 def normalizeScalarsNFC (scalars : List Scalar) : List Scalar
+def normalizeScalarsNFKD (scalars : List Scalar) : List Scalar
+def normalizeScalarsNFKC (scalars : List Scalar) : List Scalar
 def normalizeScalars? (form : NormalizationForm) (scalars : List Scalar)
   : Option (List Scalar)
 
 def isNormalizedNFD (scalars : List Scalar) : Bool
 def isNormalizedNFC (scalars : List Scalar) : Bool
+def isNormalizedNFKD (scalars : List Scalar) : Bool
+def isNormalizedNFKC (scalars : List Scalar) : Bool
 def canonicallyEquivalent (left right : List Scalar) : Bool
 
 def normalizeBytesNFD? (bytes : ByteArray) : Option ByteArray
 def normalizeBytesNFC? (bytes : ByteArray) : Option ByteArray
+def normalizeBytesNFKD? (bytes : ByteArray) : Option ByteArray
+def normalizeBytesNFKC? (bytes : ByteArray) : Option ByteArray
 def normalizeListNFD? (bytes : List UInt8) : Option (List UInt8)
 def normalizeListNFC? (bytes : List UInt8) : Option (List UInt8)
+def normalizeListNFKD? (bytes : List UInt8) : Option (List UInt8)
+def normalizeListNFKC? (bytes : List UInt8) : Option (List UInt8)
 def normalizeBytes? (form : NormalizationForm) (bytes : ByteArray) : Option ByteArray
 def normalizeList? (form : NormalizationForm) (bytes : List UInt8) : Option (List UInt8)
 def isNormalizedBytesNFD? (bytes : ByteArray) : Option Bool
 def isNormalizedBytesNFC? (bytes : ByteArray) : Option Bool
+def isNormalizedBytesNFKD? (bytes : ByteArray) : Option Bool
+def isNormalizedBytesNFKC? (bytes : ByteArray) : Option Bool
 def canonicallyEquivalentBytes? (left right : ByteArray) : Bool
 ```
 
@@ -327,7 +338,7 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - Regional-indicator sequences are paired during grapheme traversal so flag-style two-scalar clusters stay intact.
 - `normalizeScalarsNFD` performs canonical decomposition together with canonical combining-class ordering for the supported normalization subset.
 - `normalizeScalarsNFC` adds canonical composition on top of NFD, including algorithmic Hangul composition and a supported Latin precomposed subset.
-- `normalizeScalars?` and `normalizeBytes?` currently support `nfd` and `nfc`; `nfkd` and `nfkc` report `none` until compatibility mappings are added.
+- `normalizeScalars?` and `normalizeBytes?` support all four normalization forms. `nfkd` and `nfkc` currently cover a practical compatibility subset including fullwidth ASCII, no-break spaces, selected spacing marks, common ligatures, and Kelvin/Angstrom compatibility characters.
 - `canonicallyEquivalent` and `canonicallyEquivalentBytes?` compare inputs through canonical decomposition, so precomposed and decomposed forms match.
 - `toLowerSimple`, `toUpperSimple`, and `caseFoldSimple` cover ASCII plus the same supported Latin precomposed subset used by the current normalization tables.
 - `caseFoldScalarsSimple` and `caseFoldBytesSimple?` lower the supported subset and then canonicalize through NFD, so decomposed and precomposed forms compare consistently.
@@ -355,7 +366,8 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 
 - Canonical normalization currently covers algorithmic Hangul decomposition/composition plus a supported set of Latin precomposed characters and combining marks.
 - Canonical ordering is stable within each starter segment, so combining-mark order is normalized without crossing starter boundaries.
-- Compatibility normalization (`nfkd`/`nfkc`) is intentionally not implemented yet because it requires a much larger compatibility-mapping table.
+- Compatibility normalization (`nfkd`/`nfkc`) now covers a practical subset: fullwidth ASCII forms, ideographic/no-break spaces, selected spacing diacritics, selected superscript/fraction compatibility characters, common Latin ligatures, and Kelvin/Angstrom-style compatibility symbols.
+- The module still does not ship the full Unicode compatibility-mapping tables, so unsupported compatibility characters remain unchanged.
 
 ### Case Mapping Notes
 
@@ -393,6 +405,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property and comprehensive tests cover grapheme clustering for combining marks, CRLF, Hangul sequences, regional indicators, emoji modifier sequences, emoji ZWJ sequences, and replacement-aware malformed input.
 - Property and comprehensive tests cover UTF-16 surrogate-pair encoding, strict/replacement UTF-16 decoding, and UTF-8/UTF-16 transcoding.
 - Property and comprehensive tests cover canonical decomposition/composition for supported Latin precomposed characters, canonical ordering, Hangul normalization, and canonical-equivalence checks.
+- Property and comprehensive tests cover compatibility decomposition/composition for the supported subset, including fullwidth forms, ligatures, no-break spaces, and compatibility symbols.
 - Property and comprehensive tests cover supported simple lower/upper mappings, case-fold idempotence, byte/scalar API agreement, and caseless comparison across precomposed/decomposed forms.
 - Property and comprehensive tests cover scalar boundary discovery, scalar-aligned slicing, and byte-offset search for scalar subsequences.
 
@@ -469,8 +482,11 @@ def textOpDemo : IO Unit := do
 def normalizationDemo : IO Unit := do
   let composed := ByteArray.mk #[0xC3, 0x81]
   let decomposed := ByteArray.mk #[0x41, 0xCC, 0x81]
+  let compatibility := ByteArray.mk #[0xC2, 0xA0, 0xEF, 0xBC, 0xA1, 0xE2, 0x84, 0xAB]
   IO.println s!"nfd(composed): {Radix.UTF8.normalizeBytesNFD? composed |>.map ByteArray.toList}"
   IO.println s!"nfc(decomposed): {Radix.UTF8.normalizeBytesNFC? decomposed |>.map ByteArray.toList}"
+  IO.println s!"nfkd(compatibility): {Radix.UTF8.normalizeBytesNFKD? compatibility |>.map ByteArray.toList}"
+  IO.println s!"nfkc(compatibility): {Radix.UTF8.normalizeBytesNFKC? compatibility |>.map ByteArray.toList}"
   IO.println s!"canonically equivalent: {Radix.UTF8.canonicallyEquivalentBytes? composed decomposed}"
 
 def caseMappingDemo : IO Unit := do

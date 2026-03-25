@@ -235,25 +235,36 @@ def canonicalCombiningClass (s : Scalar) : CombiningClass
 def supportsNormalizationForm (form : NormalizationForm) : Bool
 
 def canonicalDecomposition? (s : Scalar) : Option (List Scalar)
+def compatibilityDecomposition? (s : Scalar) : Option (List Scalar)
 def canonicalComposePair? (starter mark : Scalar) : Option Scalar
 
 def normalizeScalarsNFD (scalars : List Scalar) : List Scalar
 def normalizeScalarsNFC (scalars : List Scalar) : List Scalar
+def normalizeScalarsNFKD (scalars : List Scalar) : List Scalar
+def normalizeScalarsNFKC (scalars : List Scalar) : List Scalar
 def normalizeScalars? (form : NormalizationForm) (scalars : List Scalar)
   : Option (List Scalar)
 
 def isNormalizedNFD (scalars : List Scalar) : Bool
 def isNormalizedNFC (scalars : List Scalar) : Bool
+def isNormalizedNFKD (scalars : List Scalar) : Bool
+def isNormalizedNFKC (scalars : List Scalar) : Bool
 def canonicallyEquivalent (left right : List Scalar) : Bool
 
 def normalizeBytesNFD? (bytes : ByteArray) : Option ByteArray
 def normalizeBytesNFC? (bytes : ByteArray) : Option ByteArray
+def normalizeBytesNFKD? (bytes : ByteArray) : Option ByteArray
+def normalizeBytesNFKC? (bytes : ByteArray) : Option ByteArray
 def normalizeListNFD? (bytes : List UInt8) : Option (List UInt8)
 def normalizeListNFC? (bytes : List UInt8) : Option (List UInt8)
+def normalizeListNFKD? (bytes : List UInt8) : Option (List UInt8)
+def normalizeListNFKC? (bytes : List UInt8) : Option (List UInt8)
 def normalizeBytes? (form : NormalizationForm) (bytes : ByteArray) : Option ByteArray
 def normalizeList? (form : NormalizationForm) (bytes : List UInt8) : Option (List UInt8)
 def isNormalizedBytesNFD? (bytes : ByteArray) : Option Bool
 def isNormalizedBytesNFC? (bytes : ByteArray) : Option Bool
+def isNormalizedBytesNFKD? (bytes : ByteArray) : Option Bool
+def isNormalizedBytesNFKC? (bytes : ByteArray) : Option Bool
 def canonicallyEquivalentBytes? (left right : ByteArray) : Bool
 ```
 
@@ -327,7 +338,7 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - regional indicator は grapheme 走査時に 2 個ずつペアリングし、flag 風の cluster を保ちます。
 - `normalizeScalarsNFD` は、サポート対象の canonical decomposition と canonical combining class ordering を適用します。
 - `normalizeScalarsNFC` は NFD の上に canonical composition を適用し、algorithmic Hangul composition とサポート対象の Latin precomposed 文字を扱います。
-- `normalizeScalars?` と `normalizeBytes?` は現在 `nfd` と `nfc` をサポートし、`nfkd` と `nfkc` は compatibility mapping 未実装のため `none` を返します。
+- `normalizeScalars?` と `normalizeBytes?` は現在 4 つの normalization form をサポートします。`nfkd` と `nfkc` は fullwidth ASCII、no-break space、selected spacing mark、common ligature、Kelvin/Angstrom 系 compatibility 文字などの実用サブセットを扱います。
 - `canonicallyEquivalent` と `canonicallyEquivalentBytes?` は canonical decomposition を通して比較するため、precomposed 形と decomposed 形を等価とみなせます。
 - `toLowerSimple`、`toUpperSimple`、`caseFoldSimple` は、ASCII と現在の normalization table が扱う Latin precomposed サブセットを対象にします。
 - `caseFoldScalarsSimple` と `caseFoldBytesSimple?` は、サポート対象を lowercase 化したうえで NFD に正規化するため、precomposed 形と decomposed 形を一貫して比較できます。
@@ -355,7 +366,8 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 
 - canonical normalization は現在、algorithmic Hangul decomposition/composition と、よく使う Latin precomposed 文字および combining mark のサブセットをカバーします。
 - canonical ordering は starter ごとの segment 内で安定に並べ替えるため、starter 境界をまたがずに combining mark 順序だけを正規化します。
-- compatibility normalization (`nfkd` / `nfkc`) は、より大きい compatibility-mapping table が必要になるため、意図的に未実装です。
+- compatibility normalization (`nfkd` / `nfkc`) は現在、fullwidth ASCII、ideographic/no-break space、selected spacing diacritic、selected superscript/fraction compatibility 文字、common Latin ligature、Kelvin/Angstrom 系 compatibility symbol をカバーします。
+- ただし full Unicode compatibility-mapping table までは実装していないため、未対応の compatibility 文字はそのまま残ります。
 
 ### Case Mapping Notes
 
@@ -393,6 +405,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property test と comprehensive test で combining mark、CRLF、Hangul sequence、regional indicator、emoji modifier sequence、emoji ZWJ sequence、replacement-aware malformed input の grapheme clustering も検証します。
 - Property test と comprehensive test で UTF-16 surrogate pair encoding、strict/replacement UTF-16 decode、UTF-8/UTF-16 transcoding も検証します。
 - Property test と comprehensive test で、サポート対象の Latin precomposed 文字の canonical decomposition/composition、canonical ordering、Hangul normalization、canonical equivalence も検証します。
+- Property test と comprehensive test で、サポート対象の compatibility decomposition/composition も検証し、fullwidth form、ligature、no-break space、compatibility symbol を含む代表ケースを通します。
 - Property test と comprehensive test で、サポート対象の simple lower/upper mapping、case-fold の idempotence、byte/scalar API 一致、precomposed/decomposed 間の caseless compare も検証します。
 - Property test と comprehensive test で scalar 境界列挙、scalar 単位の slice、scalar subsequence の byte-offset 検索も検証します。
 
@@ -461,8 +474,11 @@ def textOpDemo : IO Unit := do
 def normalizationDemo : IO Unit := do
   let composed := ByteArray.mk #[0xC3, 0x81]
   let decomposed := ByteArray.mk #[0x41, 0xCC, 0x81]
+  let compatibility := ByteArray.mk #[0xC2, 0xA0, 0xEF, 0xBC, 0xA1, 0xE2, 0x84, 0xAB]
   IO.println s!"nfd(composed): {Radix.UTF8.normalizeBytesNFD? composed |>.map ByteArray.toList}"
   IO.println s!"nfc(decomposed): {Radix.UTF8.normalizeBytesNFC? decomposed |>.map ByteArray.toList}"
+  IO.println s!"nfkd(compatibility): {Radix.UTF8.normalizeBytesNFKD? compatibility |>.map ByteArray.toList}"
+  IO.println s!"nfkc(compatibility): {Radix.UTF8.normalizeBytesNFKC? compatibility |>.map ByteArray.toList}"
   IO.println s!"canonically equivalent: {Radix.UTF8.canonicallyEquivalentBytes? composed decomposed}"
 
 def caseMappingDemo : IO Unit := do
