@@ -214,6 +214,33 @@ def decodeGraphemesReplacing (mode : ReplacementMode) (bytes : ByteArray)
 def graphemeCount? (bytes : ByteArray) : Option Nat
 ```
 
+### Text Operations API
+
+```lean
+def scalarBoundaryOffsets? (bytes : ByteArray) : Option (List Nat)
+def graphemeBoundaryOffsets? (bytes : ByteArray) : Option (List Nat)
+
+def byteOffsetOfScalarIndex? (bytes : ByteArray) (index : Nat) : Option Nat
+def byteOffsetOfGraphemeIndex? (bytes : ByteArray) (index : Nat) : Option Nat
+
+def scalarAtIndex? (bytes : ByteArray) (index : Nat) : Option Scalar
+def graphemeAtIndex? (bytes : ByteArray) (index : Nat) : Option Grapheme
+
+def sliceBytes? (bytes : ByteArray) (startOffset endOffset : Nat) : Option ByteArray
+def sliceScalars? (bytes : ByteArray) (startIndex endIndex : Nat) : Option ByteArray
+def sliceGraphemes? (bytes : ByteArray) (startIndex endIndex : Nat) : Option ByteArray
+
+def startsWithScalars (bytes prefix : ByteArray) : Bool
+def endsWithScalars (bytes suffix : ByteArray) : Bool
+def findScalars? (bytes needle : ByteArray) : Option Nat
+def containsScalars (bytes needle : ByteArray) : Bool
+
+def startsWithGraphemes (bytes prefix : ByteArray) : Bool
+def endsWithGraphemes (bytes suffix : ByteArray) : Bool
+def findGraphemes? (bytes needle : ByteArray) : Option Nat
+def containsGraphemes (bytes needle : ByteArray) : Bool
+```
+
 ### Replacement Mode
 
 - `decodeBytesReplacing` は既存の「不正バイト 1 個につき U+FFFD 1 個」の互換挙動を維持します。
@@ -227,6 +254,11 @@ def graphemeCount? (bytes : ByteArray) : Option Nat
 - `decodeGraphemes?` は well-formed UTF-8 を、リポジトリ内の simplified UAX #29 モデルに従って grapheme cluster へ分割します。
 - `decodeGraphemesReplacing` は不正 prefix を置換した後も同じ cluster segmentation を適用します。
 - regional indicator は grapheme 走査時に 2 個ずつペアリングし、flag 風の cluster を保ちます。
+- `scalarBoundaryOffsets?` と `graphemeBoundaryOffsets?` はバイト単位の安全な切断点を返し、常に `0` と入力末尾オフセットを含みます。
+- `sliceBytes?` は UTF-8 scalar 境界にそろっていないオフセットを拒否します。
+- `sliceScalars?` と `sliceGraphemes?` は scalar または grapheme の index 範囲を、再利用しやすい well-formed UTF-8 部分列へ戻します。
+- `findScalars?` と `findGraphemes?` は最初の整列済み一致位置をバイトオフセットで返すため、cursor や slice API へそのまま渡せます。
+- `startsWithScalars`、`endsWithScalars`、`containsScalars` と grapheme 版は、比較対象が対応するテキスト境界にそろっている場合だけ成功します。
 
 ### UTF-16 Notes
 
@@ -270,6 +302,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property test と comprehensive test で cursor traversal、正しい境界シーク、cursor replacement semantics も検証します。
 - Property test と comprehensive test で combining mark、CRLF、Hangul sequence、regional indicator、replacement-aware malformed input の grapheme clustering も検証します。
 - Property test と comprehensive test で UTF-16 surrogate pair encoding、strict/replacement UTF-16 decode、UTF-8/UTF-16 transcoding も検証します。
+- Property test と comprehensive test で scalar 境界列挙、scalar 単位の slice、scalar subsequence の byte-offset 検索も検証します。
 
 ## 使用例
 
@@ -325,6 +358,13 @@ def utf16Demo : IO Unit := do
     IO.println s!"decoded scalars: {scalars.map (·.val)}"
   | none =>
     IO.println "utf16 decode error"
+
+def textOpDemo : IO Unit := do
+  let bytes := ByteArray.mk #[0x41, 0xCC, 0x81, 0x42, 0xE2, 0x82, 0xAC]
+  IO.println s!"scalar boundaries: {Radix.UTF8.scalarBoundaryOffsets? bytes}"
+  IO.println s!"grapheme boundaries: {Radix.UTF8.graphemeBoundaryOffsets? bytes}"
+  IO.println s!"slice scalars [1, 3): {Radix.UTF8.sliceScalars? bytes 1 3 |>.map ByteArray.toList}"
+  IO.println s!"find scalar subsequence: {Radix.UTF8.findScalars? bytes (ByteArray.mk #[0x42, 0xE2, 0x82, 0xAC])}"
 ```
 
 ## 関連ドキュメント

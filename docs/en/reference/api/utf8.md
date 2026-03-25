@@ -214,6 +214,33 @@ def decodeGraphemesReplacing (mode : ReplacementMode) (bytes : ByteArray)
 def graphemeCount? (bytes : ByteArray) : Option Nat
 ```
 
+### Text Operations API
+
+```lean
+def scalarBoundaryOffsets? (bytes : ByteArray) : Option (List Nat)
+def graphemeBoundaryOffsets? (bytes : ByteArray) : Option (List Nat)
+
+def byteOffsetOfScalarIndex? (bytes : ByteArray) (index : Nat) : Option Nat
+def byteOffsetOfGraphemeIndex? (bytes : ByteArray) (index : Nat) : Option Nat
+
+def scalarAtIndex? (bytes : ByteArray) (index : Nat) : Option Scalar
+def graphemeAtIndex? (bytes : ByteArray) (index : Nat) : Option Grapheme
+
+def sliceBytes? (bytes : ByteArray) (startOffset endOffset : Nat) : Option ByteArray
+def sliceScalars? (bytes : ByteArray) (startIndex endIndex : Nat) : Option ByteArray
+def sliceGraphemes? (bytes : ByteArray) (startIndex endIndex : Nat) : Option ByteArray
+
+def startsWithScalars (bytes prefix : ByteArray) : Bool
+def endsWithScalars (bytes suffix : ByteArray) : Bool
+def findScalars? (bytes needle : ByteArray) : Option Nat
+def containsScalars (bytes needle : ByteArray) : Bool
+
+def startsWithGraphemes (bytes prefix : ByteArray) : Bool
+def endsWithGraphemes (bytes suffix : ByteArray) : Bool
+def findGraphemes? (bytes needle : ByteArray) : Option Nat
+def containsGraphemes (bytes needle : ByteArray) : Bool
+```
+
 ### Replacement Modes
 
 - `decodeBytesReplacing` preserves the legacy one-replacement-per-invalid-byte behavior.
@@ -227,6 +254,11 @@ def graphemeCount? (bytes : ByteArray) : Option Nat
 - `decodeGraphemes?` segments well-formed UTF-8 into grapheme clusters using the repository's simplified UAX #29 model.
 - `decodeGraphemesReplacing` applies the same cluster segmentation after malformed prefixes have been replaced.
 - Regional-indicator sequences are paired during grapheme traversal so flag-style two-scalar clusters stay intact.
+- `scalarBoundaryOffsets?` and `graphemeBoundaryOffsets?` expose byte-accurate cut points and always include both `0` and the total byte length.
+- `sliceBytes?` rejects offsets that are not aligned to UTF-8 scalar boundaries.
+- `sliceScalars?` and `sliceGraphemes?` turn scalar or grapheme index ranges back into well-formed UTF-8 slices.
+- `findScalars?` and `findGraphemes?` return the byte offset of the first aligned match, so the result can be fed back into cursor or slicing APIs.
+- `startsWithScalars`, `endsWithScalars`, `containsScalars`, and their grapheme counterparts require the compared regions to align to the corresponding text boundaries.
 
 ### UTF-16 Notes
 
@@ -270,6 +302,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property and comprehensive tests cover cursor traversal, valid boundary seeking, and cursor replacement semantics.
 - Property and comprehensive tests cover grapheme clustering for combining marks, CRLF, Hangul sequences, regional indicators, and replacement-aware malformed input.
 - Property and comprehensive tests cover UTF-16 surrogate-pair encoding, strict/replacement UTF-16 decoding, and UTF-8/UTF-16 transcoding.
+- Property and comprehensive tests cover scalar boundary discovery, scalar-aligned slicing, and byte-offset search for scalar subsequences.
 
 ## Examples
 
@@ -325,6 +358,13 @@ def utf16Demo : IO Unit := do
     IO.println s!"decoded scalars: {scalars.map (·.val)}"
   | none =>
     IO.println "utf16 decode error"
+
+def textOpDemo : IO Unit := do
+  let bytes := ByteArray.mk #[0x41, 0xCC, 0x81, 0x42, 0xE2, 0x82, 0xAC]
+  IO.println s!"scalar boundaries: {Radix.UTF8.scalarBoundaryOffsets? bytes}"
+  IO.println s!"grapheme boundaries: {Radix.UTF8.graphemeBoundaryOffsets? bytes}"
+  IO.println s!"slice scalars [1, 3): {Radix.UTF8.sliceScalars? bytes 1 3 |>.map ByteArray.toList}"
+  IO.println s!"find scalar subsequence: {Radix.UTF8.findScalars? bytes (ByteArray.mk #[0x42, 0xE2, 0x82, 0xAC])}"
 ```
 
 ## Related Documents
