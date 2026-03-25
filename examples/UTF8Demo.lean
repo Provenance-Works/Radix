@@ -64,6 +64,14 @@ def main : IO Unit := do
   | none =>
     throw (IO.userError "grapheme decode failed on valid UTF-8 input")
 
+  let textOpsInput := Radix.UTF8.encodeScalars [ascii, acute, smile, euro]
+  IO.println s!"  Scalar boundaries: {Radix.UTF8.scalarBoundaryOffsets? textOpsInput}"
+  IO.println s!"  Grapheme boundaries: {Radix.UTF8.graphemeBoundaryOffsets? textOpsInput}"
+  IO.println s!"  Scalar at index 2: {Radix.UTF8.scalarAtIndex? textOpsInput 2 |>.map (·.val)}"
+  IO.println s!"  Grapheme at index 1: {Radix.UTF8.graphemeAtIndex? textOpsInput 1 |>.map (fun grapheme => grapheme.scalars.map (·.val))}"
+  IO.println s!"  Slice scalars [1, 3): {Radix.UTF8.sliceScalars? textOpsInput 1 3 |>.map ByteArray.toList}"
+  IO.println s!"  Find scalar subsequence [smile, euro]: {Radix.UTF8.findScalars? textOpsInput (Radix.UTF8.encodeScalars [smile, euro])}"
+
   let utf16Units := Radix.UTF8.encodeScalarsToUTF16 [ascii, smile]
   IO.println s!"  UTF-16 units: {utf16Units.toList.map UInt16.toNat}"
   match Radix.UTF8.decodeUTF16? utf16Units with

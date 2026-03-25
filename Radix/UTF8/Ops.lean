@@ -745,6 +745,148 @@ def graphemeCount? (bytes : ByteArray) : Option Nat :=
   (decodeGraphemes? bytes).map List.length
 
 -- ════════════════════════════════════════════════════════════════════
+-- Text Search and Slicing
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Compute cumulative boundary offsets from a list of widths, including both 0 and the final end offset. -/
+private def boundaryOffsetsFromWidths (widths : List Nat) : List Nat :=
+  go 0 widths []
+where
+  go (offset : Nat) (remaining : List Nat) (acc : List Nat) : List Nat :=
+    match remaining with
+    | [] => (offset :: acc).reverse
+    | width :: rest => go (offset + width) rest (offset :: acc)
+
+/-- Whether `prefix` is a prefix of `xs`. -/
+private def startsWithList {α : Type} [DecidableEq α] : List α → List α → Bool
+  | _, [] => true
+  | [], _ :: _ => false
+  | x :: xs, y :: ys => x == y && startsWithList xs ys
+
+/-- Find the first index where `needle` appears as a contiguous sublist of `haystack`. -/
+private def findSublistIndex? {α : Type} [DecidableEq α] (haystack needle : List α) : Option Nat :=
+  if needle.isEmpty then
+    some 0
+  else
+    go 0 haystack
+where
+  go (index : Nat) (remaining : List α) : Option Nat :=
+    if startsWithList remaining needle then
+      some index
+    else
+      match remaining with
+      | [] => none
+      | _ :: rest => go (index + 1) rest
+
+/-- Safe list indexing helper used by executable text operations. -/
+private def listGet? {α : Type} (xs : List α) (index : Nat) : Option α :=
+  match xs.drop index with
+  | [] => none
+  | x :: _ => some x
+
+/-- Start offsets of all UTF-8 scalars plus the final end offset, if the buffer is well-formed. -/
+def scalarBoundaryOffsets? (bytes : ByteArray) : Option (List Nat) :=
+  (decodeBytes? bytes).map (fun scalars => boundaryOffsetsFromWidths (scalars.map Spec.Scalar.byteCount))
+
+/-- Start offsets of all grapheme clusters plus the final end offset, if the buffer is well-formed. -/
+def graphemeBoundaryOffsets? (bytes : ByteArray) : Option (List Nat) :=
+  (decodeGraphemes? bytes).map (fun graphemes => boundaryOffsetsFromWidths (graphemes.map Grapheme.byteLength))
+
+/-- Byte offset for the scalar boundary at the requested scalar index. The index may equal the scalar count. -/
+def byteOffsetOfScalarIndex? (bytes : ByteArray) (index : Nat) : Option Nat :=
+  (scalarBoundaryOffsets? bytes).bind (fun offsets => listGet? offsets index)
+
+/-- Byte offset for the grapheme boundary at the requested grapheme index. The index may equal the grapheme count. -/
+def byteOffsetOfGraphemeIndex? (bytes : ByteArray) (index : Nat) : Option Nat :=
+  (graphemeBoundaryOffsets? bytes).bind (fun offsets => listGet? offsets index)
+
+/-- Scalar at the requested scalar index, if the buffer is well-formed and the index is in range. -/
+def scalarAtIndex? (bytes : ByteArray) (index : Nat) : Option Scalar :=
+  (decodeBytes? bytes).bind (fun scalars => listGet? scalars index)
+
+/-- Grapheme cluster at the requested grapheme index, if the buffer is well-formed and the index is in range. -/
+def graphemeAtIndex? (bytes : ByteArray) (index : Nat) : Option Grapheme :=
+  (decodeGraphemes? bytes).bind (fun graphemes => listGet? graphemes index)
+
+/-- Extract a byte slice only when both offsets are valid UTF-8 scalar boundaries and `startOffset ≤ endOffset`. -/
+def sliceBytes? (bytes : ByteArray) (startOffset endOffset : Nat) : Option ByteArray :=
+  if startOffset ≤ endOffset then
+    match Cursor.atOffset? bytes startOffset, Cursor.atOffset? bytes endOffset with
+    | some _, some _ =>
+      some <| listToByteArray (((byteArrayToList bytes).drop startOffset).take (endOffset - startOffset))
+    | _, _ => none
+  else
+    none
+
+/-- Extract the UTF-8 byte slice covering scalar indices `[startIndex, endIndex)`. -/
+def sliceScalars? (bytes : ByteArray) (startIndex endIndex : Nat) : Option ByteArray := do
+  let startOffset ← byteOffsetOfScalarIndex? bytes startIndex
+  let endOffset ← byteOffsetOfScalarIndex? bytes endIndex
+  sliceBytes? bytes startOffset endOffset
+
+/-- Extract the UTF-8 byte slice covering grapheme indices `[startIndex, endIndex)`. -/
+def sliceGraphemes? (bytes : ByteArray) (startIndex endIndex : Nat) : Option ByteArray := do
+  let startOffset ← byteOffsetOfGraphemeIndex? bytes startIndex
+  let endOffset ← byteOffsetOfGraphemeIndex? bytes endIndex
+  sliceBytes? bytes startOffset endOffset
+
+/-- Whether a well-formed UTF-8 buffer starts with the scalar sequence of another well-formed buffer. -/
+def startsWithScalars (bytes : ByteArray) (prefixBytes : ByteArray) : Bool :=
+  match decodeBytes? bytes, decodeBytes? prefixBytes with
+  | some scalars, some prefixScalars => startsWithList scalars prefixScalars
+  | _, _ => false
+
+/-- Whether a well-formed UTF-8 buffer ends with the scalar sequence of another well-formed buffer. -/
+def endsWithScalars (bytes : ByteArray) (suffixBytes : ByteArray) : Bool :=
+  match decodeBytes? bytes, decodeBytes? suffixBytes with
+  | some scalars, some suffixScalars => startsWithList scalars.reverse suffixScalars.reverse
+  | _, _ => false
+
+/-- Find the byte offset of the first scalar-aligned occurrence of a well-formed UTF-8 needle inside a well-formed UTF-8 haystack. -/
+def findScalars? (bytes : ByteArray) (needleBytes : ByteArray) : Option Nat :=
+  match decodeBytes? bytes, decodeBytes? needleBytes with
+  | some scalars, some needleScalars =>
+    let offsets := boundaryOffsetsFromWidths (scalars.map Spec.Scalar.byteCount)
+    match findSublistIndex? scalars needleScalars with
+    | some index => listGet? offsets index
+    | none => none
+  | _, _ => none
+
+/-- Whether a well-formed UTF-8 buffer contains the scalar sequence of another well-formed buffer. -/
+def containsScalars (bytes : ByteArray) (needleBytes : ByteArray) : Bool :=
+  (findScalars? bytes needleBytes).isSome
+
+/-- Whether a well-formed UTF-8 buffer starts with the grapheme sequence of another well-formed buffer. -/
+def startsWithGraphemes (bytes : ByteArray) (prefixBytes : ByteArray) : Bool :=
+  match decodeGraphemes? bytes, decodeGraphemes? prefixBytes with
+  | some graphemes, some prefixGraphemes =>
+    startsWithList (graphemes.map (·.scalars)) (prefixGraphemes.map (·.scalars))
+  | _, _ => false
+
+/-- Whether a well-formed UTF-8 buffer ends with the grapheme sequence of another well-formed buffer. -/
+def endsWithGraphemes (bytes : ByteArray) (suffixBytes : ByteArray) : Bool :=
+  match decodeGraphemes? bytes, decodeGraphemes? suffixBytes with
+  | some graphemes, some suffixGraphemes =>
+    startsWithList (graphemes.map (·.scalars) |>.reverse) (suffixGraphemes.map (·.scalars) |>.reverse)
+  | _, _ => false
+
+/-- Find the byte offset of the first grapheme-aligned occurrence of a well-formed UTF-8 needle inside a well-formed UTF-8 haystack. -/
+def findGraphemes? (bytes : ByteArray) (needleBytes : ByteArray) : Option Nat :=
+  match decodeGraphemes? bytes, decodeGraphemes? needleBytes with
+  | some graphemes, some needleGraphemes =>
+    let graphemeScalars := graphemes.map (·.scalars)
+    let needleScalars := needleGraphemes.map (·.scalars)
+    let offsets := boundaryOffsetsFromWidths (graphemes.map Grapheme.byteLength)
+    match findSublistIndex? graphemeScalars needleScalars with
+    | some index => listGet? offsets index
+    | none => none
+  | _, _ => none
+
+/-- Whether a well-formed UTF-8 buffer contains the grapheme sequence of another well-formed buffer. -/
+def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool :=
+  (findGraphemes? bytes needleBytes).isSome
+
+-- ════════════════════════════════════════════════════════════════════
 -- Byte Classification
 -- ════════════════════════════════════════════════════════════════════
 
