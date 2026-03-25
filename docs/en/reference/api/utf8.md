@@ -142,6 +142,34 @@ def decodeWithCursorReplacing (mode : ReplacementMode) (bytes : ByteArray)
   : List Scalar
 ```
 
+### Grapheme API
+
+```lean
+structure Grapheme where
+  scalars : List Scalar
+  startOffset : Nat
+  endOffset : Nat
+
+def Grapheme.byteLength (grapheme : Grapheme) : Nat
+def Grapheme.scalarCount (grapheme : Grapheme) : Nat
+def Grapheme.isEmpty (grapheme : Grapheme) : Bool
+
+def Cursor.advanceGrapheme? (cursor : Cursor) : Option (Grapheme × Cursor)
+def Cursor.advanceGraphemeReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : Option (Grapheme × Cursor)
+def Cursor.currentGrapheme? (cursor : Cursor) : Option Grapheme
+def Cursor.currentGraphemeReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : Option Grapheme
+def Cursor.decodeRemainingGraphemes? (cursor : Cursor) : Option (List Grapheme)
+def Cursor.decodeRemainingGraphemesReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : List Grapheme
+
+def decodeGraphemes? (bytes : ByteArray) : Option (List Grapheme)
+def decodeGraphemesReplacing (mode : ReplacementMode) (bytes : ByteArray)
+  : List Grapheme
+def graphemeCount? (bytes : ByteArray) : Option Nat
+```
+
 ### Replacement Modes
 
 - `decodeBytesReplacing` preserves the legacy one-replacement-per-invalid-byte behavior.
@@ -152,6 +180,15 @@ def decodeWithCursorReplacing (mode : ReplacementMode) (bytes : ByteArray)
 - `Cursor.atOffset?` accepts only scalar boundaries, rejecting offsets in the middle of continuation-byte sequences.
 - `Cursor.advance?` gives byte-accurate scalar stepping over well-formed buffers.
 - `Cursor.advanceReplacing` provides replacement-aware cursor traversal for malformed buffers.
+- `decodeGraphemes?` segments well-formed UTF-8 into grapheme clusters using the repository's simplified UAX #29 model.
+- `decodeGraphemesReplacing` applies the same cluster segmentation after malformed prefixes have been replaced.
+- Regional-indicator sequences are paired during grapheme traversal so flag-style two-scalar clusters stay intact.
+
+### Grapheme Notes
+
+- Grapheme segmentation is intentionally simplified: it uses `classifyGraphemeBreak` and `isGraphemeBreak` from `UTF8.Spec`, plus regional-indicator pairing in the executable traversal layer.
+- Precomposed Hangul LV/LVT syllables are classified explicitly, so both Jamo sequences and precomposed Hangul cluster as expected under the supported rules.
+- This is not yet a complete UAX #29 implementation for emoji ZWJ or full Unicode property tables.
 
 ### Exported Constructors
 
@@ -180,6 +217,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Comprehensive tests exhaustively round-trip every Unicode scalar value from U+0000 through U+10FFFF excluding surrogates.
 - Property and comprehensive tests cover chunked strict decode, chunked replacement decode, and end-of-stream truncation semantics.
 - Property and comprehensive tests cover cursor traversal, valid boundary seeking, and cursor replacement semantics.
+- Property and comprehensive tests cover grapheme clustering for combining marks, CRLF, Hangul sequences, regional indicators, and replacement-aware malformed input.
 
 ## Examples
 
@@ -218,6 +256,14 @@ def cursorDemo : IO Unit := do
     IO.println s!"first scalar: {scalar.val}, next offset: {nextCursor.byteOffset}"
   | none =>
     IO.println "cursor error"
+
+def graphemeDemo : IO Unit := do
+  let bytes := ByteArray.mk #[0x41, 0xCC, 0x81, 0x42]
+  match Radix.UTF8.decodeGraphemes? bytes with
+  | some graphemes =>
+    IO.println s!"graphemes: {graphemes.map (fun grapheme => grapheme.scalars.map (·.val))}"
+  | none =>
+    IO.println "grapheme decode error"
 ```
 
 ## Related Documents

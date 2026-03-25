@@ -55,4 +55,13 @@ def main : IO Unit := do
   | none =>
     throw (IO.userError "cursor failed on valid UTF-8 input")
 
+  let acute ← scalar 0x0301
+  let graphemeInput := Radix.UTF8.encodeScalars [ascii, acute, smile]
+  match Radix.UTF8.decodeGraphemes? graphemeInput with
+  | some graphemes =>
+    IO.println s!"  Grapheme clusters: {graphemes.map (fun grapheme => grapheme.scalars.map (·.val))}"
+    IO.println s!"  Grapheme count: {graphemes.length}"
+  | none =>
+    throw (IO.userError "grapheme decode failed on valid UTF-8 input")
+
 end Examples.UTF8Demo

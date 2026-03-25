@@ -142,6 +142,34 @@ def decodeWithCursorReplacing (mode : ReplacementMode) (bytes : ByteArray)
   : List Scalar
 ```
 
+### Grapheme API
+
+```lean
+structure Grapheme where
+  scalars : List Scalar
+  startOffset : Nat
+  endOffset : Nat
+
+def Grapheme.byteLength (grapheme : Grapheme) : Nat
+def Grapheme.scalarCount (grapheme : Grapheme) : Nat
+def Grapheme.isEmpty (grapheme : Grapheme) : Bool
+
+def Cursor.advanceGrapheme? (cursor : Cursor) : Option (Grapheme × Cursor)
+def Cursor.advanceGraphemeReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : Option (Grapheme × Cursor)
+def Cursor.currentGrapheme? (cursor : Cursor) : Option Grapheme
+def Cursor.currentGraphemeReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : Option Grapheme
+def Cursor.decodeRemainingGraphemes? (cursor : Cursor) : Option (List Grapheme)
+def Cursor.decodeRemainingGraphemesReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : List Grapheme
+
+def decodeGraphemes? (bytes : ByteArray) : Option (List Grapheme)
+def decodeGraphemesReplacing (mode : ReplacementMode) (bytes : ByteArray)
+  : List Grapheme
+def graphemeCount? (bytes : ByteArray) : Option Nat
+```
+
 ### Replacement Mode
 
 - `decodeBytesReplacing` は既存の「不正バイト 1 個につき U+FFFD 1 個」の互換挙動を維持します。
@@ -152,6 +180,15 @@ def decodeWithCursorReplacing (mode : ReplacementMode) (bytes : ByteArray)
 - `Cursor.atOffset?` は scalar 境界のみを受理し、continuation byte の途中オフセットを拒否します。
 - `Cursor.advance?` は正しい UTF-8 バッファをバイトオフセット付きで 1 scalar ずつ前進させます。
 - `Cursor.advanceReplacing` は不正なバッファでも置換モード付きで同じ走査を提供します。
+- `decodeGraphemes?` は well-formed UTF-8 を、リポジトリ内の simplified UAX #29 モデルに従って grapheme cluster へ分割します。
+- `decodeGraphemesReplacing` は不正 prefix を置換した後も同じ cluster segmentation を適用します。
+- regional indicator は grapheme 走査時に 2 個ずつペアリングし、flag 風の cluster を保ちます。
+
+### Grapheme Notes
+
+- grapheme segmentation は intentionally simplified です。`UTF8.Spec` の `classifyGraphemeBreak` と `isGraphemeBreak` を使い、実行層で regional-indicator pairing を追加しています。
+- precomposed Hangul LV/LVT syllable も明示的に分類するので、Jamo 列と precomposed Hangul の両方をサポート範囲内で正しく cluster 化します。
+- emoji ZWJ sequence や full Unicode property table まで含む完全な UAX #29 実装ではまだありません。
 
 ### 再公開される構築子
 
@@ -180,6 +217,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - U+0000 から U+10FFFF までの全 Unicode scalar 値（サロゲート除く）を exhaustive に round-trip 検証します。
 - Property test と comprehensive test で chunked strict decode、chunked replacement decode、end-of-stream truncation を検証します。
 - Property test と comprehensive test で cursor traversal、正しい境界シーク、cursor replacement semantics も検証します。
+- Property test と comprehensive test で combining mark、CRLF、Hangul sequence、regional indicator、replacement-aware malformed input の grapheme clustering も検証します。
 
 ## 使用例
 
@@ -218,6 +256,14 @@ def cursorDemo : IO Unit := do
     IO.println s!"first scalar: {scalar.val}, next offset: {nextCursor.byteOffset}"
   | none =>
     IO.println "cursor error"
+
+def graphemeDemo : IO Unit := do
+  let bytes := ByteArray.mk #[0x41, 0xCC, 0x81, 0x42]
+  match Radix.UTF8.decodeGraphemes? bytes with
+  | some graphemes =>
+    IO.println s!"graphemes: {graphemes.map (fun grapheme => grapheme.scalars.map (·.val))}"
+  | none =>
+    IO.println "grapheme decode error"
 ```
 
 ## 関連ドキュメント
