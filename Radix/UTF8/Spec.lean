@@ -1533,7 +1533,7 @@ inductive GraphemeBreakProperty where
   | cr             -- Carriage return
   | lf             -- Line feed
   | control        -- Control characters
-  | extend         -- Combining marks, zero-width joiner
+  | extend         -- Combining marks, variation selectors, emoji modifiers
   | zwj            -- Zero-width joiner U+200D
   | regionalIndicator -- Regional indicator symbols
   | prepend        -- Prepend characters
@@ -1543,6 +1543,7 @@ inductive GraphemeBreakProperty where
   | hangulT        -- Hangul trailing jamo
   | hangulLV       -- Hangul LV syllable
   | hangulLVT      -- Hangul LVT syllable
+  | extendedPictographic -- Emoji and pictographic bases used by GB11
   | other          -- Everything else (usually a grapheme base)
   deriving DecidableEq, Repr
 
@@ -1553,13 +1554,21 @@ def classifyGraphemeBreak (s : Scalar) : GraphemeBreakProperty :=
   else if v == 0x000A then .lf
   else if v ≤ 0x001F || (0x007F ≤ v && v ≤ 0x009F) then .control
   else if v == 0x200D then .zwj
-  else if 0x0300 ≤ v && v ≤ 0x036F then .extend       -- Combining Diacriticals
+  else if (0x0300 ≤ v && v ≤ 0x036F) ||               -- Combining Diacriticals
+      (0xFE00 ≤ v && v ≤ 0xFE0F) ||                   -- Variation Selectors
+      v == 0x20E3 ||                                  -- Combining Enclosing Keycap
+      (0x1F3FB ≤ v && v ≤ 0x1F3FF) then               -- Emoji modifiers (skin tones)
+    .extend
   else if 0x1F1E6 ≤ v && v ≤ 0x1F1FF then .regionalIndicator
   else if 0x1100 ≤ v && v ≤ 0x115F then .hangulL      -- Hangul Jamo leading
   else if 0x1160 ≤ v && v ≤ 0x11A7 then .hangulV      -- Hangul Jamo vowel
   else if 0x11A8 ≤ v && v ≤ 0x11FF then .hangulT      -- Hangul Jamo trailing
   else if 0xAC00 ≤ v && v ≤ 0xD7A3 then
     if (v - 0xAC00) % 28 == 0 then .hangulLV else .hangulLVT
+  else if (0x2600 ≤ v && v ≤ 0x26FF) ||               -- Miscellaneous Symbols
+      (0x2700 ≤ v && v ≤ 0x27BF) ||                   -- Dingbats
+      (0x1F000 ≤ v && v ≤ 0x1FAFF) then               -- Modern emoji/pictograph planes
+    .extendedPictographic
   else .other
 
 /-- Whether a grapheme cluster boundary exists between two adjacent scalars

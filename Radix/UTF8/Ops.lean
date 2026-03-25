@@ -630,6 +630,29 @@ private def nextRegionalIndicatorRun
   else
     0
 
+/-- State for the GB11 emoji ZWJ rule: `Extended_Pictographic Extend* ZWJ × Extended_Pictographic`. -/
+private inductive EmojiZWJState where
+  | none
+  | extendedPictographicSequence
+  | zwjBridgeReady
+  deriving DecidableEq, Repr
+
+/-- Update the GB11 emoji ZWJ state after appending one grapheme-break property. -/
+private def nextEmojiZWJState
+    (state : EmojiZWJState)
+    (prop : Spec.GraphemeBreakProperty) : EmojiZWJState :=
+  match prop with
+  | .extendedPictographic => .extendedPictographicSequence
+  | .extend =>
+    match state with
+    | .extendedPictographicSequence => .extendedPictographicSequence
+    | _ => .none
+  | .zwj =>
+    match state with
+    | .extendedPictographicSequence => .zwjBridgeReady
+    | _ => .none
+  | _ => .none
+
 /-- Continue collecting a strict grapheme cluster after consuming its first scalar. -/
 private def collectGraphemeStrict
     (fuel : Nat)
@@ -637,7 +660,8 @@ private def collectGraphemeStrict
     (cursor : Cursor)
     (scalarsRev : List Scalar)
     (leftProp : Spec.GraphemeBreakProperty)
-    (regionalIndicatorRun : Nat) : Grapheme × Cursor :=
+    (regionalIndicatorRun : Nat)
+    (emojiZWJState : EmojiZWJState) : Grapheme × Cursor :=
   match fuel with
   | 0 =>
     ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
@@ -645,12 +669,18 @@ private def collectGraphemeStrict
     match cursor.advance? with
     | some (rightScalar, nextCursor) =>
       let rightProp := Spec.classifyGraphemeBreak rightScalar
-      if hasGraphemeBreak leftProp rightProp regionalIndicatorRun then
+      let hasBreak :=
+        if emojiZWJState == .zwjBridgeReady && rightProp == .extendedPictographic then
+          false
+        else
+          hasGraphemeBreak leftProp rightProp regionalIndicatorRun
+      if hasBreak then
         ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
       else
         let nextRun := nextRegionalIndicatorRun leftProp rightProp regionalIndicatorRun
+        let nextEmojiState := nextEmojiZWJState emojiZWJState rightProp
         collectGraphemeStrict fuel startOffset nextCursor (rightScalar :: scalarsRev)
-          rightProp nextRun
+          rightProp nextRun nextEmojiState
     | none =>
       ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
 
@@ -662,7 +692,8 @@ private def collectGraphemeReplacing
     (cursor : Cursor)
     (scalarsRev : List Scalar)
     (leftProp : Spec.GraphemeBreakProperty)
-    (regionalIndicatorRun : Nat) : Grapheme × Cursor :=
+    (regionalIndicatorRun : Nat)
+    (emojiZWJState : EmojiZWJState) : Grapheme × Cursor :=
   match fuel with
   | 0 =>
     ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
@@ -670,12 +701,18 @@ private def collectGraphemeReplacing
     match cursor.advanceReplacing mode with
     | some (rightScalar, nextCursor) =>
       let rightProp := Spec.classifyGraphemeBreak rightScalar
-      if hasGraphemeBreak leftProp rightProp regionalIndicatorRun then
+      let hasBreak :=
+        if emojiZWJState == .zwjBridgeReady && rightProp == .extendedPictographic then
+          false
+        else
+          hasGraphemeBreak leftProp rightProp regionalIndicatorRun
+      if hasBreak then
         ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
       else
         let nextRun := nextRegionalIndicatorRun leftProp rightProp regionalIndicatorRun
+        let nextEmojiState := nextEmojiZWJState emojiZWJState rightProp
         collectGraphemeReplacing fuel mode startOffset nextCursor (rightScalar :: scalarsRev)
-          rightProp nextRun
+          rightProp nextRun nextEmojiState
     | none =>
       ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
 
@@ -685,8 +722,9 @@ def Cursor.advanceGrapheme? (cursor : Cursor) : Option (Grapheme × Cursor) :=
   | some (scalar, nextCursor) =>
     let property := Spec.classifyGraphemeBreak scalar
     let regionalIndicatorRun := if property == .regionalIndicator then 1 else 0
+    let emojiZWJState := nextEmojiZWJState .none property
     some (collectGraphemeStrict cursor.remainingByteCount cursor.offset nextCursor [scalar]
-      property regionalIndicatorRun)
+      property regionalIndicatorRun emojiZWJState)
   | none => none
 
 /-- Advance the cursor by one grapheme cluster using the selected replacement policy. -/
@@ -695,8 +733,9 @@ def Cursor.advanceGraphemeReplacing (mode : ReplacementMode) (cursor : Cursor) :
   | some (scalar, nextCursor) =>
     let property := Spec.classifyGraphemeBreak scalar
     let regionalIndicatorRun := if property == .regionalIndicator then 1 else 0
+    let emojiZWJState := nextEmojiZWJState .none property
     some (collectGraphemeReplacing cursor.remainingByteCount mode cursor.offset nextCursor [scalar]
-      property regionalIndicatorRun)
+      property regionalIndicatorRun emojiZWJState)
   | none => none
 
 /-- Inspect the grapheme cluster at the current cursor position without advancing. -/
