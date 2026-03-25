@@ -29,6 +29,7 @@ export Spec (ByteClass classifyByte isLeadByte isAsciiByte isContinuationByte
              sequenceLength bom hasBOM isOverlong IsScalar IsAscii IsBMP
              IsSurrogate IsHighSurrogate IsLowSurrogate IsNoncharacter
              IsSupplementary DecodeErrorKind DecodeError DecodeStep
+             GraphemeBreakProperty classifyGraphemeBreak isGraphemeBreak
              decodeNextStep? maximalSubpartLength firstDecodeError?)
 
 -- ════════════════════════════════════════════════════════════════════
@@ -421,6 +422,173 @@ where
         match cursor.advanceReplacing mode with
         | some (scalar, nextCursor) => go fuel nextCursor (scalar :: acc)
         | none => acc.reverse
+
+-- ════════════════════════════════════════════════════════════════════
+-- Grapheme Traversal
+-- ════════════════════════════════════════════════════════════════════
+
+/-- A grapheme cluster represented as a scalar slice with byte offsets into the original buffer.
+
+The cluster uses a simplified UAX #29 segmentation model backed by `Spec.classifyGraphemeBreak`.
+-/
+structure Grapheme where
+  scalars : List Scalar
+  startOffset : Nat
+  endOffset : Nat
+  deriving DecidableEq, Repr
+
+/-- Number of bytes covered by a grapheme cluster. -/
+def Grapheme.byteLength (grapheme : Grapheme) : Nat :=
+  grapheme.endOffset - grapheme.startOffset
+
+/-- Number of scalars contained in a grapheme cluster. -/
+def Grapheme.scalarCount (grapheme : Grapheme) : Nat :=
+  grapheme.scalars.length
+
+/-- Whether a grapheme cluster is empty. Valid decoded clusters are never empty. -/
+def Grapheme.isEmpty (grapheme : Grapheme) : Bool :=
+  grapheme.scalars.isEmpty
+
+/-- Decide whether a grapheme boundary exists before `right`, given the trailing RI run. -/
+private def hasGraphemeBreak
+    (leftProp rightProp : Spec.GraphemeBreakProperty)
+    (regionalIndicatorRun : Nat) : Bool :=
+  if leftProp == .regionalIndicator && rightProp == .regionalIndicator then
+    regionalIndicatorRun % 2 == 0
+  else
+    Spec.isGraphemeBreak leftProp rightProp
+
+/-- Update the trailing regional-indicator run length after appending a scalar. -/
+private def nextRegionalIndicatorRun
+    (leftProp rightProp : Spec.GraphemeBreakProperty)
+    (regionalIndicatorRun : Nat) : Nat :=
+  if rightProp == .regionalIndicator then
+    if leftProp == .regionalIndicator then regionalIndicatorRun + 1 else 1
+  else
+    0
+
+/-- Continue collecting a strict grapheme cluster after consuming its first scalar. -/
+private def collectGraphemeStrict
+    (fuel : Nat)
+    (startOffset : Nat)
+    (cursor : Cursor)
+    (scalarsRev : List Scalar)
+    (leftProp : Spec.GraphemeBreakProperty)
+    (regionalIndicatorRun : Nat) : Grapheme × Cursor :=
+  match fuel with
+  | 0 =>
+    ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
+  | fuel + 1 =>
+    match cursor.advance? with
+    | some (rightScalar, nextCursor) =>
+      let rightProp := Spec.classifyGraphemeBreak rightScalar
+      if hasGraphemeBreak leftProp rightProp regionalIndicatorRun then
+        ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
+      else
+        let nextRun := nextRegionalIndicatorRun leftProp rightProp regionalIndicatorRun
+        collectGraphemeStrict fuel startOffset nextCursor (rightScalar :: scalarsRev)
+          rightProp nextRun
+    | none =>
+      ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
+
+/-- Continue collecting a replacement-aware grapheme cluster after consuming its first scalar. -/
+private def collectGraphemeReplacing
+    (fuel : Nat)
+    (mode : ReplacementMode)
+    (startOffset : Nat)
+    (cursor : Cursor)
+    (scalarsRev : List Scalar)
+    (leftProp : Spec.GraphemeBreakProperty)
+    (regionalIndicatorRun : Nat) : Grapheme × Cursor :=
+  match fuel with
+  | 0 =>
+    ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
+  | fuel + 1 =>
+    match cursor.advanceReplacing mode with
+    | some (rightScalar, nextCursor) =>
+      let rightProp := Spec.classifyGraphemeBreak rightScalar
+      if hasGraphemeBreak leftProp rightProp regionalIndicatorRun then
+        ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
+      else
+        let nextRun := nextRegionalIndicatorRun leftProp rightProp regionalIndicatorRun
+        collectGraphemeReplacing fuel mode startOffset nextCursor (rightScalar :: scalarsRev)
+          rightProp nextRun
+    | none =>
+      ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
+
+/-- Advance the cursor by one grapheme cluster on well-formed UTF-8 input. -/
+def Cursor.advanceGrapheme? (cursor : Cursor) : Option (Grapheme × Cursor) :=
+  match cursor.advance? with
+  | some (scalar, nextCursor) =>
+    let property := Spec.classifyGraphemeBreak scalar
+    let regionalIndicatorRun := if property == .regionalIndicator then 1 else 0
+    some (collectGraphemeStrict cursor.remainingByteCount cursor.offset nextCursor [scalar]
+      property regionalIndicatorRun)
+  | none => none
+
+/-- Advance the cursor by one grapheme cluster using the selected replacement policy. -/
+def Cursor.advanceGraphemeReplacing (mode : ReplacementMode) (cursor : Cursor) : Option (Grapheme × Cursor) :=
+  match cursor.advanceReplacing mode with
+  | some (scalar, nextCursor) =>
+    let property := Spec.classifyGraphemeBreak scalar
+    let regionalIndicatorRun := if property == .regionalIndicator then 1 else 0
+    some (collectGraphemeReplacing cursor.remainingByteCount mode cursor.offset nextCursor [scalar]
+      property regionalIndicatorRun)
+  | none => none
+
+/-- Inspect the grapheme cluster at the current cursor position without advancing. -/
+def Cursor.currentGrapheme? (cursor : Cursor) : Option Grapheme :=
+  cursor.advanceGrapheme?.map Prod.fst
+
+/-- Inspect the replacement-aware grapheme cluster at the current cursor position without advancing. -/
+def Cursor.currentGraphemeReplacing (mode : ReplacementMode) (cursor : Cursor) : Option Grapheme :=
+  (cursor.advanceGraphemeReplacing mode).map Prod.fst
+
+/-- Decode all remaining grapheme clusters from the cursor position strictly. -/
+def Cursor.decodeRemainingGraphemes? (cursor : Cursor) : Option (List Grapheme) :=
+  go cursor.remainingByteCount cursor []
+where
+  go (fuel : Nat) (current : Cursor) (acc : List Grapheme) : Option (List Grapheme) :=
+    match fuel with
+    | 0 =>
+      if current.isAtEnd then
+        some acc.reverse
+      else
+        none
+    | fuel + 1 =>
+      if current.isAtEnd then
+        some acc.reverse
+      else
+        match current.advanceGrapheme? with
+        | some (grapheme, nextCursor) => go fuel nextCursor (grapheme :: acc)
+        | none => none
+
+/-- Decode all remaining grapheme clusters from the cursor position with replacement recovery. -/
+def Cursor.decodeRemainingGraphemesReplacing (mode : ReplacementMode) (cursor : Cursor) : List Grapheme :=
+  go cursor.remainingByteCount cursor []
+where
+  go (fuel : Nat) (current : Cursor) (acc : List Grapheme) : List Grapheme :=
+    match fuel with
+    | 0 => acc.reverse
+    | fuel + 1 =>
+      if current.isAtEnd then
+        acc.reverse
+      else
+        match current.advanceGraphemeReplacing mode with
+        | some (grapheme, nextCursor) => go fuel nextCursor (grapheme :: acc)
+        | none => acc.reverse
+
+/-- Decode a full byte array into grapheme clusters using simplified UAX #29 rules. -/
+def decodeGraphemes? (bytes : ByteArray) : Option (List Grapheme) :=
+  (Cursor.init bytes).decodeRemainingGraphemes?
+
+/-- Decode a full byte array into grapheme clusters with replacement recovery. -/
+def decodeGraphemesReplacing (mode : ReplacementMode) (bytes : ByteArray) : List Grapheme :=
+  (Cursor.init bytes).decodeRemainingGraphemesReplacing mode
+
+/-- Count grapheme clusters in a well-formed byte array. -/
+def graphemeCount? (bytes : ByteArray) : Option Nat :=
+  (decodeGraphemes? bytes).map List.length
 
 -- ════════════════════════════════════════════════════════════════════
 -- Byte Classification

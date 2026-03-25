@@ -1094,6 +1094,8 @@ def classifyGraphemeBreak (s : Scalar) : GraphemeBreakProperty :=
   else if 0x1100 ≤ v && v ≤ 0x115F then .hangulL      -- Hangul Jamo leading
   else if 0x1160 ≤ v && v ≤ 0x11A7 then .hangulV      -- Hangul Jamo vowel
   else if 0x11A8 ≤ v && v ≤ 0x11FF then .hangulT      -- Hangul Jamo trailing
+  else if 0xAC00 ≤ v && v ≤ 0xD7A3 then
+    if (v - 0xAC00) % 28 == 0 then .hangulLV else .hangulLVT
   else .other
 
 /-- Whether a grapheme cluster boundary exists between two adjacent scalars
