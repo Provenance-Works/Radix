@@ -23,6 +23,9 @@ private def scalarValues (scalars : List Radix.UTF8.Scalar) : List Nat :=
 private def replacementValue : Nat :=
   Radix.UTF8.replacement.val
 
+private def strictReplacementValues (bytes : List UInt8) : List Nat :=
+  Radix.UTF8.scalarsToNats (Radix.UTF8.decodeListReplacingMaximalSubparts bytes)
+
 end UTF8Test
 
 def runUTF8Tests : IO Nat := do
@@ -71,6 +74,42 @@ def runUTF8Tests : IO Nat := do
   assert (!Radix.UTF8.isWellFormed malformed2) "reject surrogate"
   assert (!Radix.UTF8.isWellFormed malformed3) "reject truncated four-byte sequence"
   assert (Radix.UTF8.ofNat? 0xD800 == none) "reject surrogate constructor"
+
+  let assertDetailedError :=
+    fun (bytes : List UInt8)
+        (kind : Radix.UTF8.Spec.DecodeErrorKind)
+        (expectedLength consumed : Nat)
+        (label : String) => do
+      match Radix.UTF8.decodeNextListStep? bytes with
+      | some (Radix.UTF8.Spec.DecodeStep.error err) =>
+        assert (err.kind == kind) s!"{label}: error kind"
+        assert (err.expectedLength == expectedLength) s!"{label}: expected length"
+        assert (err.consumed == consumed) s!"{label}: maximal subpart length"
+        assert (Radix.UTF8.maximalSubpartLength bytes == consumed) s!"{label}: maximalSubpartLength"
+        assert (Radix.UTF8.firstDecodeErrorList? bytes == some err) s!"{label}: firstDecodeErrorList?"
+      | some (Radix.UTF8.Spec.DecodeStep.scalar _ actualConsumed) =>
+        assert false s!"{label}: unexpectedly decoded scalar with width {actualConsumed}"
+      | none =>
+        assert false s!"{label}: missing decode step"
+
+  assertDetailedError [0x80]
+    Radix.UTF8.Spec.DecodeErrorKind.unexpectedContinuationByte 1 1
+    "detailed error: unexpected continuation"
+  assertDetailedError [0xC0, 0xAF]
+    Radix.UTF8.Spec.DecodeErrorKind.overlongSequence 2 1
+    "detailed error: overlong lead"
+  assertDetailedError [0xC2, 0x41, 0x42]
+    Radix.UTF8.Spec.DecodeErrorKind.invalidContinuationByte 2 1
+    "detailed error: invalid continuation"
+  assertDetailedError [0xE1, 0x80]
+    Radix.UTF8.Spec.DecodeErrorKind.truncatedSequence 3 2
+    "detailed error: truncated three-byte sequence"
+  assertDetailedError [0xED, 0xA0, 0x80]
+    Radix.UTF8.Spec.DecodeErrorKind.surrogateSequence 3 1
+    "detailed error: surrogate sequence"
+  assertDetailedError [0xF4, 0x91, 0x92, 0x93]
+    Radix.UTF8.Spec.DecodeErrorKind.outOfRangeSequence 4 1
+    "detailed error: out-of-range sequence"
 
   -- ── Spec-level scalar predicates ──
   assert (Radix.UTF8.Spec.Scalar.isAscii ascii) "ASCII scalar isAscii"
@@ -223,5 +262,134 @@ def runUTF8Tests : IO Nat := do
     , UTF8Test.replacementValue
     , 0x22
     ]) "surrogate pair encoding replaces each invalid byte and resyncs"
+
+  -- Unicode 17 Chapter 3 official conformance vectors.
+  let officialReplacementVectors : List (List UInt8 × List Nat × String) :=
+    [ ( [0xC0, 0xAF, 0xE0, 0x80, 0xBF, 0xF0, 0x81, 0x82, 0x41]
+      , [ UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , 0x41
+        ]
+      , "Unicode 17 Table 3-8 non-shortest forms"
+      )
+    , ( [0xED, 0xA0, 0x80, 0xED, 0xBF, 0xBF, 0xED, 0xAF, 0x41]
+      , [ UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , 0x41
+        ]
+      , "Unicode 17 Table 3-9 surrogate sequences"
+      )
+    , ( [0xF4, 0x91, 0x92, 0x93, 0xFF, 0x41, 0x80, 0xBF, 0x42]
+      , [ UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , 0x41
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , 0x42
+        ]
+      , "Unicode 17 Table 3-10 other ill-formed sequences"
+      )
+    , ( [0xE1, 0x80, 0xE2, 0xF0, 0x91, 0x92, 0xF1, 0xBF, 0x41]
+      , [ UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , UTF8Test.replacementValue
+        , 0x41
+        ]
+      , "Unicode 17 Table 3-11 truncated sequences"
+      )
+    ]
+  for vector in officialReplacementVectors do
+    let (bytes, expected, label) := vector
+    assert (UTF8Test.strictReplacementValues bytes == expected) s!"{label}: maximal-subpart replacement"
+
+  let truncatedUnicodeTable := [0xE1, 0x80, 0xE2, 0xF0, 0x91, 0x92, 0xF1, 0xBF, 0x41]
+  assert (Radix.UTF8.scalarsToNats (Radix.UTF8.decodeListReplacing truncatedUnicodeTable) ==
+    [ UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , 0x41
+    ]) "legacy replacement keeps one-marker-per-byte semantics"
+  assert (UTF8Test.strictReplacementValues truncatedUnicodeTable ==
+    [ UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , UTF8Test.replacementValue
+    , 0x41
+    ]) "strict replacement collapses truncated prefixes to maximal subparts"
+
+  assert (UTF8Test.strictReplacementValues [0xC2, 0x41, 0x42] ==
+    [UTF8Test.replacementValue, 0x41, 0x42])
+    "Unicode D93b example does not consume valid successor bytes"
+  assert (UTF8Test.strictReplacementValues [0x41, 0xC2, 0xC3, 0xB1, 0x42] ==
+    [0x41, UTF8Test.replacementValue, 0x00F1, 0x42])
+    "Unicode D86 partition preserves following minimal well-formed subsequence"
+  assert (UTF8Test.strictReplacementValues [0xE1, 0x80, 0x41] ==
+    [UTF8Test.replacementValue, 0x41])
+    "strict replacement consumes truncated maximal subpart only"
+
+  -- Exhaustive coverage over all Unicode scalar values.
+  let mut exhaustiveCount := 0
+  let mut oneByteCount := 0
+  let mut twoByteCount := 0
+  let mut threeByteCount := 0
+  let mut fourByteCount := 0
+  let mut scalarNat := 0
+  while scalarNat ≤ 0x10FFFF do
+    match Radix.UTF8.ofNat? scalarNat with
+    | some scalarValue =>
+      let encodedList := Radix.UTF8.encodeToList scalarValue
+      assert (Radix.UTF8.encodedLength scalarValue == encodedList.length)
+        s!"exhaustive encodedLength matches byte count at scalar {scalarNat}"
+      assert (Radix.UTF8.maximalSubpartLength encodedList == encodedList.length)
+        s!"exhaustive maximalSubpartLength matches valid scalar width at scalar {scalarNat}"
+      match Radix.UTF8.decodeList? encodedList with
+      | some decoded =>
+        assert (decoded == [scalarValue]) s!"exhaustive UTF-8 round-trip failed at scalar {scalarNat}"
+      | none =>
+        assert false s!"exhaustive decode rejected scalar {scalarNat}"
+      exhaustiveCount := exhaustiveCount + 1
+      match encodedList.length with
+      | 1 => oneByteCount := oneByteCount + 1
+      | 2 => twoByteCount := twoByteCount + 1
+      | 3 => threeByteCount := threeByteCount + 1
+      | 4 => fourByteCount := fourByteCount + 1
+      | _ => assert false s!"unexpected UTF-8 width {encodedList.length} at scalar {scalarNat}"
+    | none =>
+      assert (0xD800 ≤ scalarNat && scalarNat ≤ 0xDFFF)
+        s!"only surrogates should be rejected by Scalar.ofNat?: {scalarNat}"
+
+    if scalarNat == 0x10FFFF then
+      scalarNat := scalarNat + 1
+    else if scalarNat == 0xD7FF then
+      scalarNat := 0xE000
+    else
+      scalarNat := scalarNat + 1
+
+  assert (exhaustiveCount == 1112064) "exhaustive scalar count matches Unicode scalar space"
+  assert (oneByteCount == 128) "ASCII scalar count matches Unicode scalar space"
+  assert (twoByteCount == 1920) "two-byte scalar count matches Unicode scalar space"
+  assert (threeByteCount == 61440) "three-byte scalar count matches Unicode scalar space"
+  assert (fourByteCount == 1048576) "four-byte scalar count matches Unicode scalar space"
 
   c.get

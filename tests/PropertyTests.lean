@@ -1897,13 +1897,34 @@ private def testUTF8Properties : IO Unit := do
       s!"UTF8 validateUTF8 matches isWellFormedList: {bytes}"
 
     let replacing := Radix.UTF8.decodeListReplacing bytes
+    let strictReplacing := Radix.UTF8.decodeListReplacingMaximalSubparts bytes
     assert (replacing.length ≤ bytes.length)
       s!"UTF8 replacement decode length bounded by input length: {bytes}"
+    assert (strictReplacing.length ≤ replacing.length)
+      s!"UTF8 maximal-subpart replacement never exceeds per-byte replacement: {bytes}"
+
+    match Radix.UTF8.decodeNextListStep? bytes with
+    | some (Radix.UTF8.Spec.DecodeStep.scalar _ consumed) =>
+      assert (1 ≤ consumed && consumed ≤ 4)
+        s!"UTF8 detailed step scalar width range: {bytes}"
+      assert (Radix.UTF8.maximalSubpartLength bytes == consumed)
+        s!"UTF8 maximalSubpartLength matches scalar width: {bytes}"
+    | some (Radix.UTF8.Spec.DecodeStep.error err) =>
+      assert (1 ≤ err.consumed && err.consumed ≤ Nat.min 4 bytes.length)
+        s!"UTF8 detailed step error width range: {bytes}"
+      assert (Radix.UTF8.maximalSubpartLength bytes == err.consumed)
+        s!"UTF8 maximalSubpartLength matches error width: {bytes}"
+      assert (Radix.UTF8.firstDecodeErrorList? bytes == some err)
+        s!"UTF8 firstDecodeErrorList? matches detailed step: {bytes}"
+    | none =>
+      assert (bytes == []) "UTF8 detailed step returns none only for empty input"
 
     match Radix.UTF8.decodeList? bytes with
     | some decoded =>
       assert (replacing == decoded)
         s!"UTF8 replacement decode agrees on well-formed input: {bytes}"
+      assert (strictReplacing == decoded)
+        s!"UTF8 maximal-subpart replacement agrees on well-formed input: {bytes}"
     | none =>
       pure ()
 
