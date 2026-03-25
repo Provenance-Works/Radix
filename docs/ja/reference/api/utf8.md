@@ -214,6 +214,49 @@ def decodeGraphemesReplacing (mode : ReplacementMode) (bytes : ByteArray)
 def graphemeCount? (bytes : ByteArray) : Option Nat
 ```
 
+### Normalization API
+
+```lean
+abbrev CombiningClass := Nat
+
+structure DecompositionEntry where
+  source : Nat
+  target : List Nat
+
+inductive NormalizationForm where
+  | nfd
+  | nfc
+  | nfkd
+  | nfkc
+
+def isStarter (ccc : CombiningClass) : Bool
+def isCombining (ccc : CombiningClass) : Bool
+def canonicalCombiningClass (s : Scalar) : CombiningClass
+def supportsNormalizationForm (form : NormalizationForm) : Bool
+
+def canonicalDecomposition? (s : Scalar) : Option (List Scalar)
+def canonicalComposePair? (starter mark : Scalar) : Option Scalar
+
+def normalizeScalarsNFD (scalars : List Scalar) : List Scalar
+def normalizeScalarsNFC (scalars : List Scalar) : List Scalar
+def normalizeScalars? (form : NormalizationForm) (scalars : List Scalar)
+  : Option (List Scalar)
+
+def isNormalizedNFD (scalars : List Scalar) : Bool
+def isNormalizedNFC (scalars : List Scalar) : Bool
+def canonicallyEquivalent (left right : List Scalar) : Bool
+
+def normalizeBytesNFD? (bytes : ByteArray) : Option ByteArray
+def normalizeBytesNFC? (bytes : ByteArray) : Option ByteArray
+def normalizeListNFD? (bytes : List UInt8) : Option (List UInt8)
+def normalizeListNFC? (bytes : List UInt8) : Option (List UInt8)
+def normalizeBytes? (form : NormalizationForm) (bytes : ByteArray) : Option ByteArray
+def normalizeList? (form : NormalizationForm) (bytes : List UInt8) : Option (List UInt8)
+def isNormalizedBytesNFD? (bytes : ByteArray) : Option Bool
+def isNormalizedBytesNFC? (bytes : ByteArray) : Option Bool
+def canonicallyEquivalentBytes? (left right : ByteArray) : Bool
+```
+
 ### Text Operations API
 
 ```lean
@@ -230,15 +273,15 @@ def sliceBytes? (bytes : ByteArray) (startOffset endOffset : Nat) : Option ByteA
 def sliceScalars? (bytes : ByteArray) (startIndex endIndex : Nat) : Option ByteArray
 def sliceGraphemes? (bytes : ByteArray) (startIndex endIndex : Nat) : Option ByteArray
 
-def startsWithScalars (bytes prefix : ByteArray) : Bool
-def endsWithScalars (bytes suffix : ByteArray) : Bool
-def findScalars? (bytes needle : ByteArray) : Option Nat
-def containsScalars (bytes needle : ByteArray) : Bool
+def startsWithScalars (bytes : ByteArray) (prefixBytes : ByteArray) : Bool
+def endsWithScalars (bytes : ByteArray) (suffixBytes : ByteArray) : Bool
+def findScalars? (bytes : ByteArray) (needleBytes : ByteArray) : Option Nat
+def containsScalars (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 
-def startsWithGraphemes (bytes prefix : ByteArray) : Bool
-def endsWithGraphemes (bytes suffix : ByteArray) : Bool
-def findGraphemes? (bytes needle : ByteArray) : Option Nat
-def containsGraphemes (bytes needle : ByteArray) : Bool
+def startsWithGraphemes (bytes : ByteArray) (prefixBytes : ByteArray) : Bool
+def endsWithGraphemes (bytes : ByteArray) (suffixBytes : ByteArray) : Bool
+def findGraphemes? (bytes : ByteArray) (needleBytes : ByteArray) : Option Nat
+def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 ```
 
 ### Replacement Mode
@@ -254,6 +297,10 @@ def containsGraphemes (bytes needle : ByteArray) : Bool
 - `decodeGraphemes?` は well-formed UTF-8 を、リポジトリ内の simplified UAX #29 モデルに従って grapheme cluster へ分割します。
 - `decodeGraphemesReplacing` は不正 prefix を置換した後も同じ cluster segmentation を適用します。
 - regional indicator は grapheme 走査時に 2 個ずつペアリングし、flag 風の cluster を保ちます。
+- `normalizeScalarsNFD` は、サポート対象の canonical decomposition と canonical combining class ordering を適用します。
+- `normalizeScalarsNFC` は NFD の上に canonical composition を適用し、algorithmic Hangul composition とサポート対象の Latin precomposed 文字を扱います。
+- `normalizeScalars?` と `normalizeBytes?` は現在 `nfd` と `nfc` をサポートし、`nfkd` と `nfkc` は compatibility mapping 未実装のため `none` を返します。
+- `canonicallyEquivalent` と `canonicallyEquivalentBytes?` は canonical decomposition を通して比較するため、precomposed 形と decomposed 形を等価とみなせます。
 - `scalarBoundaryOffsets?` と `graphemeBoundaryOffsets?` はバイト単位の安全な切断点を返し、常に `0` と入力末尾オフセットを含みます。
 - `sliceBytes?` は UTF-8 scalar 境界にそろっていないオフセットを拒否します。
 - `sliceScalars?` と `sliceGraphemes?` は scalar または grapheme の index 範囲を、再利用しやすい well-formed UTF-8 部分列へ戻します。
@@ -272,6 +319,12 @@ def containsGraphemes (bytes needle : ByteArray) : Bool
 - grapheme segmentation は intentionally simplified です。`UTF8.Spec` の `classifyGraphemeBreak` と `isGraphemeBreak` を使い、実行層で regional-indicator pairing を追加しています。
 - precomposed Hangul LV/LVT syllable も明示的に分類するので、Jamo 列と precomposed Hangul の両方をサポート範囲内で正しく cluster 化します。
 - emoji ZWJ sequence や full Unicode property table まで含む完全な UAX #29 実装ではまだありません。
+
+### Normalization Notes
+
+- canonical normalization は現在、algorithmic Hangul decomposition/composition と、よく使う Latin precomposed 文字および combining mark のサブセットをカバーします。
+- canonical ordering は starter ごとの segment 内で安定に並べ替えるため、starter 境界をまたがずに combining mark 順序だけを正規化します。
+- compatibility normalization (`nfkd` / `nfkc`) は、より大きい compatibility-mapping table が必要になるため、意図的に未実装です。
 
 ### 再公開される構築子
 
@@ -302,6 +355,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property test と comprehensive test で cursor traversal、正しい境界シーク、cursor replacement semantics も検証します。
 - Property test と comprehensive test で combining mark、CRLF、Hangul sequence、regional indicator、replacement-aware malformed input の grapheme clustering も検証します。
 - Property test と comprehensive test で UTF-16 surrogate pair encoding、strict/replacement UTF-16 decode、UTF-8/UTF-16 transcoding も検証します。
+- Property test と comprehensive test で、サポート対象の Latin precomposed 文字の canonical decomposition/composition、canonical ordering、Hangul normalization、canonical equivalence も検証します。
 - Property test と comprehensive test で scalar 境界列挙、scalar 単位の slice、scalar subsequence の byte-offset 検索も検証します。
 
 ## 使用例
@@ -365,6 +419,13 @@ def textOpDemo : IO Unit := do
   IO.println s!"grapheme boundaries: {Radix.UTF8.graphemeBoundaryOffsets? bytes}"
   IO.println s!"slice scalars [1, 3): {Radix.UTF8.sliceScalars? bytes 1 3 |>.map ByteArray.toList}"
   IO.println s!"find scalar subsequence: {Radix.UTF8.findScalars? bytes (ByteArray.mk #[0x42, 0xE2, 0x82, 0xAC])}"
+
+def normalizationDemo : IO Unit := do
+  let composed := ByteArray.mk #[0xC3, 0x81]
+  let decomposed := ByteArray.mk #[0x41, 0xCC, 0x81]
+  IO.println s!"nfd(composed): {Radix.UTF8.normalizeBytesNFD? composed |>.map ByteArray.toList}"
+  IO.println s!"nfc(decomposed): {Radix.UTF8.normalizeBytesNFC? decomposed |>.map ByteArray.toList}"
+  IO.println s!"canonically equivalent: {Radix.UTF8.canonicallyEquivalentBytes? composed decomposed}"
 ```
 
 ## 関連ドキュメント
