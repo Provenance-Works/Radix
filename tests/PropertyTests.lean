@@ -2379,6 +2379,8 @@ private def testUTF8Properties : IO Unit := do
       0x61, 0x63, 0x65, 0x6E, 0x6F, 0x75, 0x79,
       0x00C1, 0x00C7, 0x00D1, 0x00D6, 0x00DC, 0x00DD, 0x0178,
       0x00E1, 0x00E7, 0x00F1, 0x00F6, 0x00FC, 0x00FD, 0x00FF,
+      0x212A, 0x212B, 0xFB00, 0xFB01, 0xFB02, 0xFB03, 0xFB04, 0xFB05, 0xFB06,
+      0xFF21, 0xFF23, 0xFF25, 0xFF2E, 0xFF2F, 0xFF35, 0xFF39,
       0x0301, 0x0327, 0x1F642]
 
   let mut rngCaseSamples := PRNG.new 614
@@ -2397,12 +2399,15 @@ private def testUTF8Properties : IO Unit := do
       let lower := Radix.UTF8.lowercaseScalarsSimple scalars
       let upper := Radix.UTF8.uppercaseScalarsSimple scalars
       let folded := Radix.UTF8.caseFoldScalarsSimple scalars
+      let compatibilityFolded := Radix.UTF8.caseFoldScalarsCompatibility scalars
       assert (Radix.UTF8.lowercaseScalarsSimple lower == lower)
         s!"UTF8 simple lowercase is idempotent on supported case samples: {sampleNats}"
       assert (Radix.UTF8.uppercaseScalarsSimple upper == upper)
         s!"UTF8 simple uppercase is idempotent on supported case samples: {sampleNats}"
       assert (Radix.UTF8.caseFoldScalarsSimple folded == folded)
         s!"UTF8 simple case fold is idempotent on supported case samples: {sampleNats}"
+      assert (Radix.UTF8.caseFoldScalarsCompatibility compatibilityFolded == compatibilityFolded)
+        s!"UTF8 compatibility case fold is idempotent on practical case samples: {sampleNats}"
       let encoded := Radix.UTF8.encodeScalars scalars
       assert (Radix.UTF8.lowercaseBytesSimple? encoded == some (Radix.UTF8.encodeScalars lower))
         s!"UTF8 lowercaseBytesSimple? matches scalar mapping: {sampleNats}"
@@ -2410,8 +2415,12 @@ private def testUTF8Properties : IO Unit := do
         s!"UTF8 uppercaseBytesSimple? matches scalar mapping: {sampleNats}"
       assert (Radix.UTF8.caseFoldBytesSimple? encoded == some (Radix.UTF8.encodeScalars folded))
         s!"UTF8 caseFoldBytesSimple? matches scalar folding: {sampleNats}"
+      assert (Radix.UTF8.caseFoldBytesCompatibility? encoded == some (Radix.UTF8.encodeScalars compatibilityFolded))
+        s!"UTF8 caseFoldBytesCompatibility? matches scalar compatibility folding: {sampleNats}"
       assert (Radix.UTF8.equalsCaseFoldSimpleBytes? encoded (Radix.UTF8.encodeScalars upper))
         s!"UTF8 case-fold equality matches lowercase vs uppercase variants: {sampleNats}"
+      assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? encoded (Radix.UTF8.encodeScalars compatibilityFolded))
+        s!"UTF8 compatibility case-fold equality matches folded form: {sampleNats}"
     | none =>
       assert false s!"UTF8 case sample generation produced invalid scalars: {sampleNats}"
 
@@ -2437,6 +2446,22 @@ private def testUTF8Properties : IO Unit := do
         assert false "UTF8 case-fold test failed to construct acute accent"
     | none =>
       assert false s!"UTF8 case-fold sample base scalar invalid: {baseNat}"
+
+  let compatibilityPairs : List (List Nat × List Nat) :=
+    [ ([0xFF21], [0x61])
+    , ([0xFB03], [0x66, 0x66, 0x69])
+    , ([0x212A], [0x6B])
+    , ([0x212B], [0x61, 0x030A])
+    , ([0xFF21, 0x212A], [0x61, 0x6B]) ]
+  for (leftNats, rightNats) in compatibilityPairs do
+    match Radix.UTF8.natsToScalars? leftNats, Radix.UTF8.natsToScalars? rightNats with
+    | some leftScalars, some rightScalars =>
+      assert (Radix.UTF8.caselessEquivalentCompatibility leftScalars rightScalars)
+        s!"UTF8 compatibility caseless equivalence matches curated pair: {leftNats} vs {rightNats}"
+      assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars leftScalars) (Radix.UTF8.encodeScalars rightScalars))
+        s!"UTF8 compatibility byte equality matches curated pair: {leftNats} vs {rightNats}"
+    | _, _ =>
+      assert false s!"UTF8 compatibility pair generation failed: {leftNats} vs {rightNats}"
 
 private def testECCProperties : IO Unit := do
   IO.println "  ECC properties..."

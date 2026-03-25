@@ -489,12 +489,21 @@ private def runUTF8CaseMappingTests
   let asciiC ← UTF8Test.scalar 0x43
   let asciiLowerA ← UTF8Test.scalar 0x61
   let asciiLowerC ← UTF8Test.scalar 0x63
+  let asciiLowerF ← UTF8Test.scalar 0x66
+  let asciiLowerI ← UTF8Test.scalar 0x69
+  let asciiLowerK ← UTF8Test.scalar 0x6B
   let acute ← UTF8Test.scalar 0x0301
+  let ringAbove ← UTF8Test.scalar 0x030A
   let cedilla ← UTF8Test.scalar 0x0327
   let upperAAcute ← UTF8Test.scalar 0x00C1
+  let upperARing ← UTF8Test.scalar 0x00C5
   let lowerAAcute ← UTF8Test.scalar 0x00E1
   let upperCCedilla ← UTF8Test.scalar 0x00C7
   let lowerCCedilla ← UTF8Test.scalar 0x00E7
+  let angstromSign ← UTF8Test.scalar 0x212B
+  let kelvinSign ← UTF8Test.scalar 0x212A
+  let ligatureFFI ← UTF8Test.scalar 0xFB03
+  let fullwidthA ← UTF8Test.scalar 0xFF21
   let smile ← UTF8Test.scalar 0x1F642
 
   assert (Radix.UTF8.toLowerSimple asciiA == asciiLowerA)
@@ -533,6 +542,23 @@ private def runUTF8CaseMappingTests
     "equalsCaseFoldSimpleBytes? matches precomposed uppercase and decomposed lowercase forms"
   assert (!Radix.UTF8.equalsCaseFoldSimpleBytes? composedUpper (Radix.UTF8.encodeScalars [asciiLowerA, acute]))
     "equalsCaseFoldSimpleBytes? rejects unequal scalar sequences"
+
+  let compatibilityUpper := Radix.UTF8.encodeScalars [fullwidthA, ligatureFFI, kelvinSign, angstromSign]
+  let compatibilityLower := Radix.UTF8.encodeScalars [asciiLowerA, asciiLowerF, asciiLowerF, asciiLowerI, asciiLowerK, asciiLowerA, ringAbove]
+  match Radix.UTF8.caseFoldBytesCompatibility? compatibilityUpper with
+  | some folded =>
+    assert (Radix.UTF8.decodeBytes? folded == some [asciiLowerA, asciiLowerF, asciiLowerF, asciiLowerI, asciiLowerK, asciiLowerA, ringAbove])
+      "caseFoldBytesCompatibility? compatibility-decomposes and case-folds practical compatibility forms"
+  | none => assert false "caseFoldBytesCompatibility? rejected valid UTF-8 input"
+  assert (Radix.UTF8.caseFoldScalarsCompatibility [fullwidthA, ligatureFFI, kelvinSign, angstromSign] ==
+      [asciiLowerA, asciiLowerF, asciiLowerF, asciiLowerI, asciiLowerK, asciiLowerA, ringAbove])
+    "caseFoldScalarsCompatibility normalizes compatibility forms before case folding"
+  assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? compatibilityUpper compatibilityLower)
+    "equalsCaseFoldCompatibilityBytes? matches compatibility forms against lowercase decomposed text"
+  assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [kelvinSign]) (Radix.UTF8.encodeScalars [asciiLowerK]))
+    "equalsCaseFoldCompatibilityBytes? matches Kelvin sign and ASCII k"
+  assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [angstromSign]) (Radix.UTF8.encodeScalars [upperARing]))
+    "equalsCaseFoldCompatibilityBytes? matches Angstrom sign and Latin A-ring"
 
 private def runUTF8StreamingAndInteropTail
     (assert : Bool → String → IO Unit)
