@@ -257,6 +257,34 @@ def isNormalizedBytesNFC? (bytes : ByteArray) : Option Bool
 def canonicallyEquivalentBytes? (left right : ByteArray) : Bool
 ```
 
+### Case Mapping API
+
+```lean
+def simpleLowerNat? (n : Nat) : Option Nat
+def simpleUpperNat? (n : Nat) : Option Nat
+
+def Scalar.isUppercase (s : Scalar) : Bool
+def Scalar.isLowercase (s : Scalar) : Bool
+def Scalar.toLowerAscii? (s : Scalar) : Option Scalar
+def Scalar.toUpperAscii? (s : Scalar) : Option Scalar
+def Scalar.toLowerSimple (s : Scalar) : Scalar
+def Scalar.toUpperSimple (s : Scalar) : Scalar
+def Scalar.caseFoldSimple (s : Scalar) : Scalar
+
+def lowercaseScalarsSimple (scalars : List Scalar) : List Scalar
+def uppercaseScalarsSimple (scalars : List Scalar) : List Scalar
+def caseFoldScalarsSimple (scalars : List Scalar) : List Scalar
+def caselessEquivalentSimple (left right : List Scalar) : Bool
+
+def lowercaseBytesSimple? (bytes : ByteArray) : Option ByteArray
+def uppercaseBytesSimple? (bytes : ByteArray) : Option ByteArray
+def caseFoldBytesSimple? (bytes : ByteArray) : Option ByteArray
+def lowercaseListSimple? (bytes : List UInt8) : Option (List UInt8)
+def uppercaseListSimple? (bytes : List UInt8) : Option (List UInt8)
+def caseFoldListSimple? (bytes : List UInt8) : Option (List UInt8)
+def equalsCaseFoldSimpleBytes? (left right : ByteArray) : Bool
+```
+
 ### Text Operations API
 
 ```lean
@@ -301,6 +329,8 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - `normalizeScalarsNFC` は NFD の上に canonical composition を適用し、algorithmic Hangul composition とサポート対象の Latin precomposed 文字を扱います。
 - `normalizeScalars?` と `normalizeBytes?` は現在 `nfd` と `nfc` をサポートし、`nfkd` と `nfkc` は compatibility mapping 未実装のため `none` を返します。
 - `canonicallyEquivalent` と `canonicallyEquivalentBytes?` は canonical decomposition を通して比較するため、precomposed 形と decomposed 形を等価とみなせます。
+- `toLowerSimple`、`toUpperSimple`、`caseFoldSimple` は、ASCII と現在の normalization table が扱う Latin precomposed サブセットを対象にします。
+- `caseFoldScalarsSimple` と `caseFoldBytesSimple?` は、サポート対象を lowercase 化したうえで NFD に正規化するため、precomposed 形と decomposed 形を一貫して比較できます。
 - `scalarBoundaryOffsets?` と `graphemeBoundaryOffsets?` はバイト単位の安全な切断点を返し、常に `0` と入力末尾オフセットを含みます。
 - `sliceBytes?` は UTF-8 scalar 境界にそろっていないオフセットを拒否します。
 - `sliceScalars?` と `sliceGraphemes?` は scalar または grapheme の index 範囲を、再利用しやすい well-formed UTF-8 部分列へ戻します。
@@ -325,6 +355,12 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - canonical normalization は現在、algorithmic Hangul decomposition/composition と、よく使う Latin precomposed 文字および combining mark のサブセットをカバーします。
 - canonical ordering は starter ごとの segment 内で安定に並べ替えるため、starter 境界をまたがずに combining mark 順序だけを正規化します。
 - compatibility normalization (`nfkd` / `nfkc`) は、より大きい compatibility-mapping table が必要になるため、意図的に未実装です。
+
+### Case Mapping Notes
+
+- case mapping は現在 full Unicode SpecialCasing / CaseFolding table ではなく、supported simple subset です。
+- 実装済み subset は ASCII と、canonical normalization で扱っている Latin precomposed 文字にそろえています。
+- `equalsCaseFoldSimpleBytes?` は common Latin text の caseless compare には使えますが、locale-sensitive な比較や full-Unicode caseless match まではまだカバーしません。
 
 ### 再公開される構築子
 
@@ -356,6 +392,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property test と comprehensive test で combining mark、CRLF、Hangul sequence、regional indicator、replacement-aware malformed input の grapheme clustering も検証します。
 - Property test と comprehensive test で UTF-16 surrogate pair encoding、strict/replacement UTF-16 decode、UTF-8/UTF-16 transcoding も検証します。
 - Property test と comprehensive test で、サポート対象の Latin precomposed 文字の canonical decomposition/composition、canonical ordering、Hangul normalization、canonical equivalence も検証します。
+- Property test と comprehensive test で、サポート対象の simple lower/upper mapping、case-fold の idempotence、byte/scalar API 一致、precomposed/decomposed 間の caseless compare も検証します。
 - Property test と comprehensive test で scalar 境界列挙、scalar 単位の slice、scalar subsequence の byte-offset 検索も検証します。
 
 ## 使用例
@@ -426,6 +463,13 @@ def normalizationDemo : IO Unit := do
   IO.println s!"nfd(composed): {Radix.UTF8.normalizeBytesNFD? composed |>.map ByteArray.toList}"
   IO.println s!"nfc(decomposed): {Radix.UTF8.normalizeBytesNFC? decomposed |>.map ByteArray.toList}"
   IO.println s!"canonically equivalent: {Radix.UTF8.canonicallyEquivalentBytes? composed decomposed}"
+
+def caseMappingDemo : IO Unit := do
+  let upper := ByteArray.mk #[0xC3, 0x81, 0xC3, 0x87]
+  let lowerDecomposed := ByteArray.mk #[0x61, 0xCC, 0x81, 0x63, 0xCC, 0xA7]
+  IO.println s!"lowercase(simple): {Radix.UTF8.lowercaseBytesSimple? upper |>.map ByteArray.toList}"
+  IO.println s!"casefold(simple): {Radix.UTF8.caseFoldBytesSimple? upper |>.map ByteArray.toList}"
+  IO.println s!"caseless equal: {Radix.UTF8.equalsCaseFoldSimpleBytes? upper lowerDecomposed}"
 ```
 
 ## 関連ドキュメント

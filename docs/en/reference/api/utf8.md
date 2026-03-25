@@ -257,6 +257,34 @@ def isNormalizedBytesNFC? (bytes : ByteArray) : Option Bool
 def canonicallyEquivalentBytes? (left right : ByteArray) : Bool
 ```
 
+### Case Mapping API
+
+```lean
+def simpleLowerNat? (n : Nat) : Option Nat
+def simpleUpperNat? (n : Nat) : Option Nat
+
+def Scalar.isUppercase (s : Scalar) : Bool
+def Scalar.isLowercase (s : Scalar) : Bool
+def Scalar.toLowerAscii? (s : Scalar) : Option Scalar
+def Scalar.toUpperAscii? (s : Scalar) : Option Scalar
+def Scalar.toLowerSimple (s : Scalar) : Scalar
+def Scalar.toUpperSimple (s : Scalar) : Scalar
+def Scalar.caseFoldSimple (s : Scalar) : Scalar
+
+def lowercaseScalarsSimple (scalars : List Scalar) : List Scalar
+def uppercaseScalarsSimple (scalars : List Scalar) : List Scalar
+def caseFoldScalarsSimple (scalars : List Scalar) : List Scalar
+def caselessEquivalentSimple (left right : List Scalar) : Bool
+
+def lowercaseBytesSimple? (bytes : ByteArray) : Option ByteArray
+def uppercaseBytesSimple? (bytes : ByteArray) : Option ByteArray
+def caseFoldBytesSimple? (bytes : ByteArray) : Option ByteArray
+def lowercaseListSimple? (bytes : List UInt8) : Option (List UInt8)
+def uppercaseListSimple? (bytes : List UInt8) : Option (List UInt8)
+def caseFoldListSimple? (bytes : List UInt8) : Option (List UInt8)
+def equalsCaseFoldSimpleBytes? (left right : ByteArray) : Bool
+```
+
 ### Text Operations API
 
 ```lean
@@ -301,6 +329,8 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - `normalizeScalarsNFC` adds canonical composition on top of NFD, including algorithmic Hangul composition and a supported Latin precomposed subset.
 - `normalizeScalars?` and `normalizeBytes?` currently support `nfd` and `nfc`; `nfkd` and `nfkc` report `none` until compatibility mappings are added.
 - `canonicallyEquivalent` and `canonicallyEquivalentBytes?` compare inputs through canonical decomposition, so precomposed and decomposed forms match.
+- `toLowerSimple`, `toUpperSimple`, and `caseFoldSimple` cover ASCII plus the same supported Latin precomposed subset used by the current normalization tables.
+- `caseFoldScalarsSimple` and `caseFoldBytesSimple?` lower the supported subset and then canonicalize through NFD, so decomposed and precomposed forms compare consistently.
 - `scalarBoundaryOffsets?` and `graphemeBoundaryOffsets?` expose byte-accurate cut points and always include both `0` and the total byte length.
 - `sliceBytes?` rejects offsets that are not aligned to UTF-8 scalar boundaries.
 - `sliceScalars?` and `sliceGraphemes?` turn scalar or grapheme index ranges back into well-formed UTF-8 slices.
@@ -325,6 +355,12 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - Canonical normalization currently covers algorithmic Hangul decomposition/composition plus a supported set of Latin precomposed characters and combining marks.
 - Canonical ordering is stable within each starter segment, so combining-mark order is normalized without crossing starter boundaries.
 - Compatibility normalization (`nfkd`/`nfkc`) is intentionally not implemented yet because it requires a much larger compatibility-mapping table.
+
+### Case Mapping Notes
+
+- Case mapping is currently a supported simple subset, not the full Unicode SpecialCasing or CaseFolding tables.
+- The implemented subset covers ASCII plus the same Latin precomposed characters already handled by canonical normalization.
+- `equalsCaseFoldSimpleBytes?` is therefore suitable for common Latin caseless comparison, but not for locale-sensitive or full-Unicode caseless matching.
 
 ### Exported Constructors
 
@@ -356,6 +392,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property and comprehensive tests cover grapheme clustering for combining marks, CRLF, Hangul sequences, regional indicators, and replacement-aware malformed input.
 - Property and comprehensive tests cover UTF-16 surrogate-pair encoding, strict/replacement UTF-16 decoding, and UTF-8/UTF-16 transcoding.
 - Property and comprehensive tests cover canonical decomposition/composition for supported Latin precomposed characters, canonical ordering, Hangul normalization, and canonical-equivalence checks.
+- Property and comprehensive tests cover supported simple lower/upper mappings, case-fold idempotence, byte/scalar API agreement, and caseless comparison across precomposed/decomposed forms.
 - Property and comprehensive tests cover scalar boundary discovery, scalar-aligned slicing, and byte-offset search for scalar subsequences.
 
 ## Examples
@@ -426,6 +463,13 @@ def normalizationDemo : IO Unit := do
   IO.println s!"nfd(composed): {Radix.UTF8.normalizeBytesNFD? composed |>.map ByteArray.toList}"
   IO.println s!"nfc(decomposed): {Radix.UTF8.normalizeBytesNFC? decomposed |>.map ByteArray.toList}"
   IO.println s!"canonically equivalent: {Radix.UTF8.canonicallyEquivalentBytes? composed decomposed}"
+
+def caseMappingDemo : IO Unit := do
+  let upper := ByteArray.mk #[0xC3, 0x81, 0xC3, 0x87]
+  let lowerDecomposed := ByteArray.mk #[0x61, 0xCC, 0x81, 0x63, 0xCC, 0xA7]
+  IO.println s!"lowercase(simple): {Radix.UTF8.lowercaseBytesSimple? upper |>.map ByteArray.toList}"
+  IO.println s!"casefold(simple): {Radix.UTF8.caseFoldBytesSimple? upper |>.map ByteArray.toList}"
+  IO.println s!"caseless equal: {Radix.UTF8.equalsCaseFoldSimpleBytes? upper lowerDecomposed}"
 ```
 
 ## Related Documents
