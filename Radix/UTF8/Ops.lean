@@ -124,6 +124,167 @@ def scalarCountList? (bytes : List UInt8) : Option Nat :=
   (decodeList? bytes).map List.length
 
 -- ════════════════════════════════════════════════════════════════════
+-- Streaming Decoding
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Error recovery policy for streaming UTF-8 decoding. -/
+inductive ReplacementMode where
+  | perByte
+  | maximalSubpart
+  deriving DecidableEq, Repr
+
+/-- Incremental UTF-8 decoder state.
+
+The decoder stores a pending suffix that is a valid prefix of a UTF-8 scalar but
+still needs more input before it can be decided. -/
+structure StreamDecoder where
+  pending : List UInt8 := []
+  deriving DecidableEq, Repr
+
+/-- Result of decoding a UTF-8 chunk incrementally. -/
+structure StreamChunk where
+  scalars : List Scalar
+  decoder : StreamDecoder
+  deriving DecidableEq, Repr
+
+/-- Detailed failure from strict streaming decoding.
+
+`offset` is measured in bytes from the start of the buffered view processed by
+that call, including any pending prefix carried from earlier chunks. -/
+structure StreamError where
+  scalars : List Scalar
+  error : Spec.DecodeError
+  offset : Nat
+  deriving DecidableEq, Repr
+
+/-- Empty streaming decoder state. -/
+def StreamDecoder.init : StreamDecoder :=
+  {}
+
+/-- Number of bytes currently buffered as an incomplete suffix. -/
+def StreamDecoder.pendingByteCount (decoder : StreamDecoder) : Nat :=
+  decoder.pending.length
+
+/-- Whether the decoder is waiting for more bytes to complete a scalar. -/
+def StreamDecoder.hasPending (decoder : StreamDecoder) : Bool :=
+  !decoder.pending.isEmpty
+
+/-- Buffered incomplete suffix as a `ByteArray`. -/
+def StreamDecoder.pendingBytes (decoder : StreamDecoder) : ByteArray :=
+  listToByteArray decoder.pending
+
+/-- Consume as many strict UTF-8 scalars as possible from the buffered view.
+
+Malformed subsequences produce an error immediately. Truncated suffixes are left
+pending so that later chunks may complete them. -/
+private def consumeStrict : Nat → Nat → List UInt8 → List Scalar → Except StreamError (List Scalar × List UInt8)
+  | 0, _, bytes, acc => Except.ok (acc.reverse, bytes)
+  | _ + 1, _, [], acc => Except.ok (acc.reverse, [])
+  | fuel + 1, offset, bytes, acc =>
+    match Spec.decodeNextStep? bytes with
+    | none => Except.ok (acc.reverse, [])
+    | some (.scalar scalar consumed) =>
+      consumeStrict fuel (offset + consumed) (bytes.drop consumed) (scalar :: acc)
+    | some (.error err) =>
+      if err.kind == .truncatedSequence then
+        Except.ok (acc.reverse, bytes)
+      else
+        Except.error
+          { scalars := acc.reverse
+          , error := err
+          , offset := offset
+          }
+
+/-- Consume as many scalars or replacement markers as possible from the buffered
+view, leaving only an incomplete suffix pending. -/
+private def consumeReplacing : Nat → ReplacementMode → List UInt8 → List Scalar → (List Scalar × List UInt8)
+  | 0, _, bytes, acc => (acc.reverse, bytes)
+  | _ + 1, _, [], acc => (acc.reverse, [])
+  | fuel + 1, mode, bytes, acc =>
+    match Spec.decodeNextStep? bytes with
+    | none => (acc.reverse, [])
+    | some (.scalar scalar consumed) =>
+      consumeReplacing fuel mode (bytes.drop consumed) (scalar :: acc)
+    | some (.error err) =>
+      if err.kind == .truncatedSequence then
+        (acc.reverse, bytes)
+      else
+        let consumed :=
+          match mode with
+          | .perByte => 1
+          | .maximalSubpart => err.consumed
+        consumeReplacing fuel mode (bytes.drop consumed) (Spec.Scalar.replacement :: acc)
+
+/-- Decode one chunk strictly, preserving an incomplete suffix across chunk boundaries. -/
+def StreamDecoder.feed? (decoder : StreamDecoder) (chunk : ByteArray) : Except StreamError StreamChunk :=
+  let bytes := decoder.pending ++ byteArrayToList chunk
+  match consumeStrict (bytes.length + 1) 0 bytes [] with
+  | Except.ok (scalars, pending) =>
+    Except.ok
+      { scalars := scalars
+      , decoder := { pending := pending }
+      }
+  | Except.error err => Except.error err
+
+/-- Decode one chunk with replacement recovery, preserving an incomplete suffix
+across chunk boundaries. -/
+def StreamDecoder.feedReplacing (decoder : StreamDecoder) (mode : ReplacementMode)
+    (chunk : ByteArray) : StreamChunk :=
+  let bytes := decoder.pending ++ byteArrayToList chunk
+  let (scalars, pending) := consumeReplacing (bytes.length + 1) mode bytes []
+  { scalars := scalars
+  , decoder := { pending := pending }
+  }
+
+/-- Finish a strict incremental decode.
+
+Any buffered incomplete suffix becomes a truncated-sequence error. -/
+def StreamDecoder.finish? (decoder : StreamDecoder) : Except StreamError (List Scalar) :=
+  let bytes := decoder.pending
+  match consumeStrict (bytes.length + 1) 0 bytes [] with
+  | Except.error err => Except.error err
+  | Except.ok (scalars, []) => Except.ok scalars
+  | Except.ok (scalars, pending) =>
+    match Spec.firstDecodeError? pending with
+    | some err =>
+      Except.error
+        { scalars := scalars
+        , error := err
+        , offset := bytes.length - pending.length
+        }
+    | none => Except.ok scalars
+
+/-- Finish an incremental decode with replacement recovery. -/
+def StreamDecoder.finishReplacing (decoder : StreamDecoder) (mode : ReplacementMode) : List Scalar :=
+  match mode with
+  | .perByte => Spec.decodeAllReplacing decoder.pending
+  | .maximalSubpart => Spec.decodeAllReplacingMaximalSubparts decoder.pending
+
+/-- Decode a sequence of chunks strictly. -/
+def decodeChunks? (chunks : List ByteArray) : Except StreamError (List Scalar) :=
+  go StreamDecoder.init [] chunks
+where
+  go (decoder : StreamDecoder) (acc : List Scalar) : List ByteArray → Except StreamError (List Scalar)
+    | [] =>
+      match decoder.finish? with
+      | Except.ok tail => Except.ok (acc.reverse ++ tail)
+      | Except.error err => Except.error { err with scalars := acc.reverse ++ err.scalars }
+    | chunk :: rest =>
+      match decoder.feed? chunk with
+      | Except.ok result => go result.decoder (result.scalars.reverse ++ acc) rest
+      | Except.error err => Except.error { err with scalars := acc.reverse ++ err.scalars }
+
+/-- Decode a sequence of chunks with replacement recovery. -/
+def decodeChunksReplacing (mode : ReplacementMode) (chunks : List ByteArray) : List Scalar :=
+  go StreamDecoder.init [] chunks
+where
+  go (decoder : StreamDecoder) (acc : List Scalar) : List ByteArray → List Scalar
+    | [] => acc.reverse ++ decoder.finishReplacing mode
+    | chunk :: rest =>
+      let result := decoder.feedReplacing mode chunk
+      go result.decoder (result.scalars.reverse ++ acc) rest
+
+-- ════════════════════════════════════════════════════════════════════
 -- Byte Classification
 -- ════════════════════════════════════════════════════════════════════
 

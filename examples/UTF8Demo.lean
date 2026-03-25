@@ -30,4 +30,18 @@ def main : IO Unit := do
   IO.println s!"  Legacy replacement: {Radix.UTF8.decodeBytesReplacing malformed |>.map (·.val)}"
   IO.println s!"  Strict replacement: {Radix.UTF8.decodeBytesReplacingMaximalSubparts malformed |>.map (·.val)}"
 
+  let chunk1 := ByteArray.mk #[0xF0, 0x9F]
+  let chunk2 := ByteArray.mk #[0x99, 0x82, 0x21]
+  match Radix.UTF8.StreamDecoder.feed? Radix.UTF8.StreamDecoder.init chunk1 with
+  | Except.ok step1 =>
+    IO.println s!"  Streaming pending bytes after chunk1: {step1.decoder.pendingByteCount}"
+    match Radix.UTF8.StreamDecoder.feed? step1.decoder chunk2 with
+    | Except.ok step2 =>
+      IO.println s!"  Streaming decoded scalars: {step2.scalars.map (·.val)}"
+      IO.println s!"  Streaming finish: {reprStr (Radix.UTF8.StreamDecoder.finish? step2.decoder)}"
+    | Except.error err =>
+      throw (IO.userError s!"streaming decode failed on chunk2: {reprStr err}")
+  | Except.error err =>
+    throw (IO.userError s!"streaming decode failed on chunk1: {reprStr err}")
+
 end Examples.UTF8Demo
