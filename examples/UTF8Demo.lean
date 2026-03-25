@@ -56,6 +56,9 @@ def main : IO Unit := do
     throw (IO.userError "cursor failed on valid UTF-8 input")
 
   let acute ← scalar 0x0301
+  let woman ← scalar 0x1F469
+  let man ← scalar 0x1F468
+  let zwj ← scalar 0x200D
   let graphemeInput := Radix.UTF8.encodeScalars [ascii, acute, smile]
   match Radix.UTF8.decodeGraphemes? graphemeInput with
   | some graphemes =>
@@ -63,6 +66,13 @@ def main : IO Unit := do
     IO.println s!"  Grapheme count: {graphemes.length}"
   | none =>
     throw (IO.userError "grapheme decode failed on valid UTF-8 input")
+
+  let emojiFamilyInput := Radix.UTF8.encodeScalars [man, zwj, woman]
+  match Radix.UTF8.decodeGraphemes? emojiFamilyInput with
+  | some graphemes =>
+    IO.println s!"  Emoji grapheme clusters: {graphemes.map (fun grapheme => grapheme.scalars.map (·.val))}"
+  | none =>
+    throw (IO.userError "emoji grapheme decode failed on valid UTF-8 input")
 
   let textOpsInput := Radix.UTF8.encodeScalars [ascii, acute, smile, euro]
   IO.println s!"  Scalar boundaries: {Radix.UTF8.scalarBoundaryOffsets? textOpsInput}"

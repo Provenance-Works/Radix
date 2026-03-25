@@ -346,9 +346,10 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 
 ### Grapheme Notes
 
-- grapheme segmentation は intentionally simplified です。`UTF8.Spec` の `classifyGraphemeBreak` と `isGraphemeBreak` を使い、実行層で regional-indicator pairing を追加しています。
+- grapheme segmentation は intentionally simplified です。`UTF8.Spec` の `classifyGraphemeBreak` と `isGraphemeBreak` を使い、実行層で regional-indicator pairing と emoji ZWJ bridging を追加しています。
 - precomposed Hangul LV/LVT syllable も明示的に分類するので、Jamo 列と precomposed Hangul の両方をサポート範囲内で正しく cluster 化します。
-- emoji ZWJ sequence や full Unicode property table まで含む完全な UAX #29 実装ではまだありません。
+- common emoji modifier sequence、variation selector による emoji presentation、`Extended_Pictographic Extend* ZWJ Extended_Pictographic` chain は単一 grapheme cluster として保持されます。
+- ただし、full Unicode grapheme-break property table まで含む完全な UAX #29 実装ではまだありません。
 
 ### Normalization Notes
 
@@ -389,7 +390,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - U+0000 から U+10FFFF までの全 Unicode scalar 値（サロゲート除く）を exhaustive に round-trip 検証します。
 - Property test と comprehensive test で chunked strict decode、chunked replacement decode、end-of-stream truncation を検証します。
 - Property test と comprehensive test で cursor traversal、正しい境界シーク、cursor replacement semantics も検証します。
-- Property test と comprehensive test で combining mark、CRLF、Hangul sequence、regional indicator、replacement-aware malformed input の grapheme clustering も検証します。
+- Property test と comprehensive test で combining mark、CRLF、Hangul sequence、regional indicator、emoji modifier sequence、emoji ZWJ sequence、replacement-aware malformed input の grapheme clustering も検証します。
 - Property test と comprehensive test で UTF-16 surrogate pair encoding、strict/replacement UTF-16 decode、UTF-8/UTF-16 transcoding も検証します。
 - Property test と comprehensive test で、サポート対象の Latin precomposed 文字の canonical decomposition/composition、canonical ordering、Hangul normalization、canonical equivalence も検証します。
 - Property test と comprehensive test で、サポート対象の simple lower/upper mapping、case-fold の idempotence、byte/scalar API 一致、precomposed/decomposed 間の caseless compare も検証します。

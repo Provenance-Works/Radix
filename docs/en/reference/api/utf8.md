@@ -346,9 +346,10 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 
 ### Grapheme Notes
 
-- Grapheme segmentation is intentionally simplified: it uses `classifyGraphemeBreak` and `isGraphemeBreak` from `UTF8.Spec`, plus regional-indicator pairing in the executable traversal layer.
+- Grapheme segmentation is intentionally simplified: it uses `classifyGraphemeBreak` and `isGraphemeBreak` from `UTF8.Spec`, plus regional-indicator pairing and emoji-ZWJ bridging in the executable traversal layer.
 - Precomposed Hangul LV/LVT syllables are classified explicitly, so both Jamo sequences and precomposed Hangul cluster as expected under the supported rules.
-- This is not yet a complete UAX #29 implementation for emoji ZWJ or full Unicode property tables.
+- Common emoji modifier sequences, variation-selector emoji presentation, and `Extended_Pictographic Extend* ZWJ Extended_Pictographic` chains are preserved as single grapheme clusters.
+- This is still not a complete UAX #29 implementation for the full Unicode grapheme-break property tables.
 
 ### Normalization Notes
 
@@ -389,7 +390,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Comprehensive tests exhaustively round-trip every Unicode scalar value from U+0000 through U+10FFFF excluding surrogates.
 - Property and comprehensive tests cover chunked strict decode, chunked replacement decode, and end-of-stream truncation semantics.
 - Property and comprehensive tests cover cursor traversal, valid boundary seeking, and cursor replacement semantics.
-- Property and comprehensive tests cover grapheme clustering for combining marks, CRLF, Hangul sequences, regional indicators, and replacement-aware malformed input.
+- Property and comprehensive tests cover grapheme clustering for combining marks, CRLF, Hangul sequences, regional indicators, emoji modifier sequences, emoji ZWJ sequences, and replacement-aware malformed input.
 - Property and comprehensive tests cover UTF-16 surrogate-pair encoding, strict/replacement UTF-16 decoding, and UTF-8/UTF-16 transcoding.
 - Property and comprehensive tests cover canonical decomposition/composition for supported Latin precomposed characters, canonical ordering, Hangul normalization, and canonical-equivalence checks.
 - Property and comprehensive tests cover supported simple lower/upper mappings, case-fold idempotence, byte/scalar API agreement, and caseless comparison across precomposed/decomposed forms.
@@ -440,6 +441,14 @@ def graphemeDemo : IO Unit := do
     IO.println s!"graphemes: {graphemes.map (fun grapheme => grapheme.scalars.map (·.val))}"
   | none =>
     IO.println "grapheme decode error"
+
+def emojiGraphemeDemo : IO Unit := do
+  let bytes := ByteArray.mk #[0xF0, 0x9F, 0x91, 0xA8, 0xE2, 0x80, 0x8D, 0xF0, 0x9F, 0x91, 0xA9]
+  match Radix.UTF8.decodeGraphemes? bytes with
+  | some graphemes =>
+    IO.println s!"emoji graphemes: {graphemes.map (fun grapheme => grapheme.scalars.map (·.val))}"
+  | none =>
+    IO.println "emoji grapheme decode error"
 
 def utf16Demo : IO Unit := do
   let units := Radix.UTF8.encodeScalarsToUTF16 [⟨0x41, by decide⟩, ⟨0x1F642, by decide⟩]
