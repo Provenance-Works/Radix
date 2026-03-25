@@ -115,6 +115,33 @@ def decodeChunksReplacing (mode : ReplacementMode) (chunks : List ByteArray)
   : List Scalar
 ```
 
+### Cursor API
+
+```lean
+structure Cursor where
+  bytes : ByteArray
+  offset : Nat
+
+def Cursor.init (bytes : ByteArray) : Cursor
+def Cursor.atOffset? (bytes : ByteArray) (offset : Nat) : Option Cursor
+def Cursor.byteOffset (cursor : Cursor) : Nat
+def Cursor.remainingByteCount (cursor : Cursor) : Nat
+def Cursor.isAtEnd (cursor : Cursor) : Bool
+def Cursor.currentStep? (cursor : Cursor) : Option DecodeStep
+def Cursor.current? (cursor : Cursor) : Option Scalar
+def Cursor.currentError? (cursor : Cursor) : Option DecodeError
+def Cursor.advance? (cursor : Cursor) : Option (Scalar × Cursor)
+def Cursor.advanceReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : Option (Scalar × Cursor)
+def Cursor.decodeRemaining? (cursor : Cursor) : Option (List Scalar)
+def Cursor.decodeRemainingReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : List Scalar
+
+def decodeWithCursor? (bytes : ByteArray) : Option (List Scalar)
+def decodeWithCursorReplacing (mode : ReplacementMode) (bytes : ByteArray)
+  : List Scalar
+```
+
 ### Replacement Mode
 
 - `decodeBytesReplacing` は既存の「不正バイト 1 個につき U+FFFD 1 個」の互換挙動を維持します。
@@ -122,6 +149,9 @@ def decodeChunksReplacing (mode : ReplacementMode) (chunks : List ByteArray)
 - `StreamDecoder.feed?` は incomplete な UTF-8 prefix を chunk 境界で保留し、不正列として早まって確定しません。
 - `StreamDecoder.finish?` は残った pending prefix を end-of-stream の truncated-sequence error として確定します。
 - `StreamDecoder.feedReplacing` と `decodeChunksReplacing` は chunked byte stream に同じ recovery policy を適用します。
+- `Cursor.atOffset?` は scalar 境界のみを受理し、continuation byte の途中オフセットを拒否します。
+- `Cursor.advance?` は正しい UTF-8 バッファをバイトオフセット付きで 1 scalar ずつ前進させます。
+- `Cursor.advanceReplacing` は不正なバッファでも置換モード付きで同じ走査を提供します。
 
 ### 再公開される構築子
 
@@ -149,6 +179,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Unicode 17 Chapter 3 Table 3-8 から 3-11 を official maximal-subpart replacement vector として実装しています。
 - U+0000 から U+10FFFF までの全 Unicode scalar 値（サロゲート除く）を exhaustive に round-trip 検証します。
 - Property test と comprehensive test で chunked strict decode、chunked replacement decode、end-of-stream truncation を検証します。
+- Property test と comprehensive test で cursor traversal、正しい境界シーク、cursor replacement semantics も検証します。
 
 ## 使用例
 
@@ -178,6 +209,15 @@ def streamingDemo : IO Unit := do
       IO.println s!"streaming error: {reprStr err}"
   | Except.error err =>
     IO.println s!"streaming error: {reprStr err}"
+
+def cursorDemo : IO Unit := do
+  let bytes := ByteArray.mk #[0x41, 0xE2, 0x82, 0xAC]
+  let cursor := Radix.UTF8.Cursor.init bytes
+  match Radix.UTF8.Cursor.advance? cursor with
+  | some (scalar, nextCursor) =>
+    IO.println s!"first scalar: {scalar.val}, next offset: {nextCursor.byteOffset}"
+  | none =>
+    IO.println "cursor error"
 ```
 
 ## 関連ドキュメント

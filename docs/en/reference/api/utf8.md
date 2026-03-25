@@ -115,6 +115,33 @@ def decodeChunksReplacing (mode : ReplacementMode) (chunks : List ByteArray)
   : List Scalar
 ```
 
+### Cursor API
+
+```lean
+structure Cursor where
+  bytes : ByteArray
+  offset : Nat
+
+def Cursor.init (bytes : ByteArray) : Cursor
+def Cursor.atOffset? (bytes : ByteArray) (offset : Nat) : Option Cursor
+def Cursor.byteOffset (cursor : Cursor) : Nat
+def Cursor.remainingByteCount (cursor : Cursor) : Nat
+def Cursor.isAtEnd (cursor : Cursor) : Bool
+def Cursor.currentStep? (cursor : Cursor) : Option DecodeStep
+def Cursor.current? (cursor : Cursor) : Option Scalar
+def Cursor.currentError? (cursor : Cursor) : Option DecodeError
+def Cursor.advance? (cursor : Cursor) : Option (Scalar × Cursor)
+def Cursor.advanceReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : Option (Scalar × Cursor)
+def Cursor.decodeRemaining? (cursor : Cursor) : Option (List Scalar)
+def Cursor.decodeRemainingReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : List Scalar
+
+def decodeWithCursor? (bytes : ByteArray) : Option (List Scalar)
+def decodeWithCursorReplacing (mode : ReplacementMode) (bytes : ByteArray)
+  : List Scalar
+```
+
 ### Replacement Modes
 
 - `decodeBytesReplacing` preserves the legacy one-replacement-per-invalid-byte behavior.
@@ -122,6 +149,9 @@ def decodeChunksReplacing (mode : ReplacementMode) (chunks : List ByteArray)
 - `StreamDecoder.feed?` carries incomplete UTF-8 prefixes across chunk boundaries instead of misclassifying them as malformed.
 - `StreamDecoder.finish?` turns any remaining pending prefix into a truncated-sequence error.
 - `StreamDecoder.feedReplacing` and `decodeChunksReplacing` provide the same recovery policies for chunked byte streams.
+- `Cursor.atOffset?` accepts only scalar boundaries, rejecting offsets in the middle of continuation-byte sequences.
+- `Cursor.advance?` gives byte-accurate scalar stepping over well-formed buffers.
+- `Cursor.advanceReplacing` provides replacement-aware cursor traversal for malformed buffers.
 
 ### Exported Constructors
 
@@ -149,6 +179,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Unicode 17 Chapter 3 Tables 3-8 through 3-11 are encoded as official maximal-subpart replacement vectors.
 - Comprehensive tests exhaustively round-trip every Unicode scalar value from U+0000 through U+10FFFF excluding surrogates.
 - Property and comprehensive tests cover chunked strict decode, chunked replacement decode, and end-of-stream truncation semantics.
+- Property and comprehensive tests cover cursor traversal, valid boundary seeking, and cursor replacement semantics.
 
 ## Examples
 
@@ -178,6 +209,15 @@ def streamingDemo : IO Unit := do
       IO.println s!"streaming error: {reprStr err}"
   | Except.error err =>
     IO.println s!"streaming error: {reprStr err}"
+
+def cursorDemo : IO Unit := do
+  let bytes := ByteArray.mk #[0x41, 0xE2, 0x82, 0xAC]
+  let cursor := Radix.UTF8.Cursor.init bytes
+  match Radix.UTF8.Cursor.advance? cursor with
+  | some (scalar, nextCursor) =>
+    IO.println s!"first scalar: {scalar.val}, next offset: {nextCursor.byteOffset}"
+  | none =>
+    IO.println "cursor error"
 ```
 
 ## Related Documents

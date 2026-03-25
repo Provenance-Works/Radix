@@ -44,4 +44,15 @@ def main : IO Unit := do
   | Except.error err =>
     throw (IO.userError s!"streaming decode failed on chunk1: {reprStr err}")
 
+  let cursorInput := Radix.UTF8.encodeScalars [ascii, euro, smile]
+  let cursor := Radix.UTF8.Cursor.init cursorInput
+  IO.println s!"  Cursor start offset: {cursor.byteOffset}"
+  match Radix.UTF8.Cursor.advance? cursor with
+  | some (firstScalar, cursor1) =>
+    IO.println s!"  Cursor first scalar: {firstScalar.val}"
+    IO.println s!"  Cursor next offset: {cursor1.byteOffset}"
+    IO.println s!"  Cursor remaining strict decode: {reprStr (cursor1.decodeRemaining?)}"
+  | none =>
+    throw (IO.userError "cursor failed on valid UTF-8 input")
+
 end Examples.UTF8Demo
