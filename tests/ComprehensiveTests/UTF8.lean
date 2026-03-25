@@ -392,4 +392,104 @@ def runUTF8Tests : IO Nat := do
   assert (threeByteCount == 61440) "three-byte scalar count matches Unicode scalar space"
   assert (fourByteCount == 1048576) "four-byte scalar count matches Unicode scalar space"
 
+  -- Streaming strict decode across chunk boundaries.
+  let strictChunk1 := UTF8Test.byteArray [0xF0, 0x9F]
+  let strictChunk2 := UTF8Test.byteArray [0x99, 0x82, 0x41]
+  match Radix.UTF8.StreamDecoder.feed? Radix.UTF8.StreamDecoder.init strictChunk1 with
+  | Except.ok chunk1 =>
+    assert (chunk1.scalars == []) "streaming strict first chunk defers incomplete scalar"
+    assert (chunk1.decoder.pendingByteCount == 2) "streaming strict first chunk stores pending bytes"
+    match Radix.UTF8.StreamDecoder.feed? chunk1.decoder strictChunk2 with
+    | Except.ok chunk2 =>
+      assert (UTF8Test.scalarValues chunk2.scalars == [0x1F642, 0x41])
+        "streaming strict second chunk decodes pending scalar and ASCII tail"
+      assert (!chunk2.decoder.hasPending) "streaming strict leaves no pending bytes after completion"
+      assert (Radix.UTF8.StreamDecoder.finish? chunk2.decoder == Except.ok [])
+        "streaming strict finish on empty pending succeeds"
+    | Except.error err =>
+      assert false s!"streaming strict second chunk unexpectedly failed: {reprStr err}"
+  | Except.error err =>
+    assert false s!"streaming strict first chunk unexpectedly failed: {reprStr err}"
+
+  match Radix.UTF8.decodeChunks? [strictChunk1, strictChunk2] with
+  | Except.ok scalars =>
+    assert (UTF8Test.scalarValues scalars == [0x1F642, 0x41])
+      "decodeChunks? matches strict streaming result"
+  | Except.error err =>
+    assert false s!"decodeChunks? unexpectedly failed: {reprStr err}"
+
+  -- Streaming strict decode reports malformed continuation after a pending prefix.
+  let invalidChunk1 := UTF8Test.byteArray [0xC2]
+  let invalidChunk2 := UTF8Test.byteArray [0x41, 0x42]
+  match Radix.UTF8.StreamDecoder.feed? Radix.UTF8.StreamDecoder.init invalidChunk1 with
+  | Except.ok chunk1 =>
+    assert (chunk1.scalars == []) "invalid streaming prefix yields no scalar before continuation arrives"
+    assert (chunk1.decoder.pendingByteCount == 1) "invalid streaming prefix stores one pending byte"
+    match Radix.UTF8.StreamDecoder.feed? chunk1.decoder invalidChunk2 with
+    | Except.ok chunk2 =>
+      assert false s!"invalid continuation unexpectedly decoded: {reprStr chunk2}"
+    | Except.error err =>
+      assert (err.scalars == []) "invalid continuation emits no scalar before error"
+      assert (err.offset == 0) "invalid continuation is reported at buffered offset zero"
+      assert (err.error.kind == Radix.UTF8.Spec.DecodeErrorKind.invalidContinuationByte)
+        "invalid continuation reports detailed error kind"
+  | Except.error err =>
+    assert false s!"invalid streaming prefix unexpectedly failed early: {reprStr err}"
+
+  let truncatedStrictChunk := UTF8Test.byteArray [0xE1, 0x80]
+  match Radix.UTF8.StreamDecoder.feed? Radix.UTF8.StreamDecoder.init truncatedStrictChunk with
+  | Except.ok chunk =>
+    assert (chunk.decoder.pendingByteCount == 2) "strict truncated chunk remains pending before finish"
+    match Radix.UTF8.StreamDecoder.finish? chunk.decoder with
+    | Except.ok scalars =>
+      assert false s!"strict finish unexpectedly accepted truncated input: {UTF8Test.scalarValues scalars}"
+    | Except.error err =>
+      assert (err.scalars == []) "strict finish truncated error emits no scalar"
+      assert (err.offset == 0) "strict finish truncated error starts at pending offset zero"
+      assert (err.error.kind == Radix.UTF8.Spec.DecodeErrorKind.truncatedSequence)
+        "strict finish reports truncated sequence"
+      assert (err.error.consumed == 2) "strict finish keeps truncated maximal subpart width"
+  | Except.error err =>
+    assert false s!"strict truncated chunk unexpectedly failed before finish: {reprStr err}"
+
+  -- Streaming replacement modes preserve chunk boundaries and finish policy.
+  let replacementChunk1 := UTF8Test.byteArray [0xE1]
+  let replacementChunk2 := UTF8Test.byteArray [0x80, 0x41]
+  let perByte1 := Radix.UTF8.StreamDecoder.feedReplacing Radix.UTF8.StreamDecoder.init .perByte replacementChunk1
+  assert (perByte1.scalars == []) "per-byte replacement defers incomplete prefix"
+  assert (perByte1.decoder.pendingByteCount == 1) "per-byte replacement stores incomplete prefix"
+  let perByte2 := Radix.UTF8.StreamDecoder.feedReplacing perByte1.decoder .perByte replacementChunk2
+  assert (UTF8Test.scalarValues perByte2.scalars == [UTF8Test.replacementValue, UTF8Test.replacementValue, 0x41])
+    "per-byte replacement reports each invalid byte after chunk join"
+  assert (!perByte2.decoder.hasPending) "per-byte replacement clears pending after malformed completion"
+
+  let maximal1 := Radix.UTF8.StreamDecoder.feedReplacing Radix.UTF8.StreamDecoder.init .maximalSubpart replacementChunk1
+  assert (maximal1.scalars == []) "maximal-subpart replacement defers incomplete prefix"
+  assert (maximal1.decoder.pendingByteCount == 1) "maximal-subpart replacement stores incomplete prefix"
+  let maximal2 := Radix.UTF8.StreamDecoder.feedReplacing maximal1.decoder .maximalSubpart replacementChunk2
+  assert (UTF8Test.scalarValues maximal2.scalars == [UTF8Test.replacementValue, 0x41])
+    "maximal-subpart replacement collapses buffered invalid prefix into one marker"
+  assert (!maximal2.decoder.hasPending) "maximal-subpart replacement clears pending after malformed completion"
+
+  let finishPerByte :=
+    Radix.UTF8.StreamDecoder.finishReplacing
+      (Radix.UTF8.StreamDecoder.feedReplacing Radix.UTF8.StreamDecoder.init .perByte truncatedStrictChunk).decoder
+      .perByte
+  assert (UTF8Test.scalarValues finishPerByte == [UTF8Test.replacementValue, UTF8Test.replacementValue])
+    "per-byte finish replaces each pending truncated byte"
+
+  let finishMaximal :=
+    Radix.UTF8.StreamDecoder.finishReplacing
+      (Radix.UTF8.StreamDecoder.feedReplacing Radix.UTF8.StreamDecoder.init .maximalSubpart truncatedStrictChunk).decoder
+      .maximalSubpart
+  assert (UTF8Test.scalarValues finishMaximal == [UTF8Test.replacementValue])
+    "maximal-subpart finish replaces pending truncated prefix once"
+
+  assert (UTF8Test.scalarValues (Radix.UTF8.decodeChunksReplacing .maximalSubpart
+    [UTF8Test.byteArray [0xE2], UTF8Test.byteArray [0x82], UTF8Test.byteArray [0xAC]]) == [0x20AC])
+    "decodeChunksReplacing reconstructs valid scalar across three chunks"
+  assert (UTF8Test.scalarValues (Radix.UTF8.decodeChunksReplacing .maximalSubpart
+    [replacementChunk1, replacementChunk2]) == [UTF8Test.replacementValue, 0x41])
+    "decodeChunksReplacing maximal-subpart matches manual streaming result"
+
   c.get

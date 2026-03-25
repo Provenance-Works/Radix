@@ -117,6 +117,24 @@ private def assertUTF8ReplacementResync (bad : UInt8) : IO Unit := do
   assert (Radix.UTF8.scalarsToNats decoded == [Radix.UTF8.replacement.val, 0x22])
     s!"UTF8 replacement resync after invalid byte: {bad.toNat}"
 
+private def nextUTF8ScalarNat (rng : PRNG) : PRNG × Nat :=
+  let (rng0, bucket) := rng.nextNat 5
+  let (rng1, offset) :=
+    match bucket with
+    | 0 => rng0.nextNat 0x80
+    | 1 => rng0.nextNat (0x800 - 0x80)
+    | 2 => rng0.nextNat (0xD800 - 0x800)
+    | 3 => rng0.nextNat (0x10000 - 0xE000)
+    | _ => rng0.nextNat (0x110000 - 0x10000)
+  let scalarNat :=
+    match bucket with
+    | 0 => offset
+    | 1 => 0x80 + offset
+    | 2 => 0x800 + offset
+    | 3 => 0xE000 + offset
+    | _ => 0x10000 + offset
+  (rng1, scalarNat)
+
 /-! ================================================================ -/
 /-! ## UInt8 Property Tests                                          -/
 /-! ================================================================ -/
@@ -1927,6 +1945,67 @@ private def testUTF8Properties : IO Unit := do
         s!"UTF8 maximal-subpart replacement agrees on well-formed input: {bytes}"
     | none =>
       pure ()
+
+  let mut rngStreamingValid := PRNG.new 602
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngStreamingValid.nextNat 6
+    rngStreamingValid := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarNats : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngStreamingValid
+      rngStreamingValid := nextRng
+      scalarNats := scalarNat :: scalarNats
+    let scalarNatList := scalarNats.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let encoded := Radix.UTF8.encodeAllToList scalars
+      let (rng', splitA) := rngStreamingValid.nextNat (encoded.length + 1)
+      rngStreamingValid := rng'
+      let (rng', splitB) := rngStreamingValid.nextNat (encoded.length + 1)
+      rngStreamingValid := rng'
+      let splitLo := Nat.min splitA splitB
+      let splitHi := Nat.max splitA splitB
+      let chunks :=
+        [ Radix.UTF8.listToByteArray (encoded.take splitLo)
+        , Radix.UTF8.listToByteArray ((encoded.drop splitLo).take (splitHi - splitLo))
+        , Radix.UTF8.listToByteArray (encoded.drop splitHi)
+        ]
+      match Radix.UTF8.decodeChunks? chunks with
+      | Except.ok decoded =>
+        assert (decoded == scalars)
+          s!"UTF8 streaming strict decode matches one-shot valid decode: {scalarNatList}"
+      | Except.error err =>
+        assert false s!"UTF8 streaming strict decode unexpectedly failed on valid data: {reprStr err}"
+    | none =>
+      assert false s!"UTF8 random scalar generation produced invalid scalar list: {scalarNatList}"
+
+  let mut rngStreamingBytes := PRNG.new 603
+  for _ in [:numIter] do
+    let (rng', bytes) := rngStreamingBytes.nextByteList 16
+    rngStreamingBytes := rng'
+    let (rng', splitA) := rngStreamingBytes.nextNat (bytes.length + 1)
+    rngStreamingBytes := rng'
+    let (rng', splitB) := rngStreamingBytes.nextNat (bytes.length + 1)
+    rngStreamingBytes := rng'
+    let splitLo := Nat.min splitA splitB
+    let splitHi := Nat.max splitA splitB
+    let chunks :=
+      [ Radix.UTF8.listToByteArray (bytes.take splitLo)
+      , Radix.UTF8.listToByteArray ((bytes.drop splitLo).take (splitHi - splitLo))
+      , Radix.UTF8.listToByteArray (bytes.drop splitHi)
+      ]
+    assert (Radix.UTF8.decodeChunksReplacing .perByte chunks == Radix.UTF8.decodeListReplacing bytes)
+      s!"UTF8 streaming per-byte replacement matches one-shot decode: {bytes}"
+    assert (Radix.UTF8.decodeChunksReplacing .maximalSubpart chunks ==
+      Radix.UTF8.decodeListReplacingMaximalSubparts bytes)
+      s!"UTF8 streaming maximal-subpart replacement matches one-shot decode: {bytes}"
+    let streamingStrict :=
+      match Radix.UTF8.decodeChunks? chunks with
+      | Except.ok decoded => some decoded
+      | Except.error _ => none
+    assert (streamingStrict == Radix.UTF8.decodeList? bytes)
+      s!"UTF8 streaming strict success/failure matches one-shot decode: {bytes}"
 
 private def testECCProperties : IO Unit := do
   IO.println "  ECC properties..."
