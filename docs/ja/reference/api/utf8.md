@@ -82,10 +82,46 @@ def scalarCount? (bytes : ByteArray) : Option Nat
 def firstDecodeErrorBytes? (bytes : ByteArray) : Option DecodeError
 ```
 
+### Streaming API
+
+```lean
+inductive ReplacementMode
+  | perByte
+  | maximalSubpart
+
+structure StreamDecoder where
+  pending : List UInt8
+
+structure StreamChunk where
+  scalars : List Scalar
+  decoder : StreamDecoder
+
+structure StreamError where
+  scalars : List Scalar
+  error : DecodeError
+  offset : Nat
+
+def StreamDecoder.init : StreamDecoder
+def StreamDecoder.feed? (decoder : StreamDecoder) (chunk : ByteArray)
+  : Except StreamError StreamChunk
+def StreamDecoder.feedReplacing (decoder : StreamDecoder) (mode : ReplacementMode)
+  (chunk : ByteArray) : StreamChunk
+def StreamDecoder.finish? (decoder : StreamDecoder) : Except StreamError (List Scalar)
+def StreamDecoder.finishReplacing (decoder : StreamDecoder) (mode : ReplacementMode)
+  : List Scalar
+
+def decodeChunks? (chunks : List ByteArray) : Except StreamError (List Scalar)
+def decodeChunksReplacing (mode : ReplacementMode) (chunks : List ByteArray)
+  : List Scalar
+```
+
 ### Replacement Mode
 
 - `decodeBytesReplacing` は既存の「不正バイト 1 個につき U+FFFD 1 個」の互換挙動を維持します。
 - `decodeBytesReplacingMaximalSubparts` は Unicode maximal subpart に従って不正 prefix をまとめて置換しつつ、隣接する well-formed subsequence を誤って消費しません。
+- `StreamDecoder.feed?` は incomplete な UTF-8 prefix を chunk 境界で保留し、不正列として早まって確定しません。
+- `StreamDecoder.finish?` は残った pending prefix を end-of-stream の truncated-sequence error として確定します。
+- `StreamDecoder.feedReplacing` と `decodeChunksReplacing` は chunked byte stream に同じ recovery policy を適用します。
 
 ### 再公開される構築子
 
@@ -112,6 +148,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Unicode 17 Chapter 3 Table 3-7 の well-formed boundary 行を execution test で検証します。
 - Unicode 17 Chapter 3 Table 3-8 から 3-11 を official maximal-subpart replacement vector として実装しています。
 - U+0000 から U+10FFFF までの全 Unicode scalar 値（サロゲート除く）を exhaustive に round-trip 検証します。
+- Property test と comprehensive test で chunked strict decode、chunked replacement decode、end-of-stream truncation を検証します。
 
 ## 使用例
 
@@ -128,6 +165,19 @@ def demo : IO Unit := do
   let bytes := Radix.UTF8.encodeScalar scalar
   IO.println s!"encoded: {bytes.toList}"
   IO.println s!"well formed: {Radix.UTF8.isWellFormed bytes}"
+
+def streamingDemo : IO Unit := do
+  let chunk1 := ByteArray.mk #[0xF0, 0x9F]
+  let chunk2 := ByteArray.mk #[0x99, 0x82, 0x21]
+  match Radix.UTF8.StreamDecoder.feed? Radix.UTF8.StreamDecoder.init chunk1 with
+  | Except.ok step1 =>
+    match Radix.UTF8.StreamDecoder.feed? step1.decoder chunk2 with
+    | Except.ok step2 =>
+      IO.println s!"decoded: {step2.scalars.map (·.val)}"
+    | Except.error err =>
+      IO.println s!"streaming error: {reprStr err}"
+  | Except.error err =>
+    IO.println s!"streaming error: {reprStr err}"
 ```
 
 ## 関連ドキュメント

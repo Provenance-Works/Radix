@@ -82,10 +82,46 @@ def scalarCount? (bytes : ByteArray) : Option Nat
 def firstDecodeErrorBytes? (bytes : ByteArray) : Option DecodeError
 ```
 
+### Streaming API
+
+```lean
+inductive ReplacementMode
+  | perByte
+  | maximalSubpart
+
+structure StreamDecoder where
+  pending : List UInt8
+
+structure StreamChunk where
+  scalars : List Scalar
+  decoder : StreamDecoder
+
+structure StreamError where
+  scalars : List Scalar
+  error : DecodeError
+  offset : Nat
+
+def StreamDecoder.init : StreamDecoder
+def StreamDecoder.feed? (decoder : StreamDecoder) (chunk : ByteArray)
+  : Except StreamError StreamChunk
+def StreamDecoder.feedReplacing (decoder : StreamDecoder) (mode : ReplacementMode)
+  (chunk : ByteArray) : StreamChunk
+def StreamDecoder.finish? (decoder : StreamDecoder) : Except StreamError (List Scalar)
+def StreamDecoder.finishReplacing (decoder : StreamDecoder) (mode : ReplacementMode)
+  : List Scalar
+
+def decodeChunks? (chunks : List ByteArray) : Except StreamError (List Scalar)
+def decodeChunksReplacing (mode : ReplacementMode) (chunks : List ByteArray)
+  : List Scalar
+```
+
 ### Replacement Modes
 
 - `decodeBytesReplacing` preserves the legacy one-replacement-per-invalid-byte behavior.
 - `decodeBytesReplacingMaximalSubparts` consumes malformed prefixes according to Unicode maximal subparts, while never consuming adjacent well-formed subsequences.
+- `StreamDecoder.feed?` carries incomplete UTF-8 prefixes across chunk boundaries instead of misclassifying them as malformed.
+- `StreamDecoder.finish?` turns any remaining pending prefix into a truncated-sequence error.
+- `StreamDecoder.feedReplacing` and `decodeChunksReplacing` provide the same recovery policies for chunked byte streams.
 
 ### Exported Constructors
 
@@ -112,6 +148,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Unicode 17 Chapter 3 Table 3-7 well-formed boundary rows are covered in execution tests.
 - Unicode 17 Chapter 3 Tables 3-8 through 3-11 are encoded as official maximal-subpart replacement vectors.
 - Comprehensive tests exhaustively round-trip every Unicode scalar value from U+0000 through U+10FFFF excluding surrogates.
+- Property and comprehensive tests cover chunked strict decode, chunked replacement decode, and end-of-stream truncation semantics.
 
 ## Examples
 
@@ -128,6 +165,19 @@ def demo : IO Unit := do
   let bytes := Radix.UTF8.encodeScalar scalar
   IO.println s!"encoded: {bytes.toList}"
   IO.println s!"well formed: {Radix.UTF8.isWellFormed bytes}"
+
+def streamingDemo : IO Unit := do
+  let chunk1 := ByteArray.mk #[0xF0, 0x9F]
+  let chunk2 := ByteArray.mk #[0x99, 0x82, 0x21]
+  match Radix.UTF8.StreamDecoder.feed? Radix.UTF8.StreamDecoder.init chunk1 with
+  | Except.ok step1 =>
+    match Radix.UTF8.StreamDecoder.feed? step1.decoder chunk2 with
+    | Except.ok step2 =>
+      IO.println s!"decoded: {step2.scalars.map (·.val)}"
+    | Except.error err =>
+      IO.println s!"streaming error: {reprStr err}"
+  | Except.error err =>
+    IO.println s!"streaming error: {reprStr err}"
 ```
 
 ## Related Documents
