@@ -64,4 +64,12 @@ def main : IO Unit := do
   | none =>
     throw (IO.userError "grapheme decode failed on valid UTF-8 input")
 
+  let utf16Units := Radix.UTF8.encodeScalarsToUTF16 [ascii, smile]
+  IO.println s!"  UTF-16 units: {utf16Units.toList.map UInt16.toNat}"
+  match Radix.UTF8.decodeUTF16? utf16Units with
+  | some scalars =>
+    IO.println s!"  UTF-16 decoded scalars: {scalars.map (·.val)}"
+  | none =>
+    throw (IO.userError "UTF-16 decode failed on valid input")
+
 end Examples.UTF8Demo

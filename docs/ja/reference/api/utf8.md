@@ -82,6 +82,50 @@ def scalarCount? (bytes : ByteArray) : Option Nat
 def firstDecodeErrorBytes? (bytes : ByteArray) : Option DecodeError
 ```
 
+### UTF-16 API
+
+```lean
+abbrev UTF16CodeUnit := UInt16
+
+def utf16ArrayToList (units : Array UTF16CodeUnit) : List UTF16CodeUnit
+def listToUTF16Array (units : List UTF16CodeUnit) : Array UTF16CodeUnit
+
+inductive UTF16DecodeErrorKind
+  | unexpectedLowSurrogate
+  | invalidLowSurrogate
+  | truncatedHighSurrogate
+
+structure UTF16DecodeError where
+  kind : UTF16DecodeErrorKind
+  expectedLength : Nat
+  consumed : Nat
+
+inductive UTF16DecodeStep where
+  | scalar (scalar : Scalar) (consumed : Nat)
+  | error (error : UTF16DecodeError)
+
+def encodeScalarToUTF16List (s : Scalar) : List UTF16CodeUnit
+def encodeScalarToUTF16 (s : Scalar) : Array UTF16CodeUnit
+def encodeScalarsToUTF16List (scalars : List Scalar) : List UTF16CodeUnit
+def encodeScalarsToUTF16 (scalars : List Scalar) : Array UTF16CodeUnit
+
+def decodeNextUTF16ListStep? (units : List UTF16CodeUnit) : Option UTF16DecodeStep
+def decodeNextUTF16Step? (units : Array UTF16CodeUnit) : Option UTF16DecodeStep
+def decodeUTF16List? (units : List UTF16CodeUnit) : Option (List Scalar)
+def decodeUTF16? (units : Array UTF16CodeUnit) : Option (List Scalar)
+def decodeUTF16ListReplacing (units : List UTF16CodeUnit) : List Scalar
+def decodeUTF16Replacing (units : Array UTF16CodeUnit) : List Scalar
+def firstUTF16DecodeErrorList? (units : List UTF16CodeUnit) : Option UTF16DecodeError
+def firstUTF16DecodeError? (units : Array UTF16CodeUnit) : Option UTF16DecodeError
+def utf16ScalarCount? (units : Array UTF16CodeUnit) : Option Nat
+
+def transcodeUTF16ToUTF8? (units : Array UTF16CodeUnit) : Option ByteArray
+def transcodeUTF16ToUTF8Replacing (units : Array UTF16CodeUnit) : ByteArray
+def transcodeUTF8ToUTF16? (bytes : ByteArray) : Option (Array UTF16CodeUnit)
+def transcodeUTF8ToUTF16Replacing (mode : ReplacementMode) (bytes : ByteArray)
+  : Array UTF16CodeUnit
+```
+
 ### Streaming API
 
 ```lean
@@ -184,6 +228,13 @@ def graphemeCount? (bytes : ByteArray) : Option Nat
 - `decodeGraphemesReplacing` は不正 prefix を置換した後も同じ cluster segmentation を適用します。
 - regional indicator は grapheme 走査時に 2 個ずつペアリングし、flag 風の cluster を保ちます。
 
+### UTF-16 Notes
+
+- strict UTF-16 decode は BMP scalar をそのまま受理し、supplementary scalar は妥当な surrogate pair から復元します。
+- malformed surrogate usage は `unexpectedLowSurrogate`、`invalidLowSurrogate`、`truncatedHighSurrogate` に分類されます。
+- UTF-16 replacement decode は malformed code unit を 1 個ずつ消費するので、次の妥当な code unit で再同期できます。
+- `transcodeUTF16ToUTF8Replacing` は置換後に UTF-8 へ再エンコードするため、常に well-formed UTF-8 を返します。
+
 ### Grapheme Notes
 
 - grapheme segmentation は intentionally simplified です。`UTF8.Spec` の `classifyGraphemeBreak` と `isGraphemeBreak` を使い、実行層で regional-indicator pairing を追加しています。
@@ -218,6 +269,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property test と comprehensive test で chunked strict decode、chunked replacement decode、end-of-stream truncation を検証します。
 - Property test と comprehensive test で cursor traversal、正しい境界シーク、cursor replacement semantics も検証します。
 - Property test と comprehensive test で combining mark、CRLF、Hangul sequence、regional indicator、replacement-aware malformed input の grapheme clustering も検証します。
+- Property test と comprehensive test で UTF-16 surrogate pair encoding、strict/replacement UTF-16 decode、UTF-8/UTF-16 transcoding も検証します。
 
 ## 使用例
 
@@ -264,6 +316,15 @@ def graphemeDemo : IO Unit := do
     IO.println s!"graphemes: {graphemes.map (fun grapheme => grapheme.scalars.map (·.val))}"
   | none =>
     IO.println "grapheme decode error"
+
+def utf16Demo : IO Unit := do
+  let units := Radix.UTF8.encodeScalarsToUTF16 [⟨0x41, by decide⟩, ⟨0x1F642, by decide⟩]
+  IO.println s!"utf16 units: {units.toList.map UInt16.toNat}"
+  match Radix.UTF8.decodeUTF16? units with
+  | some scalars =>
+    IO.println s!"decoded scalars: {scalars.map (·.val)}"
+  | none =>
+    IO.println "utf16 decode error"
 ```
 
 ## 関連ドキュメント
