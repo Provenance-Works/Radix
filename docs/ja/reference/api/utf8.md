@@ -285,15 +285,20 @@ def Scalar.caseFoldSimple (s : Scalar) : Scalar
 def lowercaseScalarsSimple (scalars : List Scalar) : List Scalar
 def uppercaseScalarsSimple (scalars : List Scalar) : List Scalar
 def caseFoldScalarsSimple (scalars : List Scalar) : List Scalar
+def caseFoldScalarsCompatibility (scalars : List Scalar) : List Scalar
 def caselessEquivalentSimple (left right : List Scalar) : Bool
+def caselessEquivalentCompatibility (left right : List Scalar) : Bool
 
 def lowercaseBytesSimple? (bytes : ByteArray) : Option ByteArray
 def uppercaseBytesSimple? (bytes : ByteArray) : Option ByteArray
 def caseFoldBytesSimple? (bytes : ByteArray) : Option ByteArray
+def caseFoldBytesCompatibility? (bytes : ByteArray) : Option ByteArray
 def lowercaseListSimple? (bytes : List UInt8) : Option (List UInt8)
 def uppercaseListSimple? (bytes : List UInt8) : Option (List UInt8)
 def caseFoldListSimple? (bytes : List UInt8) : Option (List UInt8)
+def caseFoldListCompatibility? (bytes : List UInt8) : Option (List UInt8)
 def equalsCaseFoldSimpleBytes? (left right : ByteArray) : Bool
+def equalsCaseFoldCompatibilityBytes? (left right : ByteArray) : Bool
 ```
 
 ### Text Operations API
@@ -342,6 +347,7 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - `canonicallyEquivalent` と `canonicallyEquivalentBytes?` は canonical decomposition を通して比較するため、precomposed 形と decomposed 形を等価とみなせます。
 - `toLowerSimple`、`toUpperSimple`、`caseFoldSimple` は、ASCII と現在の normalization table が扱う Latin precomposed サブセットを対象にします。
 - `caseFoldScalarsSimple` と `caseFoldBytesSimple?` は、サポート対象を lowercase 化したうえで NFD に正規化するため、precomposed 形と decomposed 形を一貫して比較できます。
+- `caseFoldScalarsCompatibility` と `caseFoldBytesCompatibility?` は、その前に NFKD ベースの compatibility decomposition も行うため、fullwidth ASCII、common ligature、Kelvin sign、Angstrom 系 compatibility 文字も lowercase の互換展開形にそろえて比較できます。
 - `scalarBoundaryOffsets?` と `graphemeBoundaryOffsets?` はバイト単位の安全な切断点を返し、常に `0` と入力末尾オフセットを含みます。
 - `sliceBytes?` は UTF-8 scalar 境界にそろっていないオフセットを拒否します。
 - `sliceScalars?` と `sliceGraphemes?` は scalar または grapheme の index 範囲を、再利用しやすい well-formed UTF-8 部分列へ戻します。
@@ -374,6 +380,8 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - case mapping は現在 full Unicode SpecialCasing / CaseFolding table ではなく、supported simple subset です。
 - 実装済み subset は ASCII と、canonical normalization で扱っている Latin precomposed 文字にそろえています。
 - `equalsCaseFoldSimpleBytes?` は common Latin text の caseless compare には使えますが、locale-sensitive な比較や full-Unicode caseless match まではまだカバーしません。
+- `equalsCaseFoldCompatibilityBytes?` はその実用範囲を広げ、fullwidth ASCII、selected ligature、Kelvin/Angstrom 系 compatibility 文字も caseless compare できるようにします。
+- ただし、full Unicode CaseFolding / SpecialCasing table まではまだ実装していないため、未対応 script はそのまま残ります。
 
 ### 再公開される構築子
 
@@ -407,6 +415,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property test と comprehensive test で、サポート対象の Latin precomposed 文字の canonical decomposition/composition、canonical ordering、Hangul normalization、canonical equivalence も検証します。
 - Property test と comprehensive test で、サポート対象の compatibility decomposition/composition も検証し、fullwidth form、ligature、no-break space、compatibility symbol を含む代表ケースを通します。
 - Property test と comprehensive test で、サポート対象の simple lower/upper mapping、case-fold の idempotence、byte/scalar API 一致、precomposed/decomposed 間の caseless compare も検証します。
+- Property test と comprehensive test で、compatibility-aware case fold も検証し、fullwidth form、ligature、Kelvin sign、Angstrom 系の代表ケースを通します。
 - Property test と comprehensive test で scalar 境界列挙、scalar 単位の slice、scalar subsequence の byte-offset 検索も検証します。
 
 ## 使用例
@@ -484,9 +493,13 @@ def normalizationDemo : IO Unit := do
 def caseMappingDemo : IO Unit := do
   let upper := ByteArray.mk #[0xC3, 0x81, 0xC3, 0x87]
   let lowerDecomposed := ByteArray.mk #[0x61, 0xCC, 0x81, 0x63, 0xCC, 0xA7]
+  let compatibilityUpper := ByteArray.mk #[0xEF, 0xBC, 0xA1, 0xEF, 0xAC, 0x83, 0xE2, 0x84, 0xAA]
+  let compatibilityLower := ByteArray.mk #[0x61, 0x66, 0x66, 0x69, 0x6B]
   IO.println s!"lowercase(simple): {Radix.UTF8.lowercaseBytesSimple? upper |>.map ByteArray.toList}"
   IO.println s!"casefold(simple): {Radix.UTF8.caseFoldBytesSimple? upper |>.map ByteArray.toList}"
+  IO.println s!"casefold(compatibility): {Radix.UTF8.caseFoldBytesCompatibility? compatibilityUpper |>.map ByteArray.toList}"
   IO.println s!"caseless equal: {Radix.UTF8.equalsCaseFoldSimpleBytes? upper lowerDecomposed}"
+  IO.println s!"compatibility caseless equal: {Radix.UTF8.equalsCaseFoldCompatibilityBytes? compatibilityUpper compatibilityLower}"
 ```
 
 ## 関連ドキュメント

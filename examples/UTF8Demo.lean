@@ -87,10 +87,15 @@ def main : IO Unit := do
   let letterC ← scalar 0x43
   let cedilla ← scalar 0x0327
   let cCedilla ← scalar 0x00C7
+  let lowerA ← scalar 0x61
   let lowerAAcute ← scalar 0x00E1
+  let lowerF ← scalar 0x66
+  let lowerI ← scalar 0x69
+  let lowerK ← scalar 0x6B
   let noBreakSpace ← scalar 0x00A0
   let ligatureFFI ← scalar 0xFB03
   let angstromSign ← scalar 0x212B
+  let kelvinSign ← scalar 0x212A
   let fullwidthA ← scalar 0xFF21
   let hangulL ← scalar 0x1100
   let hangulV ← scalar 0x1161
@@ -108,6 +113,8 @@ def main : IO Unit := do
   IO.println s!"  Simple lowercase (Á): {(Radix.UTF8.toLowerSimple aAcute).val}"
   IO.println s!"  Simple uppercase (á): {(Radix.UTF8.toUpperSimple lowerAAcute).val}"
   IO.println s!"  Caseless compare (Á vs a + acute): {Radix.UTF8.equalsCaseFoldSimpleBytes? (Radix.UTF8.encodeScalars [aAcute]) (Radix.UTF8.encodeScalars [ascii, acute])}"
+  IO.println s!"  Compatibility casefold (fullwidth A + ffi ligature + Kelvin): {Radix.UTF8.caseFoldBytesCompatibility? (Radix.UTF8.encodeScalars [fullwidthA, ligatureFFI, kelvinSign]) |>.map ByteArray.toList}"
+  IO.println s!"  Compatibility caseless compare: {Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [fullwidthA, ligatureFFI, kelvinSign]) (Radix.UTF8.encodeScalars [lowerA, lowerF, lowerF, lowerI, lowerK])}"
 
   let utf16Units := Radix.UTF8.encodeScalarsToUTF16 [ascii, smile]
   IO.println s!"  UTF-16 units: {utf16Units.toList.map UInt16.toNat}"

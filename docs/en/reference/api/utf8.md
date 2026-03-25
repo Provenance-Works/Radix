@@ -285,15 +285,20 @@ def Scalar.caseFoldSimple (s : Scalar) : Scalar
 def lowercaseScalarsSimple (scalars : List Scalar) : List Scalar
 def uppercaseScalarsSimple (scalars : List Scalar) : List Scalar
 def caseFoldScalarsSimple (scalars : List Scalar) : List Scalar
+def caseFoldScalarsCompatibility (scalars : List Scalar) : List Scalar
 def caselessEquivalentSimple (left right : List Scalar) : Bool
+def caselessEquivalentCompatibility (left right : List Scalar) : Bool
 
 def lowercaseBytesSimple? (bytes : ByteArray) : Option ByteArray
 def uppercaseBytesSimple? (bytes : ByteArray) : Option ByteArray
 def caseFoldBytesSimple? (bytes : ByteArray) : Option ByteArray
+def caseFoldBytesCompatibility? (bytes : ByteArray) : Option ByteArray
 def lowercaseListSimple? (bytes : List UInt8) : Option (List UInt8)
 def uppercaseListSimple? (bytes : List UInt8) : Option (List UInt8)
 def caseFoldListSimple? (bytes : List UInt8) : Option (List UInt8)
+def caseFoldListCompatibility? (bytes : List UInt8) : Option (List UInt8)
 def equalsCaseFoldSimpleBytes? (left right : ByteArray) : Bool
+def equalsCaseFoldCompatibilityBytes? (left right : ByteArray) : Bool
 ```
 
 ### Text Operations API
@@ -342,6 +347,7 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - `canonicallyEquivalent` and `canonicallyEquivalentBytes?` compare inputs through canonical decomposition, so precomposed and decomposed forms match.
 - `toLowerSimple`, `toUpperSimple`, and `caseFoldSimple` cover ASCII plus the same supported Latin precomposed subset used by the current normalization tables.
 - `caseFoldScalarsSimple` and `caseFoldBytesSimple?` lower the supported subset and then canonicalize through NFD, so decomposed and precomposed forms compare consistently.
+- `caseFoldScalarsCompatibility` and `caseFoldBytesCompatibility?` add NFKD-based compatibility decomposition before folding, so fullwidth ASCII, common ligatures, Kelvin-sign/K-like forms, and Angstrom-style compatibility characters compare against their lowercase compatibility-expanded equivalents.
 - `scalarBoundaryOffsets?` and `graphemeBoundaryOffsets?` expose byte-accurate cut points and always include both `0` and the total byte length.
 - `sliceBytes?` rejects offsets that are not aligned to UTF-8 scalar boundaries.
 - `sliceScalars?` and `sliceGraphemes?` turn scalar or grapheme index ranges back into well-formed UTF-8 slices.
@@ -374,6 +380,8 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - Case mapping is currently a supported simple subset, not the full Unicode SpecialCasing or CaseFolding tables.
 - The implemented subset covers ASCII plus the same Latin precomposed characters already handled by canonical normalization.
 - `equalsCaseFoldSimpleBytes?` is therefore suitable for common Latin caseless comparison, but not for locale-sensitive or full-Unicode caseless matching.
+- `equalsCaseFoldCompatibilityBytes?` extends that practical coverage with compatibility decomposition, so caseless comparison works across fullwidth ASCII, selected ligatures, and Kelvin/Angstrom-style compatibility characters.
+- The module still does not implement the full Unicode CaseFolding or SpecialCasing tables, so unsupported scripts remain unchanged.
 
 ### Exported Constructors
 
@@ -407,6 +415,7 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property and comprehensive tests cover canonical decomposition/composition for supported Latin precomposed characters, canonical ordering, Hangul normalization, and canonical-equivalence checks.
 - Property and comprehensive tests cover compatibility decomposition/composition for the supported subset, including fullwidth forms, ligatures, no-break spaces, and compatibility symbols.
 - Property and comprehensive tests cover supported simple lower/upper mappings, case-fold idempotence, byte/scalar API agreement, and caseless comparison across precomposed/decomposed forms.
+- Property and comprehensive tests cover compatibility-aware case folding for fullwidth forms, ligatures, Kelvin-sign/K, and Angstrom-style equivalences.
 - Property and comprehensive tests cover scalar boundary discovery, scalar-aligned slicing, and byte-offset search for scalar subsequences.
 
 ## Examples
@@ -492,9 +501,13 @@ def normalizationDemo : IO Unit := do
 def caseMappingDemo : IO Unit := do
   let upper := ByteArray.mk #[0xC3, 0x81, 0xC3, 0x87]
   let lowerDecomposed := ByteArray.mk #[0x61, 0xCC, 0x81, 0x63, 0xCC, 0xA7]
+  let compatibilityUpper := ByteArray.mk #[0xEF, 0xBC, 0xA1, 0xEF, 0xAC, 0x83, 0xE2, 0x84, 0xAA]
+  let compatibilityLower := ByteArray.mk #[0x61, 0x66, 0x66, 0x69, 0x6B]
   IO.println s!"lowercase(simple): {Radix.UTF8.lowercaseBytesSimple? upper |>.map ByteArray.toList}"
   IO.println s!"casefold(simple): {Radix.UTF8.caseFoldBytesSimple? upper |>.map ByteArray.toList}"
+  IO.println s!"casefold(compatibility): {Radix.UTF8.caseFoldBytesCompatibility? compatibilityUpper |>.map ByteArray.toList}"
   IO.println s!"caseless equal: {Radix.UTF8.equalsCaseFoldSimpleBytes? upper lowerDecomposed}"
+  IO.println s!"compatibility caseless equal: {Radix.UTF8.equalsCaseFoldCompatibilityBytes? compatibilityUpper compatibilityLower}"
 ```
 
 ## Related Documents
