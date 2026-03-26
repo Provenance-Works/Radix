@@ -366,6 +366,7 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - grapheme segmentation は、`UTF8.Spec` 側で Unicode 17 の `Control`、`Extend`、`SpacingMark`、`Prepend`、`Extended_Pictographic` property table と Hangul 規則を使って分類します。
 - 実行層では、その pairwise 規則の上に regional-indicator pairing、GB11 emoji ZWJ bridging、GB9c Indic conjunct handling を追加しています。
 - precomposed Hangul LV/LVT syllable、Jamo 列、spacing-mark vowel sign、prepend 文字、emoji modifier sequence、variation-selector emoji presentation、Indic virama conjunct は、default extended grapheme cluster として 1 cluster に保たれます。
+- UTF-8 の comprehensive test では、repo に固定した Unicode 17 の `GraphemeBreakTest.txt` を実際に実行するため、grapheme 挙動は手書き例だけでなく標準 test corpus に対しても検証されます。
 - これは Unicode の default extended grapheme cluster algorithm に合わせた挙動であり、locale/application 固有の tailoring は引き続き対象外です。
 
 ### Normalization Notes

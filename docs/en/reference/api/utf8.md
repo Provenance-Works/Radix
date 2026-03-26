@@ -366,6 +366,7 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - Grapheme segmentation now uses Unicode 17 property tables for `Control`, `Extend`, `SpacingMark`, `Prepend`, and `Extended_Pictographic`, together with the standard Hangul syllable rules from `UTF8.Spec`.
 - The executable traversal layer implements regional-indicator pairing, GB11 emoji ZWJ bridging, and GB9c Indic conjunct handling on top of the spec-level pairwise break rules.
 - Precomposed Hangul LV/LVT syllables, Jamo sequences, spacing-mark vowel signs, prepend characters, emoji modifier sequences, variation-selector emoji presentation, and Indic virama conjuncts are all preserved as single default extended grapheme clusters.
+- The repository vendors and executes the official Unicode 17 `GraphemeBreakTest.txt` suite during UTF-8 comprehensive tests, so grapheme behavior is checked against the standard test corpus rather than only hand-written examples.
 - This matches the Unicode default extended grapheme cluster algorithm; locale- or application-specific tailoring is still out of scope.
 
 ### Normalization Notes
