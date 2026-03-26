@@ -32,6 +32,110 @@ private def replacementValue : Nat :=
 private def strictReplacementValues (bytes : List UInt8) : List Nat :=
   Radix.UTF8.scalarsToNats (Radix.UTF8.decodeListReplacingMaximalSubparts bytes)
 
+private def hexDigitValue? (c : Char) : Option Nat :=
+  match c with
+  | '0' => some 0
+  | '1' => some 1
+  | '2' => some 2
+  | '3' => some 3
+  | '4' => some 4
+  | '5' => some 5
+  | '6' => some 6
+  | '7' => some 7
+  | '8' => some 8
+  | '9' => some 9
+  | 'A' => some 10
+  | 'B' => some 11
+  | 'C' => some 12
+  | 'D' => some 13
+  | 'E' => some 14
+  | 'F' => some 15
+  | 'a' => some 10
+  | 'b' => some 11
+  | 'c' => some 12
+  | 'd' => some 13
+  | 'e' => some 14
+  | 'f' => some 15
+  | _ => none
+
+private def parseHexNat? (token : String) : Option Nat :=
+  token.toList.foldlM (fun acc c => do
+    let digit ← hexDigitValue? c
+    pure (acc * 16 + digit)) 0
+
+private def stripLineComment (line : String) : String :=
+  match line.splitOn "#" with
+  | [] => line
+  | head :: _ => head
+
+private def graphemeBreakTokens (line : String) : List String :=
+  let body := (stripLineComment line).replace "\t" " "
+  (body.splitOn " ").filter (fun token => token != "")
+
+private def parseOfficialGraphemeBreakLine
+    (lineNumber : Nat)
+    (line : String) : Except String (Option (List (List Nat))) := do
+  let tokens := graphemeBreakTokens line
+  if tokens.isEmpty then
+    pure none
+  else
+    match tokens with
+    | [] => pure none
+    | "÷" :: rest =>
+      let rec go
+          (remaining : List String)
+          (currentRev : List Nat)
+          (clustersRev : List (List Nat)) : Except String (List (List Nat)) := do
+        match remaining with
+        | [] =>
+          if currentRev.isEmpty then
+            pure clustersRev.reverse
+          else
+            throw s!"unterminated grapheme cluster at line {lineNumber}"
+        | scalarToken :: boundary :: tail =>
+          let scalarValue ←
+            match parseHexNat? scalarToken with
+            | some value => pure value
+            | none => throw s!"invalid scalar token '{scalarToken}' at line {lineNumber}"
+          let nextClusterRev := scalarValue :: currentRev
+          match boundary with
+          | "×" => go tail nextClusterRev clustersRev
+          | "÷" => go tail [] (nextClusterRev.reverse :: clustersRev)
+          | _ => throw s!"invalid boundary token '{boundary}' at line {lineNumber}"
+        | _ => throw s!"dangling token sequence at line {lineNumber}"
+      return some (← go rest [] [])
+    | first :: _ => throw s!"expected initial break marker at line {lineNumber}, got '{first}'"
+
+private def runOfficialGraphemeBreakTests
+    (assert : Bool → String → IO Unit) : IO Unit := do
+  let path := "tests/data/unicode/17.0.0/GraphemeBreakTest.txt"
+  let content ← IO.FS.readFile path
+  let lines := content.splitOn "\n"
+  let rec go (remaining : List String) (lineNumber caseCount : Nat) : IO Nat := do
+    match remaining with
+    | [] => pure caseCount
+    | line :: rest =>
+      match parseOfficialGraphemeBreakLine lineNumber line with
+      | .error err =>
+        assert false s!"official grapheme test parse failed: {err}"
+        go rest (lineNumber + 1) caseCount
+      | .ok none =>
+        go rest (lineNumber + 1) caseCount
+      | .ok (some expectedClusters) =>
+        let flatScalars := expectedClusters.foldr List.append []
+        let scalars ← flatScalars.mapM scalar
+        let encoded := Radix.UTF8.encodeScalars scalars
+        match Radix.UTF8.decodeGraphemes? encoded with
+        | some graphemes =>
+          let actualClusters := graphemeScalarValues graphemes
+          assert (actualClusters == expectedClusters)
+            s!"Unicode GraphemeBreakTest mismatch at case {caseCount + 1}: expected {expectedClusters}, got {actualClusters}"
+        | none =>
+          assert false s!"Unicode GraphemeBreakTest decode failed at case {caseCount + 1}"
+        go rest (lineNumber + 1) (caseCount + 1)
+  let caseCount ← go lines 1 0
+  assert (caseCount == 766) s!"official GraphemeBreakTest case count changed: {caseCount}"
+
 private def runUTF8CursorTests
     (assert : Bool → String → IO Unit)
     (ascii twoByte threeByte fourByte : Radix.UTF8.Scalar) : IO Unit := do
@@ -723,6 +827,7 @@ private def runUTF8StreamingAndInteropTail
 
   UTF8Test.runUTF8CursorTests assert ascii twoByte threeByte fourByte
   UTF8Test.runUTF8GraphemeTests assert ascii
+  UTF8Test.runOfficialGraphemeBreakTests assert
   UTF8Test.runUTF16InteropTests assert ascii threeByte fourByte
   UTF8Test.runUTF8NormalizationTests assert
   UTF8Test.runUTF8CaseMappingTests assert
