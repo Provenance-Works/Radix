@@ -154,6 +154,12 @@ private def runUTF8GraphemeTests
   let variationSelector16 ← UTF8Test.scalar 0xFE0F
   let fire ← UTF8Test.scalar 0x1F525
   let zwj ← UTF8Test.scalar 0x200D
+  let arabicNumberSign ← UTF8Test.scalar 0x0600
+  let devanagariKa ← UTF8Test.scalar 0x0915
+  let devanagariNukta ← UTF8Test.scalar 0x093C
+  let devanagariVowelAa ← UTF8Test.scalar 0x093E
+  let devanagariVirama ← UTF8Test.scalar 0x094D
+  let byteOrderMark ← UTF8Test.scalar 0xFEFF
 
   let combiningInput := Radix.UTF8.encodeScalars [ascii, acute, letterB]
   match Radix.UTF8.decodeGraphemes? combiningInput with
@@ -220,6 +226,34 @@ private def runUTF8GraphemeTests
     assert (UTF8Test.graphemeScalarValues graphemes == [[0x2764, 0xFE0F, 0x200D, 0x1F525]])
       "grapheme decode keeps emoji variation-selector ZWJ sequences in one cluster"
   | none => assert false "grapheme decode rejected valid emoji variation-selector input"
+
+  let prependInput := Radix.UTF8.encodeScalars [arabicNumberSign, ascii]
+  match Radix.UTF8.decodeGraphemes? prependInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0x0600, 0x41]])
+      "grapheme decode applies Unicode Prepend characters before the following base"
+  | none => assert false "grapheme decode rejected valid Prepend input"
+
+  let spacingMarkInput := Radix.UTF8.encodeScalars [devanagariKa, devanagariVowelAa, ascii]
+  match Radix.UTF8.decodeGraphemes? spacingMarkInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0x0915, 0x093E], [0x41]])
+      "grapheme decode keeps Unicode SpacingMark vowels in the same cluster"
+  | none => assert false "grapheme decode rejected valid SpacingMark input"
+
+  let indicConjunctInput := Radix.UTF8.encodeScalars [devanagariKa, devanagariNukta, devanagariVirama, devanagariKa, ascii]
+  match Radix.UTF8.decodeGraphemes? indicConjunctInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0x0915, 0x093C, 0x094D, 0x0915], [0x41]])
+      "grapheme decode keeps Indic virama conjuncts in one cluster under GB9c"
+  | none => assert false "grapheme decode rejected valid Indic conjunct input"
+
+  let controlInput := Radix.UTF8.encodeScalars [byteOrderMark, ascii]
+  match Radix.UTF8.decodeGraphemes? controlInput with
+  | some graphemes =>
+    assert (UTF8Test.graphemeScalarValues graphemes == [[0xFEFF], [0x41]])
+      "grapheme decode breaks around Unicode control-property scalars outside ASCII"
+  | none => assert false "grapheme decode rejected valid control-property input"
 
   let graphemeCursor := Radix.UTF8.Cursor.init combiningInput
   match Radix.UTF8.Cursor.currentGrapheme? graphemeCursor with
