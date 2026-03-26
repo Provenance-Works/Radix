@@ -592,7 +592,8 @@ where
 
 /-- A grapheme cluster represented as a scalar slice with byte offsets into the original buffer.
 
-The cluster uses a simplified UAX #29 segmentation model backed by `Spec.classifyGraphemeBreak`.
+The cluster uses the Unicode default extended grapheme segmentation model backed by
+`Spec.classifyGraphemeBreak`, regional-indicator pairing, GB11 emoji ZWJ state, and GB9c Indic conjunct state.
 -/
 structure Grapheme where
   scalars : List Scalar
@@ -653,6 +654,33 @@ private def nextEmojiZWJState
     | _ => .none
   | _ => .none
 
+/-- State for the GB9c Indic conjunct rule:
+    `InCB=Consonant [InCB=Extend | InCB=Linker]* InCB=Linker [InCB=Extend | InCB=Linker]* × InCB=Consonant`. -/
+private inductive IndicConjunctState where
+  | none
+  | consonantSequence
+  | linkerBridgeReady
+  deriving DecidableEq, Repr
+
+/-- Update the GB9c Indic conjunct state after appending one scalar. -/
+private def nextIndicConjunctState
+    (state : IndicConjunctState)
+    (scalar : Scalar) : IndicConjunctState :=
+  match Spec.classifyIndicConjunctBreak scalar with
+  | .consonant =>
+    .consonantSequence
+  | .extend =>
+    match state with
+    | .consonantSequence => .consonantSequence
+    | .linkerBridgeReady => .linkerBridgeReady
+    | .none => .none
+  | .linker =>
+    match state with
+    | .consonantSequence => .linkerBridgeReady
+    | .linkerBridgeReady => .linkerBridgeReady
+    | .none => .none
+  | .other => .none
+
 /-- Continue collecting a strict grapheme cluster after consuming its first scalar. -/
 private def collectGraphemeStrict
     (fuel : Nat)
@@ -661,7 +689,8 @@ private def collectGraphemeStrict
     (scalarsRev : List Scalar)
     (leftProp : Spec.GraphemeBreakProperty)
     (regionalIndicatorRun : Nat)
-    (emojiZWJState : EmojiZWJState) : Grapheme × Cursor :=
+    (emojiZWJState : EmojiZWJState)
+    (indicConjunctState : IndicConjunctState) : Grapheme × Cursor :=
   match fuel with
   | 0 =>
     ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
@@ -672,6 +701,9 @@ private def collectGraphemeStrict
       let hasBreak :=
         if emojiZWJState == .zwjBridgeReady && rightProp == .extendedPictographic then
           false
+        else if indicConjunctState == .linkerBridgeReady &&
+          Spec.classifyIndicConjunctBreak rightScalar == .consonant then
+          false
         else
           hasGraphemeBreak leftProp rightProp regionalIndicatorRun
       if hasBreak then
@@ -679,8 +711,9 @@ private def collectGraphemeStrict
       else
         let nextRun := nextRegionalIndicatorRun leftProp rightProp regionalIndicatorRun
         let nextEmojiState := nextEmojiZWJState emojiZWJState rightProp
+        let nextIndicState := nextIndicConjunctState indicConjunctState rightScalar
         collectGraphemeStrict fuel startOffset nextCursor (rightScalar :: scalarsRev)
-          rightProp nextRun nextEmojiState
+          rightProp nextRun nextEmojiState nextIndicState
     | none =>
       ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
 
@@ -693,7 +726,8 @@ private def collectGraphemeReplacing
     (scalarsRev : List Scalar)
     (leftProp : Spec.GraphemeBreakProperty)
     (regionalIndicatorRun : Nat)
-    (emojiZWJState : EmojiZWJState) : Grapheme × Cursor :=
+    (emojiZWJState : EmojiZWJState)
+    (indicConjunctState : IndicConjunctState) : Grapheme × Cursor :=
   match fuel with
   | 0 =>
     ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
@@ -704,6 +738,9 @@ private def collectGraphemeReplacing
       let hasBreak :=
         if emojiZWJState == .zwjBridgeReady && rightProp == .extendedPictographic then
           false
+        else if indicConjunctState == .linkerBridgeReady &&
+          Spec.classifyIndicConjunctBreak rightScalar == .consonant then
+          false
         else
           hasGraphemeBreak leftProp rightProp regionalIndicatorRun
       if hasBreak then
@@ -711,8 +748,9 @@ private def collectGraphemeReplacing
       else
         let nextRun := nextRegionalIndicatorRun leftProp rightProp regionalIndicatorRun
         let nextEmojiState := nextEmojiZWJState emojiZWJState rightProp
+        let nextIndicState := nextIndicConjunctState indicConjunctState rightScalar
         collectGraphemeReplacing fuel mode startOffset nextCursor (rightScalar :: scalarsRev)
-          rightProp nextRun nextEmojiState
+          rightProp nextRun nextEmojiState nextIndicState
     | none =>
       ({ scalars := scalarsRev.reverse, startOffset := startOffset, endOffset := cursor.offset }, cursor)
 
@@ -723,8 +761,9 @@ def Cursor.advanceGrapheme? (cursor : Cursor) : Option (Grapheme × Cursor) :=
     let property := Spec.classifyGraphemeBreak scalar
     let regionalIndicatorRun := if property == .regionalIndicator then 1 else 0
     let emojiZWJState := nextEmojiZWJState .none property
+    let indicConjunctState := nextIndicConjunctState .none scalar
     some (collectGraphemeStrict cursor.remainingByteCount cursor.offset nextCursor [scalar]
-      property regionalIndicatorRun emojiZWJState)
+      property regionalIndicatorRun emojiZWJState indicConjunctState)
   | none => none
 
 /-- Advance the cursor by one grapheme cluster using the selected replacement policy. -/
@@ -734,8 +773,9 @@ def Cursor.advanceGraphemeReplacing (mode : ReplacementMode) (cursor : Cursor) :
     let property := Spec.classifyGraphemeBreak scalar
     let regionalIndicatorRun := if property == .regionalIndicator then 1 else 0
     let emojiZWJState := nextEmojiZWJState .none property
+    let indicConjunctState := nextIndicConjunctState .none scalar
     some (collectGraphemeReplacing cursor.remainingByteCount mode cursor.offset nextCursor [scalar]
-      property regionalIndicatorRun emojiZWJState)
+      property regionalIndicatorRun emojiZWJState indicConjunctState)
   | none => none
 
 /-- Inspect the grapheme cluster at the current cursor position without advancing. -/
@@ -780,7 +820,8 @@ where
         | some (grapheme, nextCursor) => go fuel nextCursor (grapheme :: acc)
         | none => acc.reverse
 
-/-- Decode a full byte array into grapheme clusters using simplified UAX #29 rules. -/
+/-- Decode a full byte array into grapheme clusters using the Unicode default
+  extended grapheme rules. -/
 def decodeGraphemes? (bytes : ByteArray) : Option (List Grapheme) :=
   (Cursor.init bytes).decodeRemainingGraphemes?
 

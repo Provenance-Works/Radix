@@ -3,6 +3,7 @@ Copyright (c) 2026 Radix Contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Mathlib.Tactic
+import Radix.UTF8.GraphemeTables
 
 /-!
 # UTF-8 Specification (Layer 3)
@@ -1681,7 +1682,7 @@ def caselessEquivalentCompatibility (left right : List Scalar) : Bool :=
 -- Grapheme Cluster Break Properties
 -- ════════════════════════════════════════════════════════════════════
 
-/-- Grapheme cluster break property (simplified UAX #29). -/
+/-- Grapheme cluster break property for Unicode default extended grapheme segmentation. -/
 inductive GraphemeBreakProperty where
   | cr             -- Carriage return
   | lf             -- Line feed
@@ -1700,32 +1701,43 @@ inductive GraphemeBreakProperty where
   | other          -- Everything else (usually a grapheme base)
   deriving DecidableEq, Repr
 
-/-- Classify a scalar into its grapheme break property (simplified). -/
+/-- Indic_Conjunct_Break property values needed by GB9c. -/
+inductive IndicConjunctBreakProperty where
+  | consonant
+  | extend
+  | linker
+  | other
+  deriving DecidableEq, Repr
+
+/-- Classify a scalar into its grapheme break property using Unicode 17 tables. -/
 def classifyGraphemeBreak (s : Scalar) : GraphemeBreakProperty :=
   let v := s.val
   if v == 0x000D then .cr
   else if v == 0x000A then .lf
-  else if v ≤ 0x001F || (0x007F ≤ v && v ≤ 0x009F) then .control
+  else if GraphemeTables.isControl v then .control
   else if v == 0x200D then .zwj
-  else if (0x0300 ≤ v && v ≤ 0x036F) ||               -- Combining Diacriticals
-      (0xFE00 ≤ v && v ≤ 0xFE0F) ||                   -- Variation Selectors
-      v == 0x20E3 ||                                  -- Combining Enclosing Keycap
-      (0x1F3FB ≤ v && v ≤ 0x1F3FF) then               -- Emoji modifiers (skin tones)
-    .extend
+  else if GraphemeTables.isExtend v then .extend
   else if 0x1F1E6 ≤ v && v ≤ 0x1F1FF then .regionalIndicator
-  else if 0x1100 ≤ v && v ≤ 0x115F then .hangulL      -- Hangul Jamo leading
-  else if 0x1160 ≤ v && v ≤ 0x11A7 then .hangulV      -- Hangul Jamo vowel
-  else if 0x11A8 ≤ v && v ≤ 0x11FF then .hangulT      -- Hangul Jamo trailing
+  else if GraphemeTables.isPrepend v then .prepend
+  else if GraphemeTables.isSpacingMark v then .spacingMark
+  else if (0x1100 ≤ v && v ≤ 0x115F) || (0xA960 ≤ v && v ≤ 0xA97C) then .hangulL
+  else if (0x1160 ≤ v && v ≤ 0x11A7) || (0xD7B0 ≤ v && v ≤ 0xD7C6) then .hangulV
+  else if (0x11A8 ≤ v && v ≤ 0x11FF) || (0xD7CB ≤ v && v ≤ 0xD7FB) then .hangulT
   else if 0xAC00 ≤ v && v ≤ 0xD7A3 then
     if (v - 0xAC00) % 28 == 0 then .hangulLV else .hangulLVT
-  else if (0x2600 ≤ v && v ≤ 0x26FF) ||               -- Miscellaneous Symbols
-      (0x2700 ≤ v && v ≤ 0x27BF) ||                   -- Dingbats
-      (0x1F000 ≤ v && v ≤ 0x1FAFF) then               -- Modern emoji/pictograph planes
-    .extendedPictographic
+  else if GraphemeTables.isExtendedPictographic v then .extendedPictographic
+  else .other
+
+/-- Classify a scalar into the Indic_Conjunct_Break property values used by GB9c. -/
+def classifyIndicConjunctBreak (s : Scalar) : IndicConjunctBreakProperty :=
+  let v := s.val
+  if GraphemeTables.isIndicConsonant v then .consonant
+  else if GraphemeTables.isIndicLinker v then .linker
+  else if GraphemeTables.isIndicExtend v then .extend
   else .other
 
 /-- Whether a grapheme cluster boundary exists between two adjacent scalars
-    (simplified UAX #29 rules). -/
+  under the pairwise Unicode default extended grapheme rules. -/
 def isGraphemeBreak (left right : GraphemeBreakProperty) : Bool :=
   match left, right with
   | .cr, .lf => false                       -- GB3: Do not break between CR and LF
