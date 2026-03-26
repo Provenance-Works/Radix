@@ -1885,6 +1885,24 @@ private def testNumericTypeclassProperties : IO Unit := do
 
 private def testUTF8Properties : IO Unit := do
   IO.println "  UTF8 properties..."
+  let rec expectedFirstDecodeError (fuel : Nat) (remaining : List UInt8) : Option Radix.UTF8.DecodeError :=
+    match fuel with
+    | 0 => none
+    | fuel + 1 =>
+      match Radix.UTF8.decodeNextListStep? remaining with
+      | none => none
+      | some (.error err) => some err
+      | some (.scalar _ consumed) => expectedFirstDecodeError fuel (remaining.drop consumed)
+  let rec expectedFirstUTF16Error
+      (fuel : Nat)
+      (remaining : List Radix.UTF8.UTF16CodeUnit) : Option Radix.UTF8.UTF16DecodeError :=
+    match fuel with
+    | 0 => none
+    | fuel + 1 =>
+      match Radix.UTF8.decodeNextUTF16ListStep? remaining with
+      | none => none
+      | some (.error err) => some err
+      | some (.scalar _ consumed) => expectedFirstUTF16Error fuel (remaining.drop consumed)
   let boundaryVals := [0x00, 0x24, 0x41, 0x7F, 0x80, 0x7FF, 0x800, 0xD7FF, 0xE000, 0xFFFF, 0x10000, 0x10FFFF]
   for n in boundaryVals do
     assertUTF8RoundTrip n
@@ -1927,10 +1945,13 @@ private def testUTF8Properties : IO Unit := do
 
     let replacing := Radix.UTF8.decodeListReplacing bytes
     let strictReplacing := Radix.UTF8.decodeListReplacingMaximalSubparts bytes
+    let expectedFirstError := expectedFirstDecodeError (bytes.length + 1) bytes
     assert (replacing.length ≤ bytes.length)
       s!"UTF8 replacement decode length bounded by input length: {bytes}"
     assert (strictReplacing.length ≤ replacing.length)
       s!"UTF8 maximal-subpart replacement never exceeds per-byte replacement: {bytes}"
+    assert (Radix.UTF8.firstDecodeErrorList? bytes == expectedFirstError)
+      s!"UTF8 firstDecodeErrorList? returns the first error anywhere in the input: {bytes}"
 
     match Radix.UTF8.decodeNextListStep? bytes with
     | some (Radix.UTF8.Spec.DecodeStep.scalar _ consumed) =>
@@ -2185,13 +2206,15 @@ private def testUTF8Properties : IO Unit := do
     assert (Radix.UTF8.decodeBytes? replacementUTF8 == some replacingUTF16)
       s!"UTF16 replacement transcoding emits decodable UTF8: {units.map UInt16.toNat}"
     let firstError := Radix.UTF8.firstUTF16DecodeErrorList? units
+    let expectedFirstError := expectedFirstUTF16Error (units.length + 1) units
+    assert (firstError == expectedFirstError)
+      s!"UTF16 first error returns the first error anywhere in the input: {units.map UInt16.toNat}"
     match Radix.UTF8.decodeNextUTF16ListStep? units with
     | some (.error err) =>
       assert (firstError == some err)
         s!"UTF16 first error matches detailed step: {units.map UInt16.toNat}"
     | _ =>
-      assert (firstError == none)
-        s!"UTF16 first error absent on non-error first step: {units.map UInt16.toNat}"
+      pure ()
 
   let mut rngTextOps := PRNG.new 610
   for _ in [:numIter] do

@@ -257,9 +257,16 @@ def decodeUTF16Replacing (units : Array UTF16CodeUnit) : List Scalar :=
 
 /-- Return the first UTF-16 decoding error from a code-unit list, if any. -/
 def firstUTF16DecodeErrorList? (units : List UTF16CodeUnit) : Option UTF16DecodeError :=
-  match decodeNextUTF16ListStep? units with
-  | some (.error err) => some err
-  | _ => none
+  go (units.length + 1) units
+where
+  go : Nat → List UTF16CodeUnit → Option UTF16DecodeError
+    | 0, _ => none
+    | _ + 1, [] => none
+    | fuel + 1, remaining =>
+      match decodeNextUTF16ListStep? remaining with
+      | none => none
+      | some (.error err) => some err
+      | some (.scalar _ consumed) => go fuel (remaining.drop consumed)
 
 /-- Return the first UTF-16 decoding error from a code-unit array, if any. -/
 def firstUTF16DecodeError? (units : Array UTF16CodeUnit) : Option UTF16DecodeError :=

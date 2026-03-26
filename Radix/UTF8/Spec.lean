@@ -3,7 +3,9 @@ Copyright (c) 2026 Radix Contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Mathlib.Tactic
+import Radix.UTF8.CaseFoldingTables
 import Radix.UTF8.GraphemeTables
+import Radix.UTF8.NormalizationTables
 
 /-!
 # UTF-8 Specification (Layer 3)
@@ -477,9 +479,16 @@ def maximalSubpartLength (bytes : List UInt8) : Nat :=
 
 /-- Return the first UTF-8 decoding error, if any. -/
 def firstDecodeError? (bytes : List UInt8) : Option DecodeError :=
-  match decodeNextStep? bytes with
-  | some (.error err) => some err
-  | _ => none
+  go (bytes.length + 1) bytes
+where
+  go : Nat → List UInt8 → Option DecodeError
+    | 0, _ => none
+    | _ + 1, [] => none
+    | fuel + 1, remaining =>
+      match decodeNextStep? remaining with
+      | none => none
+      | some (.error err) => some err
+      | some (.scalar _ consumed) => go fuel (remaining.drop consumed)
 
 /-- Decode with U+FFFD replacement using Unicode maximal subparts.
 
@@ -1198,18 +1207,9 @@ def isStarter (ccc : CombiningClass) : Bool := ccc == 0
 /-- Whether a scalar is a combining mark (CCC > 0). -/
 def isCombining (ccc : CombiningClass) : Bool := ccc > 0
 
-/-- Canonical combining class for the supported normalization subset. -/
+/-- Canonical combining class derived from the vendored Unicode 17 normalization data. -/
 def canonicalCombiningClass (s : Scalar) : CombiningClass :=
-  match s.val with
-  | 0x0327 => 202 -- COMBINING CEDILLA
-  | 0x0300 => 230 -- COMBINING GRAVE ACCENT
-  | 0x0301 => 230 -- COMBINING ACUTE ACCENT
-  | 0x0302 => 230 -- COMBINING CIRCUMFLEX ACCENT
-  | 0x0303 => 230 -- COMBINING TILDE
-  | 0x0304 => 230 -- COMBINING MACRON
-  | 0x0308 => 230 -- COMBINING DIAERESIS
-  | 0x030A => 230 -- COMBINING RING ABOVE
-  | _ => 0
+  NormalizationTables.canonicalCombiningClass s.val
 
 /-- Insert a combining-mark entry into a stable ascending CCC order. -/
 private def insertByCombiningClass (entry : Scalar × CombiningClass) :
@@ -1254,157 +1254,17 @@ def supportsNormalizationForm (form : NormalizationForm) : Bool :=
 private def scalarListFromNats? (ns : List Nat) : Option (List Scalar) :=
   ns.mapM Scalar.ofNat?
 
-/-- Canonical decomposition mappings for the supported precomposed subset. -/
+/-- Canonical decomposition mappings derived from the vendored Unicode 17 data. -/
 private def canonicalDecompositionNats? (n : Nat) : Option (List Nat) :=
-  match n with
-  | 0x00C0 => some [0x0041, 0x0300]
-  | 0x00C1 => some [0x0041, 0x0301]
-  | 0x00C2 => some [0x0041, 0x0302]
-  | 0x00C3 => some [0x0041, 0x0303]
-  | 0x00C4 => some [0x0041, 0x0308]
-  | 0x00C5 => some [0x0041, 0x030A]
-  | 0x00C7 => some [0x0043, 0x0327]
-  | 0x00C8 => some [0x0045, 0x0300]
-  | 0x00C9 => some [0x0045, 0x0301]
-  | 0x00CA => some [0x0045, 0x0302]
-  | 0x00CB => some [0x0045, 0x0308]
-  | 0x00CC => some [0x0049, 0x0300]
-  | 0x00CD => some [0x0049, 0x0301]
-  | 0x00CE => some [0x0049, 0x0302]
-  | 0x00CF => some [0x0049, 0x0308]
-  | 0x00D1 => some [0x004E, 0x0303]
-  | 0x00D2 => some [0x004F, 0x0300]
-  | 0x00D3 => some [0x004F, 0x0301]
-  | 0x00D4 => some [0x004F, 0x0302]
-  | 0x00D5 => some [0x004F, 0x0303]
-  | 0x00D6 => some [0x004F, 0x0308]
-  | 0x00D9 => some [0x0055, 0x0300]
-  | 0x00DA => some [0x0055, 0x0301]
-  | 0x00DB => some [0x0055, 0x0302]
-  | 0x00DC => some [0x0055, 0x0308]
-  | 0x00DD => some [0x0059, 0x0301]
-  | 0x00E0 => some [0x0061, 0x0300]
-  | 0x00E1 => some [0x0061, 0x0301]
-  | 0x00E2 => some [0x0061, 0x0302]
-  | 0x00E3 => some [0x0061, 0x0303]
-  | 0x00E4 => some [0x0061, 0x0308]
-  | 0x00E5 => some [0x0061, 0x030A]
-  | 0x00E7 => some [0x0063, 0x0327]
-  | 0x00E8 => some [0x0065, 0x0300]
-  | 0x00E9 => some [0x0065, 0x0301]
-  | 0x00EA => some [0x0065, 0x0302]
-  | 0x00EB => some [0x0065, 0x0308]
-  | 0x00EC => some [0x0069, 0x0300]
-  | 0x00ED => some [0x0069, 0x0301]
-  | 0x00EE => some [0x0069, 0x0302]
-  | 0x00EF => some [0x0069, 0x0308]
-  | 0x00F1 => some [0x006E, 0x0303]
-  | 0x00F2 => some [0x006F, 0x0300]
-  | 0x00F3 => some [0x006F, 0x0301]
-  | 0x00F4 => some [0x006F, 0x0302]
-  | 0x00F5 => some [0x006F, 0x0303]
-  | 0x00F6 => some [0x006F, 0x0308]
-  | 0x00F9 => some [0x0075, 0x0300]
-  | 0x00FA => some [0x0075, 0x0301]
-  | 0x00FB => some [0x0075, 0x0302]
-  | 0x00FC => some [0x0075, 0x0308]
-  | 0x00FD => some [0x0079, 0x0301]
-  | 0x00FF => some [0x0079, 0x0308]
-  | 0x0178 => some [0x0059, 0x0308]
-  | _ => none
+  NormalizationTables.canonicalDecomposition? n
 
-/-- Compatibility decomposition mappings for the supported practical subset. -/
+/-- Compatibility decomposition mappings derived from the vendored Unicode 17 data. -/
 private def compatibilityDecompositionNats? (n : Nat) : Option (List Nat) :=
-  if n == 0x3000 then
-    some [0x0020]
-  else if 0xFF01 ≤ n && n ≤ 0xFF5E then
-    some [n - 0xFEE0]
-  else
-    match n with
-    | 0x00A0 => some [0x0020]
-    | 0x00A8 => some [0x0020, 0x0308]
-    | 0x00AA => some [0x0061]
-    | 0x00AF => some [0x0020, 0x0304]
-    | 0x00B2 => some [0x0032]
-    | 0x00B3 => some [0x0033]
-    | 0x00B4 => some [0x0020, 0x0301]
-    | 0x00B5 => some [0x03BC]
-    | 0x00B8 => some [0x0020, 0x0327]
-    | 0x00B9 => some [0x0031]
-    | 0x00BA => some [0x006F]
-    | 0x00BC => some [0x0031, 0x2044, 0x0034]
-    | 0x00BD => some [0x0031, 0x2044, 0x0032]
-    | 0x00BE => some [0x0033, 0x2044, 0x0034]
-    | 0x2126 => some [0x03A9]
-    | 0x212A => some [0x004B]
-    | 0x212B => some [0x00C5]
-    | 0xFB00 => some [0x0066, 0x0066]
-    | 0xFB01 => some [0x0066, 0x0069]
-    | 0xFB02 => some [0x0066, 0x006C]
-    | 0xFB03 => some [0x0066, 0x0066, 0x0069]
-    | 0xFB04 => some [0x0066, 0x0066, 0x006C]
-    | 0xFB05 => some [0x0073, 0x0074]
-    | 0xFB06 => some [0x0073, 0x0074]
-    | _ => none
+  NormalizationTables.compatibilityDecomposition? n
 
-/-- Canonical composition mappings for the supported precomposed subset. -/
+/-- Canonical composition mappings derived from the vendored Unicode 17 data. -/
 private def canonicalCompositionNat? (starter mark : Nat) : Option Nat :=
-  match starter, mark with
-  | 0x0041, 0x0300 => some 0x00C0
-  | 0x0041, 0x0301 => some 0x00C1
-  | 0x0041, 0x0302 => some 0x00C2
-  | 0x0041, 0x0303 => some 0x00C3
-  | 0x0041, 0x0308 => some 0x00C4
-  | 0x0041, 0x030A => some 0x00C5
-  | 0x0043, 0x0327 => some 0x00C7
-  | 0x0045, 0x0300 => some 0x00C8
-  | 0x0045, 0x0301 => some 0x00C9
-  | 0x0045, 0x0302 => some 0x00CA
-  | 0x0045, 0x0308 => some 0x00CB
-  | 0x0049, 0x0300 => some 0x00CC
-  | 0x0049, 0x0301 => some 0x00CD
-  | 0x0049, 0x0302 => some 0x00CE
-  | 0x0049, 0x0308 => some 0x00CF
-  | 0x004E, 0x0303 => some 0x00D1
-  | 0x004F, 0x0300 => some 0x00D2
-  | 0x004F, 0x0301 => some 0x00D3
-  | 0x004F, 0x0302 => some 0x00D4
-  | 0x004F, 0x0303 => some 0x00D5
-  | 0x004F, 0x0308 => some 0x00D6
-  | 0x0055, 0x0300 => some 0x00D9
-  | 0x0055, 0x0301 => some 0x00DA
-  | 0x0055, 0x0302 => some 0x00DB
-  | 0x0055, 0x0308 => some 0x00DC
-  | 0x0059, 0x0301 => some 0x00DD
-  | 0x0059, 0x0308 => some 0x0178
-  | 0x0061, 0x0300 => some 0x00E0
-  | 0x0061, 0x0301 => some 0x00E1
-  | 0x0061, 0x0302 => some 0x00E2
-  | 0x0061, 0x0303 => some 0x00E3
-  | 0x0061, 0x0308 => some 0x00E4
-  | 0x0061, 0x030A => some 0x00E5
-  | 0x0063, 0x0327 => some 0x00E7
-  | 0x0065, 0x0300 => some 0x00E8
-  | 0x0065, 0x0301 => some 0x00E9
-  | 0x0065, 0x0302 => some 0x00EA
-  | 0x0065, 0x0308 => some 0x00EB
-  | 0x0069, 0x0300 => some 0x00EC
-  | 0x0069, 0x0301 => some 0x00ED
-  | 0x0069, 0x0302 => some 0x00EE
-  | 0x0069, 0x0308 => some 0x00EF
-  | 0x006E, 0x0303 => some 0x00F1
-  | 0x006F, 0x0300 => some 0x00F2
-  | 0x006F, 0x0301 => some 0x00F3
-  | 0x006F, 0x0302 => some 0x00F4
-  | 0x006F, 0x0303 => some 0x00F5
-  | 0x006F, 0x0308 => some 0x00F6
-  | 0x0075, 0x0300 => some 0x00F9
-  | 0x0075, 0x0301 => some 0x00FA
-  | 0x0075, 0x0302 => some 0x00FB
-  | 0x0075, 0x0308 => some 0x00FC
-  | 0x0079, 0x0301 => some 0x00FD
-  | 0x0079, 0x0308 => some 0x00FF
-  | _, _ => none
+  NormalizationTables.canonicalComposition? starter mark
 
 private def hangulSBase : Nat := 0xAC00
 private def hangulLBase : Nat := 0x1100
@@ -1450,8 +1310,9 @@ def compatibilityDecomposition? (s : Scalar) : Option (List Scalar) :=
   | some ns => scalarListFromNats? ns
   | none => none
 
-/-- The supported decomposition tables are shallow, so a small total recursion bound is enough. -/
-private def normalizationDecompositionFuel : Nat := 4
+/-- Vendored Unicode 17 normalization data has a bounded recursive decomposition depth. -/
+private def normalizationDecompositionFuel : Nat :=
+  NormalizationTables.maxCompatibilityDecompositionDepth
 
 /-- Recursively decompose one scalar under the selected normalization regime. -/
 private def decomposeScalarRecursive (compatibility : Bool) (fuel : Nat) (s : Scalar) : List Scalar :=
@@ -1601,80 +1462,37 @@ def lowercaseScalarsSimple (scalars : List Scalar) : List Scalar :=
 def uppercaseScalarsSimple (scalars : List Scalar) : List Scalar :=
   scalars.map Scalar.toUpperSimple
 
-/-- Apply supported simple case folding and canonical decomposition to a scalar list. -/
-def caseFoldScalarsSimple (scalars : List Scalar) : List Scalar :=
-  normalizeScalarsNFD (scalars.map Scalar.caseFoldSimple)
-
-/-- Whether two scalar lists are equal under the supported simple case-folding subset. -/
-def caselessEquivalentSimple (left right : List Scalar) : Bool :=
-  caseFoldScalarsSimple left == caseFoldScalarsSimple right
-
-/-- Extended case-fold mappings for a practical Unicode subset, including
-    multi-scalar folds and Greek sigma normalization. -/
-private def extendedCaseFoldNats? (n : Nat) : Option (List Nat) :=
-  match n with
-  | 0x00DF => some [0x0073, 0x0073]          -- LATIN SMALL LETTER SHARP S
-  | 0x0130 => some [0x0069, 0x0307]          -- LATIN CAPITAL LETTER I WITH DOT ABOVE
-  | 0x017F => some [0x0073]                  -- LATIN SMALL LETTER LONG S
-  | 0x0386 => some [0x03AC]                  -- GREEK CAPITAL LETTER ALPHA WITH TONOS
-  | 0x0388 => some [0x03AD]                  -- GREEK CAPITAL LETTER EPSILON WITH TONOS
-  | 0x0389 => some [0x03AE]                  -- GREEK CAPITAL LETTER ETA WITH TONOS
-  | 0x038A => some [0x03AF]                  -- GREEK CAPITAL LETTER IOTA WITH TONOS
-  | 0x038C => some [0x03CC]                  -- GREEK CAPITAL LETTER OMICRON WITH TONOS
-  | 0x038E => some [0x03CD]                  -- GREEK CAPITAL LETTER UPSILON WITH TONOS
-  | 0x038F => some [0x03CE]                  -- GREEK CAPITAL LETTER OMEGA WITH TONOS
-  | 0x0391 => some [0x03B1]
-  | 0x0392 => some [0x03B2]
-  | 0x0393 => some [0x03B3]
-  | 0x0394 => some [0x03B4]
-  | 0x0395 => some [0x03B5]
-  | 0x0396 => some [0x03B6]
-  | 0x0397 => some [0x03B7]
-  | 0x0398 => some [0x03B8]
-  | 0x0399 => some [0x03B9]
-  | 0x039A => some [0x03BA]
-  | 0x039B => some [0x03BB]
-  | 0x039C => some [0x03BC]
-  | 0x039D => some [0x03BD]
-  | 0x039E => some [0x03BE]
-  | 0x039F => some [0x03BF]
-  | 0x03A0 => some [0x03C0]
-  | 0x03A1 => some [0x03C1]
-  | 0x03A3 => some [0x03C3]
-  | 0x03A4 => some [0x03C4]
-  | 0x03A5 => some [0x03C5]
-  | 0x03A6 => some [0x03C6]
-  | 0x03A7 => some [0x03C7]
-  | 0x03A8 => some [0x03C8]
-  | 0x03A9 => some [0x03C9]
-  | 0x03AA => some [0x03CA]
-  | 0x03AB => some [0x03CB]
-  | 0x03C2 => some [0x03C3]                  -- GREEK SMALL LETTER FINAL SIGMA
-  | 0x1E9E => some [0x0073, 0x0073]          -- LATIN CAPITAL LETTER SHARP S
-  | _ =>
-    match simpleLowerNat? n with
-    | some lower => some [lower]
-    | none => none
-
-/-- Fold one scalar under the practical extended Unicode case-fold subset. -/
-private def extendedCaseFoldScalar (s : Scalar) : List Scalar :=
-  match extendedCaseFoldNats? s.val with
-  | some ns =>
-    match scalarListFromNats? ns with
+/-- Decode a case-fold table row, falling back to the original scalar if the generated
+    Unicode data ever contained an invalid scalar. -/
+private def caseFoldTableScalar (lookup : Nat → Option (List Nat)) (s : Scalar) : List Scalar :=
+  match lookup s.val with
+  | some mapping =>
+    match scalarListFromNats? mapping with
     | some scalars => scalars
     | none => [s]
   | none => [s]
 
-/-- Apply compatibility decomposition plus supported simple case folding to a scalar list.
-    This is a practical approximation of compatibility-aware caseless matching. -/
+/-- Apply Unicode simple case folding and canonical decomposition to a scalar list. -/
+def caseFoldScalarsSimple (scalars : List Scalar) : List Scalar :=
+  let decomposed := normalizeScalarsNFD scalars
+  let folded := decomposed.foldr
+    (fun scalar acc => caseFoldTableScalar CaseFoldingTables.simpleCaseFold? scalar ++ acc)
+    []
+  normalizeScalarsNFD folded
+
+/-- Whether two scalar lists are equal under Unicode simple case folding. -/
+def caselessEquivalentSimple (left right : List Scalar) : Bool :=
+  caseFoldScalarsSimple left == caseFoldScalarsSimple right
+
+/-- Apply compatibility decomposition plus Unicode full case folding to a scalar list. -/
 def caseFoldScalarsCompatibility (scalars : List Scalar) : List Scalar :=
   let compatibilityDecomposed := normalizeScalarsNFKD scalars
   let folded := compatibilityDecomposed.foldr
-    (fun scalar acc => extendedCaseFoldScalar scalar ++ acc)
+    (fun scalar acc => caseFoldTableScalar CaseFoldingTables.fullCaseFold? scalar ++ acc)
     []
   normalizeScalarsNFKD folded
 
-/-- Whether two scalar lists are equal under the supported compatibility-aware case-folding subset. -/
+/-- Whether two scalar lists are equal under Unicode compatibility-aware case folding. -/
 def caselessEquivalentCompatibility (left right : List Scalar) : Bool :=
   caseFoldScalarsCompatibility left == caseFoldScalarsCompatibility right
 

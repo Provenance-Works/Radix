@@ -14,6 +14,9 @@ private def scalar (n : Nat) : IO Radix.UTF8.Scalar := do
   | some s => pure s
   | none => throw (IO.userError s!"invalid scalar {n}")
 
+  private def scalarList (values : List Nat) : IO (List Radix.UTF8.Scalar) :=
+    values.mapM scalar
+
 private def byteArray (bytes : List UInt8) : ByteArray :=
   ByteArray.mk bytes.toArray
 
@@ -106,6 +109,67 @@ private def parseOfficialGraphemeBreakLine
       return some (← go rest [] [])
     | first :: _ => throw s!"expected initial break marker at line {lineNumber}, got '{first}'"
 
+private def parseHexNatList? (field : String) : Option (List Nat) := do
+  let normalized := (field.replace "\t" " ").trimAscii.toString
+  let tokens := (normalized.splitOn " ").filter (fun token => token != "")
+  tokens.mapM parseHexNat?
+
+private def parseOfficialCaseFoldingLine
+    (lineNumber : Nat)
+    (line : String) : Except String (Option (Nat × String × List Nat)) := do
+  let body := (stripLineComment line).trimAscii.toString
+  if body == "" then
+    pure none
+  else
+    match (body.splitOn ";").map (fun part => part.trimAscii.toString) with
+    | sourceField :: statusField :: mappingField :: _ =>
+      let source ←
+        match parseHexNat? sourceField with
+        | some value => pure value
+        | none => throw s!"invalid case folding source '{sourceField}' at line {lineNumber}"
+      let mapping ←
+        match parseHexNatList? mappingField with
+        | some values => pure values
+        | none => throw s!"invalid case folding mapping '{mappingField}' at line {lineNumber}"
+      pure (some (source, statusField, mapping))
+    | _ => throw s!"invalid case folding record at line {lineNumber}"
+
+  private def parseOfficialNormalizationLine
+      (lineNumber : Nat)
+      (line : String)
+      : Except String (Option (List Nat × List Nat × List Nat × List Nat × List Nat)) := do
+    let body := (stripLineComment line).trimAscii.toString
+    if body == "" then
+      pure none
+    else
+      match body.toList.head? with
+      | some '@' => pure none
+      | _ =>
+        match (body.splitOn ";").map (fun part => part.trimAscii.toString) with
+        | c1Field :: c2Field :: c3Field :: c4Field :: c5Field :: _ =>
+          let c1 ←
+            match parseHexNatList? c1Field with
+            | some values => pure values
+            | none => throw s!"invalid normalization source '{c1Field}' at line {lineNumber}"
+          let c2 ←
+            match parseHexNatList? c2Field with
+            | some values => pure values
+            | none => throw s!"invalid NFC field '{c2Field}' at line {lineNumber}"
+          let c3 ←
+            match parseHexNatList? c3Field with
+            | some values => pure values
+            | none => throw s!"invalid NFD field '{c3Field}' at line {lineNumber}"
+          let c4 ←
+            match parseHexNatList? c4Field with
+            | some values => pure values
+            | none => throw s!"invalid NFKC field '{c4Field}' at line {lineNumber}"
+          let c5 ←
+            match parseHexNatList? c5Field with
+            | some values => pure values
+            | none => throw s!"invalid NFKD field '{c5Field}' at line {lineNumber}"
+          pure (some (c1, c2, c3, c4, c5))
+        | _ => throw s!"invalid normalization record at line {lineNumber}"
+
 private def runOfficialGraphemeBreakTests
     (assert : Bool → String → IO Unit) : IO Unit := do
   let path := "tests/data/unicode/17.0.0/GraphemeBreakTest.txt"
@@ -135,6 +199,102 @@ private def runOfficialGraphemeBreakTests
         go rest (lineNumber + 1) (caseCount + 1)
   let caseCount ← go lines 1 0
   assert (caseCount == 766) s!"official GraphemeBreakTest case count changed: {caseCount}"
+
+private def runOfficialCaseFoldingTests
+    (assert : Bool → String → IO Unit) : IO Unit := do
+  let path := "tests/data/unicode/17.0.0/CaseFolding.txt"
+  let content ← IO.FS.readFile path
+  let lines := content.splitOn "\n"
+  let rec go
+      (remaining : List String)
+      (lineNumber simpleCount fullCount : Nat) : IO (Nat × Nat) := do
+    match remaining with
+    | [] => pure (simpleCount, fullCount)
+    | line :: rest =>
+      match parseOfficialCaseFoldingLine lineNumber line with
+      | .error err =>
+        assert false s!"official case folding parse failed: {err}"
+        go rest (lineNumber + 1) simpleCount fullCount
+      | .ok none =>
+        go rest (lineNumber + 1) simpleCount fullCount
+      | .ok (some (source, status, mapping)) =>
+        let nextSimpleCount :=
+          if status == "C" || status == "S" then simpleCount + 1 else simpleCount
+        let nextFullCount :=
+          if status == "C" || status == "F" then fullCount + 1 else fullCount
+        if status == "C" || status == "S" then
+          let actualSimple := Radix.UTF8.CaseFoldingTables.simpleCaseFold? source
+          assert (actualSimple == some mapping)
+            s!"Unicode CaseFolding simple table mismatch at line {lineNumber} for U+{Nat.toDigits 16 source |> String.ofList}: expected {mapping}, got {actualSimple}"
+        if status == "C" || status == "F" then
+          let actualFull := Radix.UTF8.CaseFoldingTables.fullCaseFold? source
+          assert (actualFull == some mapping)
+            s!"Unicode CaseFolding full table mismatch at line {lineNumber} for U+{Nat.toDigits 16 source |> String.ofList}: expected {mapping}, got {actualFull}"
+        go rest (lineNumber + 1) nextSimpleCount nextFullCount
+  let (simpleCount, fullCount) ← go lines 1 0 0
+  assert (simpleCount == 1512) s!"official simple case folding count changed: {simpleCount}"
+  assert (fullCount == 1585) s!"official full case folding count changed: {fullCount}"
+
+private def runOfficialNormalizationTests
+    (assert : Bool → String → IO Unit) : IO Unit := do
+  let path := "tests/data/unicode/17.0.0/NormalizationTest.txt"
+  let content ← IO.FS.readFile path
+  let lines := content.splitOn "\n"
+  let rec go (remaining : List String) (lineNumber caseCount : Nat) : IO Nat := do
+    match remaining with
+    | [] => pure caseCount
+    | line :: rest =>
+      match parseOfficialNormalizationLine lineNumber line with
+      | .error err =>
+        assert false s!"official normalization parse failed: {err}"
+        go rest (lineNumber + 1) caseCount
+      | .ok none =>
+        go rest (lineNumber + 1) caseCount
+      | .ok (some (c1, c2, c3, c4, c5)) =>
+        let sourceScalars ← scalarList c1
+        let nfcScalars ← scalarList c2
+        let nfdScalars ← scalarList c3
+        let nfkcScalars ← scalarList c4
+        let nfkdScalars ← scalarList c5
+        let actualNFCSource := scalarValues (Radix.UTF8.normalizeScalarsNFC sourceScalars)
+        let actualNFCNFC := scalarValues (Radix.UTF8.normalizeScalarsNFC nfcScalars)
+        let actualNFCNFD := scalarValues (Radix.UTF8.normalizeScalarsNFC nfdScalars)
+        let actualNFCNFKC := scalarValues (Radix.UTF8.normalizeScalarsNFC nfkcScalars)
+        let actualNFCNFKD := scalarValues (Radix.UTF8.normalizeScalarsNFC nfkdScalars)
+        let actualNFDSource := scalarValues (Radix.UTF8.normalizeScalarsNFD sourceScalars)
+        let actualNFDNFC := scalarValues (Radix.UTF8.normalizeScalarsNFD nfcScalars)
+        let actualNFDNFD := scalarValues (Radix.UTF8.normalizeScalarsNFD nfdScalars)
+        let actualNFDNFKC := scalarValues (Radix.UTF8.normalizeScalarsNFD nfkcScalars)
+        let actualNFDNFKD := scalarValues (Radix.UTF8.normalizeScalarsNFD nfkdScalars)
+        let actualNFKCSource := scalarValues (Radix.UTF8.normalizeScalarsNFKC sourceScalars)
+        let actualNFKCNFC := scalarValues (Radix.UTF8.normalizeScalarsNFKC nfcScalars)
+        let actualNFKCNFD := scalarValues (Radix.UTF8.normalizeScalarsNFKC nfdScalars)
+        let actualNFKCNFKC := scalarValues (Radix.UTF8.normalizeScalarsNFKC nfkcScalars)
+        let actualNFKCNFKD := scalarValues (Radix.UTF8.normalizeScalarsNFKC nfkdScalars)
+        let actualNFKDSource := scalarValues (Radix.UTF8.normalizeScalarsNFKD sourceScalars)
+        let actualNFKDNFC := scalarValues (Radix.UTF8.normalizeScalarsNFKD nfcScalars)
+        let actualNFKDNFD := scalarValues (Radix.UTF8.normalizeScalarsNFKD nfdScalars)
+        let actualNFKDNFKC := scalarValues (Radix.UTF8.normalizeScalarsNFKD nfkcScalars)
+        let actualNFKDNFKD := scalarValues (Radix.UTF8.normalizeScalarsNFKD nfkdScalars)
+
+        assert (actualNFCSource == c2 && actualNFCNFC == c2 && actualNFCNFD == c2)
+          s!"NormalizationTest NFC invariant failed at case {caseCount + 1}"
+        assert (actualNFCNFKC == c4 && actualNFCNFKD == c4)
+          s!"NormalizationTest NFC compatibility invariant failed at case {caseCount + 1}"
+        assert (actualNFDSource == c3 && actualNFDNFC == c3 && actualNFDNFD == c3)
+          s!"NormalizationTest NFD invariant failed at case {caseCount + 1}"
+        assert (actualNFDNFKC == c5 && actualNFDNFKD == c5)
+          s!"NormalizationTest NFD compatibility invariant failed at case {caseCount + 1}"
+        assert (actualNFKCSource == c4 && actualNFKCNFC == c4 && actualNFKCNFD == c4 &&
+            actualNFKCNFKC == c4 && actualNFKCNFKD == c4)
+          s!"NormalizationTest NFKC invariant failed at case {caseCount + 1}"
+        assert (actualNFKDSource == c5 && actualNFKDNFC == c5 && actualNFKDNFD == c5 &&
+            actualNFKDNFKC == c5 && actualNFKDNFKD == c5)
+          s!"NormalizationTest NFKD invariant failed at case {caseCount + 1}"
+
+        go rest (lineNumber + 1) (caseCount + 1)
+  let caseCount ← go lines 1 0
+  assert (caseCount > 0) "official normalization corpus should contain at least one case"
 
 private def runUTF8CursorTests
     (assert : Bool → String → IO Unit)
@@ -220,6 +380,11 @@ private def runUTF8CursorTests
     Radix.UTF8.decodeWithCursorReplacing .maximalSubpart cursorMalformed |>.map (·.val)
   assert (maximalCursorValues == [UTF8Test.replacementValue, 0x41])
     "cursor maximal-subpart replacement collapses malformed prefix"
+
+  let laterUTF8Error := UTF8Test.byteArray [0x41, 0xE1, 0x80]
+  assert (Radix.UTF8.firstDecodeErrorBytes? laterUTF8Error ==
+    some { kind := .truncatedSequence, expectedLength := 3, consumed := 2 })
+    "firstDecodeErrorBytes? scans past valid prefixes to report the first later UTF-8 error"
 
   match Radix.UTF8.Cursor.advanceReplacing .maximalSubpart malformedCursor0 with
   | some (replacementScalar, malformedCursor1) => do
@@ -440,6 +605,13 @@ private def runUTF16InteropTests
     some { kind := Radix.UTF8.UTF16DecodeErrorKind.invalidLowSurrogate, expectedLength := 2, consumed := 1 })
     "firstUTF16DecodeErrorList? matches detailed step"
 
+  assert (Radix.UTF8.firstUTF16DecodeErrorList? [0x0041, 0xD800, 0x0041] ==
+    some { kind := Radix.UTF8.UTF16DecodeErrorKind.invalidLowSurrogate, expectedLength := 2, consumed := 1 })
+    "firstUTF16DecodeErrorList? scans past valid prefixes to report the first later UTF-16 error"
+  assert (Radix.UTF8.firstUTF16DecodeError? #[0x0041, 0xDFFF] ==
+    some { kind := Radix.UTF8.UTF16DecodeErrorKind.unexpectedLowSurrogate, expectedLength := 1, consumed := 1 })
+    "firstUTF16DecodeError? reports later low-surrogate errors in arrays"
+
   let malformedUTF16 : Array UInt16 := #[0xD800, 0x0041, 0xDFFF, 0xD83D, 0xDE42]
   let replacedUTF16 := Radix.UTF8.decodeUTF16Replacing malformedUTF16
   assert (UTF8Test.scalarValues replacedUTF16 == [UTF8Test.replacementValue, 0x41, UTF8Test.replacementValue, 0x1F642])
@@ -545,7 +717,13 @@ private def runUTF8NormalizationTests
   let noBreakSpace ← UTF8Test.scalar 0x00A0
   let precomposedAAcute ← UTF8Test.scalar 0x00C1
   let precomposedARing ← UTF8Test.scalar 0x00C5
+  let precomposedARingAcute ← UTF8Test.scalar 0x01FA
   let precomposedCCedilla ← UTF8Test.scalar 0x00C7
+  let greekCapitalAlphaWithTonos ← UTF8Test.scalar 0x0386
+  let greekCapitalIotaWithDialytika ← UTF8Test.scalar 0x03AA
+  let greekCapitalAlpha ← UTF8Test.scalar 0x0391
+  let greekCapitalIota ← UTF8Test.scalar 0x0399
+  let diaeresis ← UTF8Test.scalar 0x0308
   let angstromSign ← UTF8Test.scalar 0x212B
   let ligatureFFI ← UTF8Test.scalar 0xFB03
   let fullwidthA ← UTF8Test.scalar 0xFF21
@@ -561,8 +739,8 @@ private def runUTF8NormalizationTests
     "normalizeScalarsNFC composes supported precomposed Latin characters"
   assert (UTF8Test.scalarValues (Radix.UTF8.normalizeScalarsNFD [asciiC, acute, cedilla]) == [0x43, 0x0327, 0x0301])
     "normalizeScalarsNFD applies canonical ordering within a segment"
-  assert (UTF8Test.scalarValues (Radix.UTF8.normalizeScalarsNFC [asciiC, acute, cedilla]) == [0x00C7, 0x0301])
-    "normalizeScalarsNFC composes after canonical reordering without violating blocking"
+  assert (UTF8Test.scalarValues (Radix.UTF8.normalizeScalarsNFC [asciiC, acute, cedilla]) == [0x1E08])
+    "normalizeScalarsNFC composes fully after canonical reordering when Unicode composition allows it"
 
   assert (UTF8Test.scalarValues (Radix.UTF8.normalizeScalarsNFD [hangulLV]) == [0x1100, 0x1161])
     "normalizeScalarsNFD decomposes Hangul LV syllables algorithmically"
@@ -578,6 +756,12 @@ private def runUTF8NormalizationTests
   assert (Radix.UTF8.normalizeScalarsNFKC [noBreakSpace, ligatureFFI, angstromSign, fullwidthA] ==
       [asciiSpace, asciiF, asciiF, asciiI, precomposedARing, asciiA])
     "normalizeScalarsNFKC recomposes the supported compatibility subset"
+  assert (UTF8Test.scalarValues (Radix.UTF8.normalizeScalarsNFD [precomposedARingAcute]) == [0x41, 0x030A, 0x0301])
+    "normalizeScalarsNFD fully decomposes Latin letters outside the previous subset"
+  assert (Radix.UTF8.normalizeScalarsNFD [greekCapitalAlphaWithTonos] == [greekCapitalAlpha, acute])
+    "normalizeScalarsNFD fully decomposes Greek capital alpha with tonos"
+  assert (Radix.UTF8.normalizeScalarsNFD [greekCapitalIotaWithDialytika] == [greekCapitalIota, diaeresis])
+    "normalizeScalarsNFD fully decomposes Greek capital iota with dialytika"
 
   let precomposedBytes := Radix.UTF8.encodeScalars [precomposedAAcute, precomposedCCedilla]
   let decomposedBytes := Radix.UTF8.encodeScalars [asciiA, acute, asciiC, cedilla]
@@ -646,8 +830,14 @@ private def runUTF8CaseMappingTests
   let fullwidthA ← UTF8Test.scalar 0xFF21
   let sharpS ← UTF8Test.scalar 0x00DF
   let capitalSharpS ← UTF8Test.scalar 0x1E9E
+  let capitalAWithRingAndAcute ← UTF8Test.scalar 0x01FA
   let dottedCapitalI ← UTF8Test.scalar 0x0130
   let longS ← UTF8Test.scalar 0x017F
+  let diaeresis ← UTF8Test.scalar 0x0308
+  let greekCapitalAlphaWithTonos ← UTF8Test.scalar 0x0386
+  let greekCapitalIotaWithDialytika ← UTF8Test.scalar 0x03AA
+  let greekAlpha ← UTF8Test.scalar 0x03B1
+  let greekIota ← UTF8Test.scalar 0x03B9
   let greekCapitalSigma ← UTF8Test.scalar 0x03A3
   let greekSigma ← UTF8Test.scalar 0x03C3
   let greekFinalSigma ← UTF8Test.scalar 0x03C2
@@ -718,12 +908,28 @@ private def runUTF8CaseMappingTests
     "caseFoldScalarsCompatibility lowercases Greek capital sigma"
   assert (Radix.UTF8.caseFoldScalarsCompatibility [greekFinalSigma] == [greekSigma])
     "caseFoldScalarsCompatibility normalizes final sigma to sigma"
+  assert (Radix.UTF8.caseFoldScalarsSimple [capitalSharpS] == [sharpS])
+    "caseFoldScalarsSimple uses Unicode simple folding for capital sharp s"
+  assert (Radix.UTF8.caseFoldScalarsSimple [greekFinalSigma] == [greekSigma])
+    "caseFoldScalarsSimple normalizes final sigma to sigma"
+  assert (Radix.UTF8.caseFoldScalarsSimple [greekCapitalAlphaWithTonos] == [greekAlpha, acute])
+    "caseFoldScalarsSimple preserves canonical equivalence for Greek alpha with tonos"
+  assert (Radix.UTF8.caseFoldScalarsSimple [greekCapitalIotaWithDialytika] == [greekIota, diaeresis])
+    "caseFoldScalarsSimple preserves canonical equivalence for Greek iota with dialytika"
+  assert (UTF8Test.scalarValues (Radix.UTF8.caseFoldScalarsSimple [capitalAWithRingAndAcute]) == [0x61, 0x030A, 0x0301])
+    "caseFoldScalarsSimple preserves canonical equivalence for Latin A with ring and acute"
   assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [capitalSharpS]) (Radix.UTF8.encodeScalars [asciiLowerS, asciiLowerS]))
     "equalsCaseFoldCompatibilityBytes? matches capital sharp s and ss"
   assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [dottedCapitalI]) (Radix.UTF8.encodeScalars [asciiLowerI, dotAbove]))
     "equalsCaseFoldCompatibilityBytes? matches dotted capital I and i plus dot"
   assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [greekCapitalSigma]) (Radix.UTF8.encodeScalars [greekFinalSigma]))
     "equalsCaseFoldCompatibilityBytes? matches sigma variants"
+  assert (Radix.UTF8.equalsCaseFoldSimpleBytes? (Radix.UTF8.encodeScalars [greekCapitalAlphaWithTonos]) (Radix.UTF8.encodeScalars [greekAlpha, acute]))
+    "equalsCaseFoldSimpleBytes? matches Greek alpha with tonos across canonical forms"
+  assert (Radix.UTF8.equalsCaseFoldSimpleBytes? (Radix.UTF8.encodeScalars [greekCapitalIotaWithDialytika]) (Radix.UTF8.encodeScalars [greekIota, diaeresis]))
+    "equalsCaseFoldSimpleBytes? matches Greek iota with dialytika across canonical forms"
+  assert (Radix.UTF8.equalsCaseFoldSimpleBytes? (Radix.UTF8.encodeScalars [capitalAWithRingAndAcute]) (Radix.UTF8.encodeScalars [asciiLowerA, ringAbove, acute]))
+    "equalsCaseFoldSimpleBytes? matches Latin A with ring and acute across canonical forms"
 
 private def runUTF8StreamingAndInteropTail
     (assert : Bool → String → IO Unit)
@@ -830,7 +1036,9 @@ private def runUTF8StreamingAndInteropTail
   UTF8Test.runOfficialGraphemeBreakTests assert
   UTF8Test.runUTF16InteropTests assert ascii threeByte fourByte
   UTF8Test.runUTF8NormalizationTests assert
+  UTF8Test.runOfficialNormalizationTests assert
   UTF8Test.runUTF8CaseMappingTests assert
+  UTF8Test.runOfficialCaseFoldingTests assert
   UTF8Test.runUTF8TextOpTests assert ascii twoByte threeByte fourByte
 
 end UTF8Test
