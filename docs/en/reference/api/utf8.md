@@ -338,7 +338,7 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - `Cursor.atOffset?` accepts only scalar boundaries, rejecting offsets in the middle of continuation-byte sequences.
 - `Cursor.advance?` gives byte-accurate scalar stepping over well-formed buffers.
 - `Cursor.advanceReplacing` provides replacement-aware cursor traversal for malformed buffers.
-- `decodeGraphemes?` segments well-formed UTF-8 into grapheme clusters using the repository's simplified UAX #29 model.
+- `decodeGraphemes?` segments well-formed UTF-8 into grapheme clusters using the Unicode default extended grapheme model implemented in the repository.
 - `decodeGraphemesReplacing` applies the same cluster segmentation after malformed prefixes have been replaced.
 - Regional-indicator sequences are paired during grapheme traversal so flag-style two-scalar clusters stay intact.
 - `normalizeScalarsNFD` performs canonical decomposition together with canonical combining-class ordering for the supported normalization subset.
@@ -363,10 +363,10 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 
 ### Grapheme Notes
 
-- Grapheme segmentation is intentionally simplified: it uses `classifyGraphemeBreak` and `isGraphemeBreak` from `UTF8.Spec`, plus regional-indicator pairing and emoji-ZWJ bridging in the executable traversal layer.
-- Precomposed Hangul LV/LVT syllables are classified explicitly, so both Jamo sequences and precomposed Hangul cluster as expected under the supported rules.
-- Common emoji modifier sequences, variation-selector emoji presentation, and `Extended_Pictographic Extend* ZWJ Extended_Pictographic` chains are preserved as single grapheme clusters.
-- This is still not a complete UAX #29 implementation for the full Unicode grapheme-break property tables.
+- Grapheme segmentation now uses Unicode 17 property tables for `Control`, `Extend`, `SpacingMark`, `Prepend`, and `Extended_Pictographic`, together with the standard Hangul syllable rules from `UTF8.Spec`.
+- The executable traversal layer implements regional-indicator pairing, GB11 emoji ZWJ bridging, and GB9c Indic conjunct handling on top of the spec-level pairwise break rules.
+- Precomposed Hangul LV/LVT syllables, Jamo sequences, spacing-mark vowel signs, prepend characters, emoji modifier sequences, variation-selector emoji presentation, and Indic virama conjuncts are all preserved as single default extended grapheme clusters.
+- This matches the Unicode default extended grapheme cluster algorithm; locale- or application-specific tailoring is still out of scope.
 
 ### Normalization Notes
 

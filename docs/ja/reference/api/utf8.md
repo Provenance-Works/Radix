@@ -338,7 +338,7 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - `Cursor.atOffset?` は scalar 境界のみを受理し、continuation byte の途中オフセットを拒否します。
 - `Cursor.advance?` は正しい UTF-8 バッファをバイトオフセット付きで 1 scalar ずつ前進させます。
 - `Cursor.advanceReplacing` は不正なバッファでも置換モード付きで同じ走査を提供します。
-- `decodeGraphemes?` は well-formed UTF-8 を、リポジトリ内の simplified UAX #29 モデルに従って grapheme cluster へ分割します。
+- `decodeGraphemes?` は well-formed UTF-8 を、リポジトリ内で実装した Unicode default extended grapheme モデルに従って grapheme cluster へ分割します。
 - `decodeGraphemesReplacing` は不正 prefix を置換した後も同じ cluster segmentation を適用します。
 - regional indicator は grapheme 走査時に 2 個ずつペアリングし、flag 風の cluster を保ちます。
 - `normalizeScalarsNFD` は、サポート対象の canonical decomposition と canonical combining class ordering を適用します。
@@ -363,10 +363,10 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 
 ### Grapheme Notes
 
-- grapheme segmentation は intentionally simplified です。`UTF8.Spec` の `classifyGraphemeBreak` と `isGraphemeBreak` を使い、実行層で regional-indicator pairing と emoji ZWJ bridging を追加しています。
-- precomposed Hangul LV/LVT syllable も明示的に分類するので、Jamo 列と precomposed Hangul の両方をサポート範囲内で正しく cluster 化します。
-- common emoji modifier sequence、variation selector による emoji presentation、`Extended_Pictographic Extend* ZWJ Extended_Pictographic` chain は単一 grapheme cluster として保持されます。
-- ただし、full Unicode grapheme-break property table まで含む完全な UAX #29 実装ではまだありません。
+- grapheme segmentation は、`UTF8.Spec` 側で Unicode 17 の `Control`、`Extend`、`SpacingMark`、`Prepend`、`Extended_Pictographic` property table と Hangul 規則を使って分類します。
+- 実行層では、その pairwise 規則の上に regional-indicator pairing、GB11 emoji ZWJ bridging、GB9c Indic conjunct handling を追加しています。
+- precomposed Hangul LV/LVT syllable、Jamo 列、spacing-mark vowel sign、prepend 文字、emoji modifier sequence、variation-selector emoji presentation、Indic virama conjunct は、default extended grapheme cluster として 1 cluster に保たれます。
+- これは Unicode の default extended grapheme cluster algorithm に合わせた挙動であり、locale/application 固有の tailoring は引き続き対象外です。
 
 ### Normalization Notes
 
