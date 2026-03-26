@@ -341,13 +341,13 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - `decodeGraphemes?` は well-formed UTF-8 を、リポジトリ内で実装した Unicode default extended grapheme モデルに従って grapheme cluster へ分割します。
 - `decodeGraphemesReplacing` は不正 prefix を置換した後も同じ cluster segmentation を適用します。
 - regional indicator は grapheme 走査時に 2 個ずつペアリングし、flag 風の cluster を保ちます。
-- `normalizeScalarsNFD` は、サポート対象の canonical decomposition と canonical combining class ordering を適用します。
-- `normalizeScalarsNFC` は NFD の上に canonical composition を適用し、algorithmic Hangul composition とサポート対象の Latin precomposed 文字を扱います。
-- `normalizeScalars?` と `normalizeBytes?` は現在 4 つの normalization form をサポートします。`nfkd` と `nfkc` は fullwidth ASCII、no-break space、selected spacing mark、common ligature、Kelvin/Angstrom 系 compatibility 文字などの実用サブセットを扱います。
+- `normalizeScalarsNFD` は、Unicode 17 全体の canonical decomposition と canonical combining class ordering を適用します。
+- `normalizeScalarsNFC` は NFD の上に Unicode 17 全体の canonical composition を適用し、algorithmic Hangul composition と vendored composition-exclusion rule も反映します。
+- `normalizeScalars?` と `normalizeBytes?` は、repo に同梱した Unicode 17 の canonical / compatibility decomposition table 全体に対して 4 つの normalization form をサポートします。
 - `canonicallyEquivalent` と `canonicallyEquivalentBytes?` は canonical decomposition を通して比較するため、precomposed 形と decomposed 形を等価とみなせます。
-- `toLowerSimple`、`toUpperSimple`、`caseFoldSimple` は、ASCII と現在の normalization table が扱う Latin precomposed サブセットを対象にします。
-- `caseFoldScalarsSimple` と `caseFoldBytesSimple?` は、サポート対象を lowercase 化したうえで NFD に正規化するため、precomposed 形と decomposed 形を一貫して比較できます。
-- `caseFoldScalarsCompatibility` と `caseFoldBytesCompatibility?` は、その前に NFKD ベースの compatibility decomposition も行うため、fullwidth ASCII、common ligature、Kelvin sign、Angstrom 系 compatibility 文字に加えて、sharp s 展開、dotted I、Greek sigma variant も lowercase の互換展開形にそろえて比較できます。
+- `toLowerSimple`、`toUpperSimple`、`caseFoldSimple` は、引き続き repository 内の direct simple-mapping subset を使う 1-scalar casing API です。
+- `caseFoldScalarsSimple` と `caseFoldBytesSimple?` は、official Unicode 17 simple CaseFolding mapping の前後で Unicode 17 全体の NFD を通すため、canonically equivalent な precomposed/decomposed 形を一貫して比較できます。
+- `caseFoldScalarsCompatibility` と `caseFoldBytesCompatibility?` は、Unicode 17 全体の NFKD を適用したうえで official Unicode 17 full CaseFolding mapping を使うため、実装がモデル化している normalization + folding data に対して Unicode default caseless matching を提供します。
 - `scalarBoundaryOffsets?` と `graphemeBoundaryOffsets?` はバイト単位の安全な切断点を返し、常に `0` と入力末尾オフセットを含みます。
 - `sliceBytes?` は UTF-8 scalar 境界にそろっていないオフセットを拒否します。
 - `sliceScalars?` と `sliceGraphemes?` は scalar または grapheme の index 範囲を、再利用しやすい well-formed UTF-8 部分列へ戻します。
@@ -371,18 +371,17 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 
 ### Normalization Notes
 
-- canonical normalization は現在、algorithmic Hangul decomposition/composition と、よく使う Latin precomposed 文字および combining mark のサブセットをカバーします。
+- canonical normalization は、repo に vendor した Unicode 17 `UnicodeData.txt` と `CompositionExclusions.txt` から導出した full composition exclusion rule をもとに生成しています。
 - canonical ordering は starter ごとの segment 内で安定に並べ替えるため、starter 境界をまたがずに combining mark 順序だけを正規化します。
-- compatibility normalization (`nfkd` / `nfkc`) は現在、fullwidth ASCII、ideographic/no-break space、selected spacing diacritic、selected superscript/fraction compatibility 文字、common Latin ligature、Kelvin/Angstrom 系 compatibility symbol をカバーします。
-- ただし full Unicode compatibility-mapping table までは実装していないため、未対応の compatibility 文字はそのまま残ります。
+- compatibility normalization (`nfkd` / `nfkc`) は、vendor 済み Unicode 17 compatibility decomposition table 全体を使います。
+- UTF-8 の comprehensive test では official Unicode 17 `NormalizationTest.txt` も vendor して実行し、normalization 挙動を手書き例だけでなく標準の conformance corpus に対して検証します。
 
 ### Case Mapping Notes
 
-- case mapping は現在 full Unicode SpecialCasing / CaseFolding table ではなく、supported simple subset です。
-- 実装済み subset は ASCII と、canonical normalization で扱っている Latin precomposed 文字にそろえています。
-- `equalsCaseFoldSimpleBytes?` は common Latin text の caseless compare には使えますが、locale-sensitive な比較や full-Unicode caseless match まではまだカバーしません。
-- `equalsCaseFoldCompatibilityBytes?` はその実用範囲を広げ、fullwidth ASCII、selected ligature、Kelvin/Angstrom 系 compatibility 文字、sharp s 展開、dotted I、sigma/final-sigma variant も caseless compare できるようにします。
-- ただし、full Unicode CaseFolding / SpecialCasing table まではまだ実装していないため、未対応 script はそのまま残ります。
+- direct scalar casing helper (`toLowerSimple`、`toUpperSimple`、`caseFoldSimple`) は、意図的に simple で locale-tailored ではありません。
+- `caseFoldScalarsSimple`、`caseFoldBytesSimple?`、`equalsCaseFoldSimpleBytes?`、`caseFoldScalarsCompatibility`、`caseFoldBytesCompatibility?`、`equalsCaseFoldCompatibilityBytes?` は、repo に vendor した official Unicode 17 CaseFolding data を使います。
+- UTF-8 の comprehensive test では official Unicode 17 `CaseFolding.txt` を vendor し、生成済み simple/full folding table をその標準 data と直接照合します。正規化込みの caseless matching については別の実行テストで regression も固定化しています。
+- `SpecialCasing.txt` にある locale-specific tailoring はまだ対象外で、実装は language-tailored casing ではなく Unicode default case folding data を使います。
 
 ### 再公開される構築子
 
@@ -413,10 +412,10 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property test と comprehensive test で cursor traversal、正しい境界シーク、cursor replacement semantics も検証します。
 - Property test と comprehensive test で combining mark、CRLF、Hangul sequence、regional indicator、emoji modifier sequence、emoji ZWJ sequence、replacement-aware malformed input の grapheme clustering も検証します。
 - Property test と comprehensive test で UTF-16 surrogate pair encoding、strict/replacement UTF-16 decode、UTF-8/UTF-16 transcoding も検証します。
-- Property test と comprehensive test で、サポート対象の Latin precomposed 文字の canonical decomposition/composition、canonical ordering、Hangul normalization、canonical equivalence も検証します。
-- Property test と comprehensive test で、サポート対象の compatibility decomposition/composition も検証し、fullwidth form、ligature、no-break space、compatibility symbol を含む代表ケースを通します。
+- Comprehensive test では official Unicode 17 `NormalizationTest.txt` を vendor し、NFC / NFD / NFKC / NFKD の invariant を標準 corpus に対して検証します。
+- Property test と comprehensive test で、canonical ordering、Hangul normalization、canonical equivalence、そして以前の Latin-only subset 外にある regression case も検証します。
 - Property test と comprehensive test で、サポート対象の simple lower/upper mapping、case-fold の idempotence、byte/scalar API 一致、precomposed/decomposed 間の caseless compare も検証します。
-- Property test と comprehensive test で、compatibility-aware case fold も検証し、fullwidth form、ligature、Kelvin sign、Angstrom 系、sharp s、dotted I、sigma/final-sigma の代表ケースを通します。
+- Comprehensive test では official Unicode 17 `CaseFolding.txt` を vendor し、生成済み simple/full folding table の両方を標準 data と照合します。
 - Property test と comprehensive test で scalar 境界列挙、scalar 単位の slice、scalar subsequence の byte-offset 検索も検証します。
 
 ## 使用例

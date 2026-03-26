@@ -341,13 +341,13 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - `decodeGraphemes?` segments well-formed UTF-8 into grapheme clusters using the Unicode default extended grapheme model implemented in the repository.
 - `decodeGraphemesReplacing` applies the same cluster segmentation after malformed prefixes have been replaced.
 - Regional-indicator sequences are paired during grapheme traversal so flag-style two-scalar clusters stay intact.
-- `normalizeScalarsNFD` performs canonical decomposition together with canonical combining-class ordering for the supported normalization subset.
-- `normalizeScalarsNFC` adds canonical composition on top of NFD, including algorithmic Hangul composition and a supported Latin precomposed subset.
-- `normalizeScalars?` and `normalizeBytes?` support all four normalization forms. `nfkd` and `nfkc` currently cover a practical compatibility subset including fullwidth ASCII, no-break spaces, selected spacing marks, common ligatures, and Kelvin/Angstrom compatibility characters.
+- `normalizeScalarsNFD` performs full Unicode 17 canonical decomposition together with canonical combining-class ordering.
+- `normalizeScalarsNFC` adds full Unicode 17 canonical composition on top of NFD, including algorithmic Hangul composition and the vendored composition-exclusion rules.
+- `normalizeScalars?` and `normalizeBytes?` support all four normalization forms across the vendored Unicode 17 canonical and compatibility decomposition tables.
 - `canonicallyEquivalent` and `canonicallyEquivalentBytes?` compare inputs through canonical decomposition, so precomposed and decomposed forms match.
-- `toLowerSimple`, `toUpperSimple`, and `caseFoldSimple` cover ASCII plus the same supported Latin precomposed subset used by the current normalization tables.
-- `caseFoldScalarsSimple` and `caseFoldBytesSimple?` lower the supported subset and then canonicalize through NFD, so decomposed and precomposed forms compare consistently.
-- `caseFoldScalarsCompatibility` and `caseFoldBytesCompatibility?` add NFKD-based compatibility decomposition before folding, so fullwidth ASCII, common ligatures, Kelvin-sign/K-like forms, Angstrom-style compatibility characters, sharp-s expansions, dotted-I handling, and Greek sigma variants compare against their lowercase compatibility-expanded equivalents.
+- `toLowerSimple`, `toUpperSimple`, and `caseFoldSimple` still expose the repository's direct simple-mapping subset for one-scalar casing APIs.
+- `caseFoldScalarsSimple` and `caseFoldBytesSimple?` normalize through full Unicode 17 NFD before and after applying the official Unicode 17 simple CaseFolding mappings, so canonically equivalent precomposed/decomposed forms compare consistently.
+- `caseFoldScalarsCompatibility` and `caseFoldBytesCompatibility?` add full Unicode 17 NFKD before applying the official Unicode 17 full CaseFolding mappings, providing Unicode default caseless matching for the modeled normalization and folding data.
 - `scalarBoundaryOffsets?` and `graphemeBoundaryOffsets?` expose byte-accurate cut points and always include both `0` and the total byte length.
 - `sliceBytes?` rejects offsets that are not aligned to UTF-8 scalar boundaries.
 - `sliceScalars?` and `sliceGraphemes?` turn scalar or grapheme index ranges back into well-formed UTF-8 slices.
@@ -371,18 +371,17 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 
 ### Normalization Notes
 
-- Canonical normalization currently covers algorithmic Hangul decomposition/composition plus a supported set of Latin precomposed characters and combining marks.
+- Canonical normalization is generated from vendored Unicode 17 `UnicodeData.txt` plus the derived full-composition-exclusion rules from `CompositionExclusions.txt`.
 - Canonical ordering is stable within each starter segment, so combining-mark order is normalized without crossing starter boundaries.
-- Compatibility normalization (`nfkd`/`nfkc`) now covers a practical subset: fullwidth ASCII forms, ideographic/no-break spaces, selected spacing diacritics, selected superscript/fraction compatibility characters, common Latin ligatures, and Kelvin/Angstrom-style compatibility symbols.
-- The module still does not ship the full Unicode compatibility-mapping tables, so unsupported compatibility characters remain unchanged.
+- Compatibility normalization (`nfkd`/`nfkc`) uses the full vendored Unicode 17 compatibility decomposition tables.
+- The comprehensive UTF-8 test suite vendors and executes the official Unicode 17 `NormalizationTest.txt` corpus, so normalization behavior is checked against the standard conformance data rather than only hand-written examples.
 
 ### Case Mapping Notes
 
-- Case mapping is currently a supported simple subset, not the full Unicode SpecialCasing or CaseFolding tables.
-- The implemented subset covers ASCII plus the same Latin precomposed characters already handled by canonical normalization.
-- `equalsCaseFoldSimpleBytes?` is therefore suitable for common Latin caseless comparison, but not for locale-sensitive or full-Unicode caseless matching.
-- `equalsCaseFoldCompatibilityBytes?` extends that practical coverage with compatibility decomposition, so caseless comparison works across fullwidth ASCII, selected ligatures, Kelvin/Angstrom-style compatibility characters, sharp-s expansions, dotted-I handling, and sigma/final-sigma variants.
-- The module still does not implement the full Unicode CaseFolding or SpecialCasing tables, so unsupported scripts remain unchanged.
+- Direct scalar casing helpers (`toLowerSimple`, `toUpperSimple`, `caseFoldSimple`) remain intentionally simple and non-locale-tailored.
+- `caseFoldScalarsSimple`, `caseFoldBytesSimple?`, `equalsCaseFoldSimpleBytes?`, `caseFoldScalarsCompatibility`, `caseFoldBytesCompatibility?`, and `equalsCaseFoldCompatibilityBytes?` use the official Unicode 17 CaseFolding data vendored in the repository.
+- The comprehensive UTF-8 test suite vendors the official Unicode 17 `CaseFolding.txt` corpus and checks the generated simple/full folding tables against it, while separate execution tests cover normalization-integrated caseless matching regressions.
+- Locale-specific tailorings from `SpecialCasing.txt` are still out of scope; the implementation follows Unicode default case folding data rather than language-specific casing rules.
 
 ### Exported Constructors
 
@@ -413,10 +412,10 @@ def Scalar.byteCount (s : Scalar) : Nat
 - Property and comprehensive tests cover cursor traversal, valid boundary seeking, and cursor replacement semantics.
 - Property and comprehensive tests cover grapheme clustering for combining marks, CRLF, Hangul sequences, regional indicators, emoji modifier sequences, emoji ZWJ sequences, and replacement-aware malformed input.
 - Property and comprehensive tests cover UTF-16 surrogate-pair encoding, strict/replacement UTF-16 decoding, and UTF-8/UTF-16 transcoding.
-- Property and comprehensive tests cover canonical decomposition/composition for supported Latin precomposed characters, canonical ordering, Hangul normalization, and canonical-equivalence checks.
-- Property and comprehensive tests cover compatibility decomposition/composition for the supported subset, including fullwidth forms, ligatures, no-break spaces, and compatibility symbols.
+- Comprehensive tests vendor and execute the official Unicode 17 `NormalizationTest.txt` corpus for NFC, NFD, NFKC, and NFKD invariants.
+- Property and comprehensive tests cover canonical ordering, Hangul normalization, canonical equivalence, and regression cases outside the earlier Latin-only subset.
 - Property and comprehensive tests cover supported simple lower/upper mappings, case-fold idempotence, byte/scalar API agreement, and caseless comparison across precomposed/decomposed forms.
-- Property and comprehensive tests cover compatibility-aware case folding for fullwidth forms, ligatures, Kelvin-sign/K, Angstrom-style equivalences, sharp-s expansion, dotted-I folding, and sigma/final-sigma normalization.
+- Comprehensive tests vendor the official Unicode 17 `CaseFolding.txt` corpus and check both generated simple and full folding tables against it.
 - Property and comprehensive tests cover scalar boundary discovery, scalar-aligned slicing, and byte-offset search for scalar subsequences.
 
 ## Examples
