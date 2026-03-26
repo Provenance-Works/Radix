@@ -1608,11 +1608,70 @@ def caseFoldScalarsSimple (scalars : List Scalar) : List Scalar :=
 def caselessEquivalentSimple (left right : List Scalar) : Bool :=
   caseFoldScalarsSimple left == caseFoldScalarsSimple right
 
+/-- Extended case-fold mappings for a practical Unicode subset, including
+    multi-scalar folds and Greek sigma normalization. -/
+private def extendedCaseFoldNats? (n : Nat) : Option (List Nat) :=
+  match n with
+  | 0x00DF => some [0x0073, 0x0073]          -- LATIN SMALL LETTER SHARP S
+  | 0x0130 => some [0x0069, 0x0307]          -- LATIN CAPITAL LETTER I WITH DOT ABOVE
+  | 0x017F => some [0x0073]                  -- LATIN SMALL LETTER LONG S
+  | 0x0386 => some [0x03AC]                  -- GREEK CAPITAL LETTER ALPHA WITH TONOS
+  | 0x0388 => some [0x03AD]                  -- GREEK CAPITAL LETTER EPSILON WITH TONOS
+  | 0x0389 => some [0x03AE]                  -- GREEK CAPITAL LETTER ETA WITH TONOS
+  | 0x038A => some [0x03AF]                  -- GREEK CAPITAL LETTER IOTA WITH TONOS
+  | 0x038C => some [0x03CC]                  -- GREEK CAPITAL LETTER OMICRON WITH TONOS
+  | 0x038E => some [0x03CD]                  -- GREEK CAPITAL LETTER UPSILON WITH TONOS
+  | 0x038F => some [0x03CE]                  -- GREEK CAPITAL LETTER OMEGA WITH TONOS
+  | 0x0391 => some [0x03B1]
+  | 0x0392 => some [0x03B2]
+  | 0x0393 => some [0x03B3]
+  | 0x0394 => some [0x03B4]
+  | 0x0395 => some [0x03B5]
+  | 0x0396 => some [0x03B6]
+  | 0x0397 => some [0x03B7]
+  | 0x0398 => some [0x03B8]
+  | 0x0399 => some [0x03B9]
+  | 0x039A => some [0x03BA]
+  | 0x039B => some [0x03BB]
+  | 0x039C => some [0x03BC]
+  | 0x039D => some [0x03BD]
+  | 0x039E => some [0x03BE]
+  | 0x039F => some [0x03BF]
+  | 0x03A0 => some [0x03C0]
+  | 0x03A1 => some [0x03C1]
+  | 0x03A3 => some [0x03C3]
+  | 0x03A4 => some [0x03C4]
+  | 0x03A5 => some [0x03C5]
+  | 0x03A6 => some [0x03C6]
+  | 0x03A7 => some [0x03C7]
+  | 0x03A8 => some [0x03C8]
+  | 0x03A9 => some [0x03C9]
+  | 0x03AA => some [0x03CA]
+  | 0x03AB => some [0x03CB]
+  | 0x03C2 => some [0x03C3]                  -- GREEK SMALL LETTER FINAL SIGMA
+  | 0x1E9E => some [0x0073, 0x0073]          -- LATIN CAPITAL LETTER SHARP S
+  | _ =>
+    match simpleLowerNat? n with
+    | some lower => some [lower]
+    | none => none
+
+/-- Fold one scalar under the practical extended Unicode case-fold subset. -/
+private def extendedCaseFoldScalar (s : Scalar) : List Scalar :=
+  match extendedCaseFoldNats? s.val with
+  | some ns =>
+    match scalarListFromNats? ns with
+    | some scalars => scalars
+    | none => [s]
+  | none => [s]
+
 /-- Apply compatibility decomposition plus supported simple case folding to a scalar list.
     This is a practical approximation of compatibility-aware caseless matching. -/
 def caseFoldScalarsCompatibility (scalars : List Scalar) : List Scalar :=
   let compatibilityDecomposed := normalizeScalarsNFKD scalars
-  normalizeScalarsNFKD (compatibilityDecomposed.map Scalar.caseFoldSimple)
+  let folded := compatibilityDecomposed.foldr
+    (fun scalar acc => extendedCaseFoldScalar scalar ++ acc)
+    []
+  normalizeScalarsNFKD folded
 
 /-- Whether two scalar lists are equal under the supported compatibility-aware case-folding subset. -/
 def caselessEquivalentCompatibility (left right : List Scalar) : Bool :=
