@@ -86,16 +86,22 @@ def main : IO Unit := do
   let aRing ← scalar 0x00C5
   let letterC ← scalar 0x43
   let cedilla ← scalar 0x0327
+  let dotAbove ← scalar 0x0307
   let cCedilla ← scalar 0x00C7
   let lowerA ← scalar 0x61
   let lowerAAcute ← scalar 0x00E1
   let lowerF ← scalar 0x66
   let lowerI ← scalar 0x69
   let lowerK ← scalar 0x6B
+  let lowerS ← scalar 0x73
   let noBreakSpace ← scalar 0x00A0
   let ligatureFFI ← scalar 0xFB03
   let angstromSign ← scalar 0x212B
   let kelvinSign ← scalar 0x212A
+  let capitalSharpS ← scalar 0x1E9E
+  let dottedCapitalI ← scalar 0x0130
+  let finalSigma ← scalar 0x03C2
+  let sigma ← scalar 0x03C3
   let fullwidthA ← scalar 0xFF21
   let hangulL ← scalar 0x1100
   let hangulV ← scalar 0x1161
@@ -115,6 +121,9 @@ def main : IO Unit := do
   IO.println s!"  Caseless compare (Á vs a + acute): {Radix.UTF8.equalsCaseFoldSimpleBytes? (Radix.UTF8.encodeScalars [aAcute]) (Radix.UTF8.encodeScalars [ascii, acute])}"
   IO.println s!"  Compatibility casefold (fullwidth A + ffi ligature + Kelvin): {Radix.UTF8.caseFoldBytesCompatibility? (Radix.UTF8.encodeScalars [fullwidthA, ligatureFFI, kelvinSign]) |>.map ByteArray.toList}"
   IO.println s!"  Compatibility caseless compare: {Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [fullwidthA, ligatureFFI, kelvinSign]) (Radix.UTF8.encodeScalars [lowerA, lowerF, lowerF, lowerI, lowerK])}"
+  IO.println s!"  Sharp-s compatibility compare: {Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [capitalSharpS]) (Radix.UTF8.encodeScalars [lowerS, lowerS])}"
+  IO.println s!"  Dotted-I compatibility compare: {Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [dottedCapitalI]) (Radix.UTF8.encodeScalars [lowerI, dotAbove])}"
+  IO.println s!"  Sigma compatibility compare: {Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [finalSigma]) (Radix.UTF8.encodeScalars [sigma])}"
 
   let utf16Units := Radix.UTF8.encodeScalarsToUTF16 [ascii, smile]
   IO.println s!"  UTF-16 units: {utf16Units.toList.map UInt16.toNat}"
