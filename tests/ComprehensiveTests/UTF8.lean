@@ -492,7 +492,9 @@ private def runUTF8CaseMappingTests
   let asciiLowerF ← UTF8Test.scalar 0x66
   let asciiLowerI ← UTF8Test.scalar 0x69
   let asciiLowerK ← UTF8Test.scalar 0x6B
+  let asciiLowerS ← UTF8Test.scalar 0x73
   let acute ← UTF8Test.scalar 0x0301
+  let dotAbove ← UTF8Test.scalar 0x0307
   let ringAbove ← UTF8Test.scalar 0x030A
   let cedilla ← UTF8Test.scalar 0x0327
   let upperAAcute ← UTF8Test.scalar 0x00C1
@@ -504,6 +506,13 @@ private def runUTF8CaseMappingTests
   let kelvinSign ← UTF8Test.scalar 0x212A
   let ligatureFFI ← UTF8Test.scalar 0xFB03
   let fullwidthA ← UTF8Test.scalar 0xFF21
+  let sharpS ← UTF8Test.scalar 0x00DF
+  let capitalSharpS ← UTF8Test.scalar 0x1E9E
+  let dottedCapitalI ← UTF8Test.scalar 0x0130
+  let longS ← UTF8Test.scalar 0x017F
+  let greekCapitalSigma ← UTF8Test.scalar 0x03A3
+  let greekSigma ← UTF8Test.scalar 0x03C3
+  let greekFinalSigma ← UTF8Test.scalar 0x03C2
   let smile ← UTF8Test.scalar 0x1F642
 
   assert (Radix.UTF8.toLowerSimple asciiA == asciiLowerA)
@@ -559,6 +568,24 @@ private def runUTF8CaseMappingTests
     "equalsCaseFoldCompatibilityBytes? matches Kelvin sign and ASCII k"
   assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [angstromSign]) (Radix.UTF8.encodeScalars [upperARing]))
     "equalsCaseFoldCompatibilityBytes? matches Angstrom sign and Latin A-ring"
+  assert (Radix.UTF8.caseFoldScalarsCompatibility [sharpS] == [asciiLowerS, asciiLowerS])
+    "caseFoldScalarsCompatibility expands sharp s to ss"
+  assert (Radix.UTF8.caseFoldScalarsCompatibility [capitalSharpS] == [asciiLowerS, asciiLowerS])
+    "caseFoldScalarsCompatibility expands capital sharp s to ss"
+  assert (Radix.UTF8.caseFoldScalarsCompatibility [dottedCapitalI] == [asciiLowerI, dotAbove])
+    "caseFoldScalarsCompatibility preserves dotted i semantics"
+  assert (Radix.UTF8.caseFoldScalarsCompatibility [longS] == [asciiLowerS])
+    "caseFoldScalarsCompatibility folds long s to s"
+  assert (Radix.UTF8.caseFoldScalarsCompatibility [greekCapitalSigma] == [greekSigma])
+    "caseFoldScalarsCompatibility lowercases Greek capital sigma"
+  assert (Radix.UTF8.caseFoldScalarsCompatibility [greekFinalSigma] == [greekSigma])
+    "caseFoldScalarsCompatibility normalizes final sigma to sigma"
+  assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [capitalSharpS]) (Radix.UTF8.encodeScalars [asciiLowerS, asciiLowerS]))
+    "equalsCaseFoldCompatibilityBytes? matches capital sharp s and ss"
+  assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [dottedCapitalI]) (Radix.UTF8.encodeScalars [asciiLowerI, dotAbove]))
+    "equalsCaseFoldCompatibilityBytes? matches dotted capital I and i plus dot"
+  assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars [greekCapitalSigma]) (Radix.UTF8.encodeScalars [greekFinalSigma]))
+    "equalsCaseFoldCompatibilityBytes? matches sigma variants"
 
 private def runUTF8StreamingAndInteropTail
     (assert : Bool → String → IO Unit)
