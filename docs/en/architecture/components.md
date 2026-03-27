@@ -4,30 +4,31 @@
 
 ## Component Overview
 
-Radix exposes 18 top-level modules providing distinct systems-programming
-primitives. Seventeen runtime and model modules follow the three-layer
-architecture (Spec → Impl → Bridge), while `ProofAutomation` is a meta-level
-helper module for reusable tactic macros. v0.3.0 adds UTF-8 verification,
-error-correction primitives, DMA reasoning, timer helpers, and region algebra
-support on top of the v0.2.0 foundation.
+Radix exposes 18 leaf modules plus grouped public import surfaces
+(`Radix`, `Radix.Pure`, and `Radix.Trusted`) providing distinct
+systems-programming primitives. Seventeen leaf runtime and model modules
+follow the three-layer architecture (Spec → Impl → Bridge), while
+`ProofAutomation` is a meta-level helper module for reusable tactic macros.
+v0.3.0 adds UTF-8 verification, error-correction primitives, DMA reasoning,
+timer helpers, and region algebra support on top of the v0.2.0 foundation.
 
 ```mermaid
 graph TD
-    subgraph "Core Pure Modules"
+    subgraph "Foundational Pure Modules"
         Word["Word<br/>10 integer types<br/>5 arithmetic modes + Numeric"]
         Bit["Bit<br/>bitwise ops<br/>scan + fields"]
         Bytes["Bytes<br/>byte order<br/>ByteSlice"]
         Memory["Memory<br/>buffer + ptr + layout<br/>region algebra"]
         Binary["Binary<br/>format DSL<br/>parser + serializer + LEB128"]
     end
-    subgraph "v0.2.0 Pure Modules"
+    subgraph "Pure Data-Structure Modules"
         Alignment["Alignment<br/>address alignment<br/>pow2 fast paths"]
         RingBuffer["RingBuffer<br/>fixed-capacity FIFO<br/>buffer-backed"]
         Bitmap["Bitmap<br/>dense bitset<br/>word-at-a-time ops"]
         CRC["CRC<br/>CRC-32 / CRC-16<br/>streaming API"]
         MemoryPool["MemoryPool<br/>bump + slab allocators<br/>pure models"]
     end
-    subgraph "v0.3.0 Pure Modules"
+    subgraph "Composable Pure Modules"
         UTF8["UTF8<br/>Unicode scalar model<br/>encoding + decoding"]
         ECC["ECC<br/>Hamming(7,4)<br/>syndrome + correction"]
         DMA["DMA<br/>descriptor model<br/>checked copy simulator"]
@@ -84,6 +85,18 @@ graph TD
     style BareMetal fill:#8D6E63,color:white
     style ProofAutomation fill:#5C6BC0,color:white
 ```
+
+## Module Details
+
+## Public Import Surfaces
+
+| Import | Coverage | Purpose |
+|--------|----------|---------|
+| `Radix.<Module>` | One leaf module | Smallest public import unit |
+| `Radix.Pure` | 14 pure leaf modules | Layer 2-3 only surface |
+| `Radix.Trusted` | `System`, `Concurrency`, `BareMetal` | Trusted-boundary surface |
+| `Radix.ProofAutomation` | `ProofAutomation` only | Meta-level tactic macros |
+| `Radix` | All 18 leaf modules | Full public surface |
 
 ## Module Details
 
