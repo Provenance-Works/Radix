@@ -76,7 +76,7 @@ graph TD
 | Timer | `Timer.Spec`, `Timer.Lemmas` | `Timer.Ops` | — |
 | ProofAutomation | — | — | メタレベルタクティクマクロ |
 
-> **注記:** v0.3.0 では 14 モジュールが完全に純粋です。Word、Bit、Bytes、Memory、Binary、Alignment、RingBuffer、Bitmap、CRC、MemoryPool、UTF8、ECC、DMA、Timer は Layer 2-3 のみで完結し、Layer 1 の信頼境界をまたぐのは System、Concurrency、BareMetal だけです。`ProofAutomation` はランタイム層の外側にあるメタレベル支援モジュールです。
+> **注記:** v0.3.0 では 14 モジュールが完全に純粋です。Word、Bit、Bytes、Memory、Binary、Alignment、RingBuffer、Bitmap、CRC、MemoryPool、UTF8、ECC、DMA、Timer は Layer 2-3 のみで完結し、Layer 1 の信頼境界をまたぐのは System、Concurrency、BareMetal だけです。`ProofAutomation` はランタイム層の外側にあるメタレベル支援モジュールです。この分割は公開 import surface にも反映されており、`Radix.Pure` と `Radix.Trusted` から直接利用できます。
 
 ## モジュール依存関係グラフ
 
