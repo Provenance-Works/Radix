@@ -60,7 +60,7 @@ mindmap
 | ドキュメント | 対象読者 | 説明 |
 |----------|----------|-------------|
 | [概要](architecture/README.md) | 全員 | 3層アーキテクチャとシステム設計の全体像 |
-| [コンポーネント](architecture/components.md) | 開発者 | 内部コンポーネントの詳細（18モジュール） |
+| [コンポーネント](architecture/components.md) | 開発者 | 内部コンポーネントの詳細（18 leaf modules） |
 | [データモデル](architecture/data-model.md) | 開発者 | コアデータ構造とBitVecの関係 |
 | [データフロー](architecture/data-flow.md) | 開発者 | レイヤー間・モジュール間のデータの流れ |
 | [モジュール依存関係](architecture/module-dependency.md) | 開発者 | モジュール依存関係グラフ |
