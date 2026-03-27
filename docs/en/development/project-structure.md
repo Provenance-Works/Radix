@@ -8,11 +8,13 @@
 radix/
 ├── lakefile.lean              # Lake build configuration
 ├── lean-toolchain             # Lean 4 version pin (v4.29.0-rc4)
-├── Radix.lean                 # Root import (imports all 18 modules)
+├── Radix.lean                 # Root import (full grouped surface over all 18 leaf modules)
 ├── CHANGELOG.md               # Version history
 ├── test_helpers.lean          # Ad-hoc proof experiments
 │
-├── Radix/                     # Source modules (18 modules)
+├── Radix/                     # Source modules (18 leaf modules + grouped import surfaces)
+│   ├── Pure.lean              # Grouped import for the 14 pure leaf modules
+│   ├── Trusted.lean           # Grouped import for the 3 trusted-boundary leaf modules
 │   ├── Alignment.lean         # Alignment module aggregator
 │   ├── Bitmap.lean            # Bitmap module aggregator
 │   ├── CRC.lean               # CRC module aggregator
@@ -24,6 +26,9 @@ radix/
 │   ├── Timer.lean             # Timer module aggregator
 │   ├── UTF8.lean              # UTF-8 module aggregator
 │   ├── Word.lean              # Word module aggregator
+│   ├── Word/
+│   │   ├── Lemmas.lean        # Aggregate import for Word lemma families
+│   │   └── ...
 │   ├── Bit.lean               # Bit module aggregator
 │   ├── Bytes.lean             # Bytes module aggregator
 │   ├── Memory.lean            # Memory module aggregator
@@ -34,7 +39,7 @@ radix/
 │   └── <Module>/              # Per-module Spec / Impl / Lemmas / Assumptions files
 │
 ├── tests/
-│   ├── Main.lean              # Execution tests (all 18 modules)
+│   ├── Main.lean              # Execution tests (all 18 leaf modules)
 │   ├── PropertyTests.lean     # Property-based tests (500 iter, LCG PRNG)
 │   ├── ComprehensiveTests.lean # Full regression runner with assertion counts
 │   └── ComprehensiveTests/    # Per-module comprehensive tests
@@ -87,9 +92,19 @@ graph TD
 |------|---------|
 | `lakefile.lean` | Build configuration, dependencies, targets |
 | `lean-toolchain` | Pinned Lean 4 version |
-| `Radix.lean` | Root import — imports all 18 module aggregators |
+| `Radix.lean` | Root import — grouped public surface spanning all 18 leaf modules |
 | `tests/ComprehensiveTests.lean` | Full regression entry point with assertion summaries |
 | `CHANGELOG.md` | Version history |
+
+## Public Import Surfaces
+
+| Import | Coverage |
+|--------|----------|
+| `Radix.<Module>` | One leaf module such as `Radix.Word` or `Radix.Binary` |
+| `Radix.Pure` | All 14 pure leaf modules that stay within Layers 2-3 |
+| `Radix.Trusted` | The 3 trusted-boundary leaf modules: `System`, `Concurrency`, `BareMetal` |
+| `Radix.ProofAutomation` | Meta-level tactic macros only |
+| `Radix` | Full public surface |
 
 ## Naming Conventions
 
