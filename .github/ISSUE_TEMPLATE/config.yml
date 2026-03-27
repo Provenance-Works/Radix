@@ -1,11 +1,14 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Contribution Guide
+    url: https://github.com/provenance-works/radix/blob/main/CONTRIBUTING.md
+    about: Check the current contribution flow, verification commands, and import surfaces.
   - name: Question / Discussion
     url: https://github.com/provenance-works/radix/discussions
     about: Ask questions, share ideas, or start a general discussion.
   - name: Documentation
-    url: https://github.com/provenance-works/radix/tree/main/docs/en
-    about: Check the documentation before opening an issue.
+    url: https://github.com/provenance-works/radix/blob/main/docs/en/README.md
+    about: Check the current docs hub before opening an issue.
   - name: Security Vulnerability
     url: https://github.com/provenance-works/radix/security/advisories/new
     about: Report security vulnerabilities privately. DO NOT open a public issue.
