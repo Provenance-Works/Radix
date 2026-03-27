@@ -71,6 +71,6 @@ instead of re-inventing and re-verifying them independently.
 ## Success Criteria
 
 - Other Lean 4 projects depend on Radix as their low-level layer.
-- All 702+ theorems remain `sorry`-free across Lean/Mathlib upgrades.
+- All 1123+ theorems remain `sorry`-free across Lean/Mathlib upgrades.
 - Runtime performance within 2× of equivalent C on microbenchmarks.
 - Tracks Lean 4 stable toolchain within one release cycle.
