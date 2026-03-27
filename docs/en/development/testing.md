@@ -9,7 +9,7 @@ Radix employs a multi-layered testing strategy:
 | Layer | Type | What it verifies |
 |-------|------|-----------------|
 | **Formal proofs** | Lean 4 type system | Mathematical correctness (Lemmas modules) |
-| **Unit tests** | `tests/Main.lean` | Concrete input/output correctness for all 18 modules |
+| **Unit tests** | `tests/Main.lean` | Concrete input/output correctness for all 18 leaf modules |
 | **Property tests** | `tests/PropertyTests.lean` | Algebraic properties hold over random inputs |
 | **Comprehensive tests** | `tests/ComprehensiveTests.lean` | Cross-module regression coverage and assertion counts |
 | **Examples** | `examples/Main.lean` | Usage examples execute with assertions |
@@ -20,7 +20,7 @@ graph TD
         Proofs["Formal Proofs<br/>(Lemmas modules)<br/>Verified by Lean 4 kernel"]
     end
     subgraph "Runtime (Execution Tests)"
-        Unit["Unit Tests<br/>(tests/Main.lean)<br/>All 18 modules × concrete values"]
+        Unit["Unit Tests<br/>(tests/Main.lean)<br/>All 18 leaf modules × concrete values"]
         Prop["Property Tests<br/>(tests/PropertyTests.lean)<br/>500 iterations × random inputs"]
         Comp["Comprehensive Tests<br/>(tests/ComprehensiveTests.lean)<br/>Full regression coverage"]
         Ex["Examples<br/>(examples/Main.lean)<br/>Core walkthrough + 21 runnable example modules"]
@@ -38,7 +38,7 @@ graph TD
 ## Running Tests
 
 ```bash
-# Unit tests — all 18 modules
+# Unit tests — all 18 leaf modules
 lake exe test
 
 # Property-based tests — random + edge cases
@@ -54,11 +54,13 @@ lake exe examples
 lake exe test && lake exe proptest && lake exe comptest && lake exe examples
 ```
 
-All commands should complete with zero failures.
+All commands should complete with zero failures. `lake build` and `make check`
+also compile-validate the grouped import surfaces `Radix`, `Radix.Pure`, and
+`Radix.Trusted`.
 
 ## Unit Tests (`tests/Main.lean`)
 
-Covers all 18 modules with concrete test values:
+Covers all 18 leaf modules with concrete test values:
 
 | Module | Coverage |
 |--------|----------|
