@@ -6,7 +6,7 @@
 # =============================================================================
 
 .DEFAULT_GOAL := help
-.PHONY: help build build-baseline build-ffi test proptest comptest test-all examples bench lint clean check setup fmt sorry-check
+.PHONY: help build build-baseline build-ffi test proptest comptest test-all examples bench lint clean check setup fmt sorry-check stats stats-check pre-commit-install pre-commit-run
 
 # ---------------------------------------------------------------------------
 # Help
@@ -28,6 +28,11 @@ help: ## Show this help message
 setup: ## Install dependencies and fetch Mathlib cache
 	lake update
 	lake exe cache get 2>/dev/null || true
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		pre-commit install --install-hooks; \
+	else \
+		echo "Optional: install pre-commit, then run 'make pre-commit-install'"; \
+	fi
 
 # ---------------------------------------------------------------------------
 # Build
@@ -91,6 +96,20 @@ bench: build-baseline ## Run Lean benchmarks and the C baseline when available
 # Quality
 # ---------------------------------------------------------------------------
 
+stats: ## Refresh README/docs/project statistics from scripts/project_stats.json
+	python3 scripts/update_project_stats.py
+
+stats-check: ## Verify README/docs/project statistics are up to date
+	python3 scripts/update_project_stats.py --check
+
+pre-commit-install: ## Install local pre-commit hooks
+	@command -v pre-commit >/dev/null 2>&1 || { echo "Install pre-commit first: python3 -m pip install pre-commit"; exit 1; }
+	pre-commit install --install-hooks
+
+pre-commit-run: ## Run pre-commit on all files
+	@command -v pre-commit >/dev/null 2>&1 || { echo "Install pre-commit first: python3 -m pip install pre-commit"; exit 1; }
+	pre-commit run --all-files
+
 sorry-check: ## Verify zero sorry statements in codebase
 	@echo "Scanning for sorry statements..."
 	@result=$$(grep -rn "sorry" Radix/ --include="*.lean" 2>/dev/null); \
@@ -102,7 +121,7 @@ sorry-check: ## Verify zero sorry statements in codebase
 		echo "OK: Zero sorry statements found."; \
 	fi
 
-lint: sorry-check ## Run all lint checks
+lint: sorry-check stats-check ## Run all lint checks
 
 check: build test-all examples lint ## Run full verification (build + all tests + examples + lint)
 
