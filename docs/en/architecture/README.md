@@ -76,7 +76,7 @@ graph TD
 | Timer | `Timer.Spec`, `Timer.Lemmas` | `Timer.Ops` | — |
 | ProofAutomation | — | — | Meta-level tactic macros |
 
-> **Note:** Fourteen modules are fully pure in v0.3.0: Word, Bit, Bytes, Memory, Binary, Alignment, RingBuffer, Bitmap, CRC, MemoryPool, UTF8, ECC, DMA, and Timer. Only System, Concurrency, and BareMetal cross the Layer 1 trusted boundary, while `ProofAutomation` remains a meta-level support module.
+> **Note:** Fourteen modules are fully pure in v0.3.0: Word, Bit, Bytes, Memory, Binary, Alignment, RingBuffer, Bitmap, CRC, MemoryPool, UTF8, ECC, DMA, and Timer. Only System, Concurrency, and BareMetal cross the Layer 1 trusted boundary, while `ProofAutomation` remains a meta-level support module. This split is also exposed directly in the import surface as `Radix.Pure` and `Radix.Trusted`.
 
 ## Module Dependency Graph
 
