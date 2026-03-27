@@ -1,0 +1,29 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-json
+        files: ^(lake-manifest\.json|scripts/project_stats\.json)$
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+        files: \.(lean|md|py|ya?ml|json)$
+      - id: trailing-whitespace
+        files: \.(lean|md|py|ya?ml|json)$
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: local
+    hooks:
+      - id: radix-yaml-syntax
+        name: Validate YAML syntax
+        entry: python scripts/validate_yaml.py
+        language: python
+        additional_dependencies:
+          - pyyaml
+        files: ^(\.github/.*\.(yml|yaml)|\.gitlab-ci\.yml|\.pre-commit-config\.yaml)$
+      - id: radix-project-stats
+        name: Regenerate project stats surfaces
+        entry: python3 scripts/update_project_stats.py
+        language: system
+        pass_filenames: false
+        files: ^(README\.md|ROADMAP\.md|VISION\.md|CONTRIBUTING\.md|docs/.*\.md|scripts/project_stats\.json|scripts/update_project_stats\.py|Radix\.lean|Radix/Pure\.lean|Radix/Trusted\.lean|Radix/[^/]+\.lean|examples/.*\.lean)$
