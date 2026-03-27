@@ -6,6 +6,7 @@ import Mathlib.Tactic
 import Radix.UTF8.CaseFoldingTables
 import Radix.UTF8.GraphemeTables
 import Radix.UTF8.NormalizationTables
+import Radix.UTF8.UnicodeDataTables
 
 /-!
 # UTF-8 Specification (Layer 3)
@@ -768,9 +769,8 @@ theorem high_lead_byte_rejected (b0 : UInt8) (h : 0xF5 ≤ b0.toNat)
 
 /-! ## Unicode Category Classification -/
 
-/-- Unicode general category (simplified). Only the categories needed for
-    binary-level UTF-8 processing. -/
-inductive GeneralCategory where
+/-- Unicode broad general-category families used for derived predicates. -/
+inductive GeneralCategoryFamily where
   | letter
   | mark
   | number
@@ -780,21 +780,104 @@ inductive GeneralCategory where
   | other
   deriving DecidableEq, Repr
 
-/-- Classify a scalar into a general category based on code point range.
-    This is a rough approximation — full UCD data is not included. -/
+/-- Full Unicode general category derived from vendored Unicode 17 data. -/
+inductive GeneralCategory where
+  | uppercaseLetter
+  | lowercaseLetter
+  | titlecaseLetter
+  | modifierLetter
+  | otherLetter
+  | nonspacingMark
+  | spacingMark
+  | enclosingMark
+  | decimalNumber
+  | letterNumber
+  | otherNumber
+  | connectorPunctuation
+  | dashPunctuation
+  | openPunctuation
+  | closePunctuation
+  | initialPunctuation
+  | finalPunctuation
+  | otherPunctuation
+  | mathSymbol
+  | currencySymbol
+  | modifierSymbol
+  | otherSymbol
+  | spaceSeparator
+  | lineSeparator
+  | paragraphSeparator
+  | control
+  | format
+  | surrogate
+  | privateUse
+  | unassigned
+  deriving DecidableEq, Repr
+
+namespace GeneralCategory
+
+/-- Collapse an exact Unicode general category into its broad family. -/
+def family : GeneralCategory → GeneralCategoryFamily
+  | .uppercaseLetter | .lowercaseLetter | .titlecaseLetter | .modifierLetter | .otherLetter => .letter
+  | .nonspacingMark | .spacingMark | .enclosingMark => .mark
+  | .decimalNumber | .letterNumber | .otherNumber => .number
+  | .connectorPunctuation | .dashPunctuation | .openPunctuation | .closePunctuation
+  | .initialPunctuation | .finalPunctuation | .otherPunctuation => .punctuation
+  | .mathSymbol | .currencySymbol | .modifierSymbol | .otherSymbol => .symbol
+  | .spaceSeparator | .lineSeparator | .paragraphSeparator => .separator
+  | .control | .format | .surrogate | .privateUse | .unassigned => .other
+
+/-- Whether a scalar in this exact Unicode category should be treated as printable. -/
+def isPrintable : GeneralCategory → Bool
+  | .control | .format | .surrogate | .privateUse | .unassigned => false
+  | _ => true
+
+end GeneralCategory
+
+/-- Classify a code point into its exact Unicode 17 general category. -/
+private def classifyCategoryNat (v : Nat) : GeneralCategory :=
+  if UnicodeDataTables.isUppercaseLetter v then .uppercaseLetter
+  else if UnicodeDataTables.isLowercaseLetter v then .lowercaseLetter
+  else if UnicodeDataTables.isTitlecaseLetter v then .titlecaseLetter
+  else if UnicodeDataTables.isModifierLetter v then .modifierLetter
+  else if UnicodeDataTables.isOtherLetter v then .otherLetter
+  else if UnicodeDataTables.isNonspacingMark v then .nonspacingMark
+  else if UnicodeDataTables.isSpacingMark v then .spacingMark
+  else if UnicodeDataTables.isEnclosingMark v then .enclosingMark
+  else if UnicodeDataTables.isDecimalNumber v then .decimalNumber
+  else if UnicodeDataTables.isLetterNumber v then .letterNumber
+  else if UnicodeDataTables.isOtherNumber v then .otherNumber
+  else if UnicodeDataTables.isConnectorPunctuation v then .connectorPunctuation
+  else if UnicodeDataTables.isDashPunctuation v then .dashPunctuation
+  else if UnicodeDataTables.isOpenPunctuation v then .openPunctuation
+  else if UnicodeDataTables.isClosePunctuation v then .closePunctuation
+  else if UnicodeDataTables.isInitialPunctuation v then .initialPunctuation
+  else if UnicodeDataTables.isFinalPunctuation v then .finalPunctuation
+  else if UnicodeDataTables.isOtherPunctuation v then .otherPunctuation
+  else if UnicodeDataTables.isMathSymbol v then .mathSymbol
+  else if UnicodeDataTables.isCurrencySymbol v then .currencySymbol
+  else if UnicodeDataTables.isModifierSymbol v then .modifierSymbol
+  else if UnicodeDataTables.isOtherSymbol v then .otherSymbol
+  else if UnicodeDataTables.isSpaceSeparator v then .spaceSeparator
+  else if UnicodeDataTables.isLineSeparator v then .lineSeparator
+  else if UnicodeDataTables.isParagraphSeparator v then .paragraphSeparator
+  else if UnicodeDataTables.isControl v then .control
+  else if UnicodeDataTables.isFormat v then .format
+  else if UnicodeDataTables.isSurrogate v then .surrogate
+  else if UnicodeDataTables.isPrivateUse v then .privateUse
+  else .unassigned
+
+/-- Classify a code point into its broad Unicode general-category family. -/
+private def classifyCategoryFamilyNat (v : Nat) : GeneralCategoryFamily :=
+  (classifyCategoryNat v).family
+
+/-- Classify a scalar into its exact Unicode general category. -/
 def classifyCategory (s : Scalar) : GeneralCategory :=
-  let v := s.val
-  if v < 0x20 then .other          -- C0 controls
-  else if v < 0x7F then
-    if v ≥ 0x41 && v ≤ 0x5A then .letter      -- A-Z
-    else if v ≥ 0x61 && v ≤ 0x7A then .letter  -- a-z
-    else if v ≥ 0x30 && v ≤ 0x39 then .number  -- 0-9
-    else if v == 0x20 then .separator
-    else .punctuation
-  else if v < 0xA0 then .other     -- C1 controls + DEL
-  else if v < 0x0300 then .letter  -- Latin Extended etc.
-  else if v < 0x0370 then .mark    -- Combining diacriticals
-  else .letter                     -- Simplified: treat rest as letter
+  classifyCategoryNat s.val
+
+/-- Classify a scalar into its broad Unicode general-category family. -/
+def classifyCategoryFamily (s : Scalar) : GeneralCategoryFamily :=
+  classifyCategoryFamilyNat s.val
 
 /-! ## UTF-8 Validation State Machine
 
@@ -903,41 +986,43 @@ def IsWhitespace (n : Nat) : Prop :=
 instance (n : Nat) : Decidable (IsWhitespace n) :=
   inferInstanceAs (Decidable (_ ∨ _))
 
-/-- Whether a code point is an ASCII digit 0-9. -/
-def IsDigit (n : Nat) : Prop := 0x30 ≤ n ∧ n ≤ 0x39
+/-- Whether a code point is a Unicode decimal digit (General_Category = Nd). -/
+def IsDigit (n : Nat) : Prop := UnicodeDataTables.isDecimalDigit n = true
 
 instance (n : Nat) : Decidable (IsDigit n) :=
-  inferInstanceAs (Decidable (_ ∧ _))
+  inferInstanceAs (Decidable (_ = true))
 
-/-- Whether a code point is an ASCII uppercase letter. -/
-def IsUppercase (n : Nat) : Prop := 0x41 ≤ n ∧ n ≤ 0x5A
+/-- Whether a code point is a Unicode uppercase letter (General_Category = Lu). -/
+def IsUppercase (n : Nat) : Prop := UnicodeDataTables.isUppercase n = true
 
 instance (n : Nat) : Decidable (IsUppercase n) :=
-  inferInstanceAs (Decidable (_ ∧ _))
+  inferInstanceAs (Decidable (_ = true))
 
-/-- Whether a code point is an ASCII lowercase letter. -/
-def IsLowercase (n : Nat) : Prop := 0x61 ≤ n ∧ n ≤ 0x7A
+/-- Whether a code point is a Unicode lowercase letter (General_Category = Ll). -/
+def IsLowercase (n : Nat) : Prop := UnicodeDataTables.isLowercase n = true
 
 instance (n : Nat) : Decidable (IsLowercase n) :=
-  inferInstanceAs (Decidable (_ ∧ _))
+  inferInstanceAs (Decidable (_ = true))
 
-/-- Whether a code point is an ASCII letter (uppercase or lowercase). -/
-def IsAlpha (n : Nat) : Prop := IsUppercase n ∨ IsLowercase n
+/-- Whether a code point belongs to the Unicode broad letter category (General_Category = L*). -/
+def IsAlpha (n : Nat) : Prop := UnicodeDataTables.isLetter n = true
 
 instance (n : Nat) : Decidable (IsAlpha n) :=
-  inferInstanceAs (Decidable (_ ∨ _))
+  inferInstanceAs (Decidable (_ = true))
 
-/-- Whether a code point is an ASCII alphanumeric character. -/
+/-- Whether a code point is a Unicode alphanumeric character. -/
 def IsAlphanumeric (n : Nat) : Prop := IsAlpha n ∨ IsDigit n
 
 instance (n : Nat) : Decidable (IsAlphanumeric n) :=
   inferInstanceAs (Decidable (_ ∨ _))
 
-/-- Whether a code point is a printable ASCII character (0x20..0x7E). -/
-def IsPrintable (n : Nat) : Prop := 0x20 ≤ n ∧ n ≤ 0x7E
+/-- Whether a code point is a printable Unicode scalar under its exact Unicode
+    general-category classification. -/
+def IsPrintable (n : Nat) : Prop :=
+  IsScalar n ∧ GeneralCategory.isPrintable (classifyCategoryNat n) = true
 
 instance (n : Nat) : Decidable (IsPrintable n) :=
-  inferInstanceAs (Decidable (_ ∧ _))
+  inferInstanceAs (Decidable (_ ∧ _ = true))
 
 /-- Whether a code point is a C0 control (0x00..0x1F). -/
 def IsC0Control (n : Nat) : Prop := n ≤ 0x1F
@@ -951,121 +1036,13 @@ def IsC1Control (n : Nat) : Prop := 0x80 ≤ n ∧ n ≤ 0x9F
 instance (n : Nat) : Decidable (IsC1Control n) :=
   inferInstanceAs (Decidable (_ ∧ _))
 
-/-- Supported simple uppercase-to-lowercase mapping over ASCII and selected Latin precomposed scalars. -/
+/-- Full Unicode 17 simple uppercase-to-lowercase mapping derived from vendored UnicodeData. -/
 def simpleLowerNat? (n : Nat) : Option Nat :=
-  match n with
-  | 0x41 => some 0x61
-  | 0x42 => some 0x62
-  | 0x43 => some 0x63
-  | 0x44 => some 0x64
-  | 0x45 => some 0x65
-  | 0x46 => some 0x66
-  | 0x47 => some 0x67
-  | 0x48 => some 0x68
-  | 0x49 => some 0x69
-  | 0x4A => some 0x6A
-  | 0x4B => some 0x6B
-  | 0x4C => some 0x6C
-  | 0x4D => some 0x6D
-  | 0x4E => some 0x6E
-  | 0x4F => some 0x6F
-  | 0x50 => some 0x70
-  | 0x51 => some 0x71
-  | 0x52 => some 0x72
-  | 0x53 => some 0x73
-  | 0x54 => some 0x74
-  | 0x55 => some 0x75
-  | 0x56 => some 0x76
-  | 0x57 => some 0x77
-  | 0x58 => some 0x78
-  | 0x59 => some 0x79
-  | 0x5A => some 0x7A
-  | 0x00C0 => some 0x00E0
-  | 0x00C1 => some 0x00E1
-  | 0x00C2 => some 0x00E2
-  | 0x00C3 => some 0x00E3
-  | 0x00C4 => some 0x00E4
-  | 0x00C5 => some 0x00E5
-  | 0x00C7 => some 0x00E7
-  | 0x00C8 => some 0x00E8
-  | 0x00C9 => some 0x00E9
-  | 0x00CA => some 0x00EA
-  | 0x00CB => some 0x00EB
-  | 0x00CC => some 0x00EC
-  | 0x00CD => some 0x00ED
-  | 0x00CE => some 0x00EE
-  | 0x00CF => some 0x00EF
-  | 0x00D1 => some 0x00F1
-  | 0x00D2 => some 0x00F2
-  | 0x00D3 => some 0x00F3
-  | 0x00D4 => some 0x00F4
-  | 0x00D5 => some 0x00F5
-  | 0x00D6 => some 0x00F6
-  | 0x00D9 => some 0x00F9
-  | 0x00DA => some 0x00FA
-  | 0x00DB => some 0x00FB
-  | 0x00DC => some 0x00FC
-  | 0x00DD => some 0x00FD
-  | 0x0178 => some 0x00FF
-  | _ => none
+  UnicodeDataTables.simpleLowerNat? n
 
-/-- Supported simple lowercase-to-uppercase mapping over ASCII and selected Latin precomposed scalars. -/
+/-- Full Unicode 17 simple lowercase-to-uppercase mapping derived from vendored UnicodeData. -/
 def simpleUpperNat? (n : Nat) : Option Nat :=
-  match n with
-  | 0x61 => some 0x41
-  | 0x62 => some 0x42
-  | 0x63 => some 0x43
-  | 0x64 => some 0x44
-  | 0x65 => some 0x45
-  | 0x66 => some 0x46
-  | 0x67 => some 0x47
-  | 0x68 => some 0x48
-  | 0x69 => some 0x49
-  | 0x6A => some 0x4A
-  | 0x6B => some 0x4B
-  | 0x6C => some 0x4C
-  | 0x6D => some 0x4D
-  | 0x6E => some 0x4E
-  | 0x6F => some 0x4F
-  | 0x70 => some 0x50
-  | 0x71 => some 0x51
-  | 0x72 => some 0x52
-  | 0x73 => some 0x53
-  | 0x74 => some 0x54
-  | 0x75 => some 0x55
-  | 0x76 => some 0x56
-  | 0x77 => some 0x57
-  | 0x78 => some 0x58
-  | 0x79 => some 0x59
-  | 0x7A => some 0x5A
-  | 0x00E0 => some 0x00C0
-  | 0x00E1 => some 0x00C1
-  | 0x00E2 => some 0x00C2
-  | 0x00E3 => some 0x00C3
-  | 0x00E4 => some 0x00C4
-  | 0x00E5 => some 0x00C5
-  | 0x00E7 => some 0x00C7
-  | 0x00E8 => some 0x00C8
-  | 0x00E9 => some 0x00C9
-  | 0x00EA => some 0x00CA
-  | 0x00EB => some 0x00CB
-  | 0x00EC => some 0x00CC
-  | 0x00ED => some 0x00CD
-  | 0x00EE => some 0x00CE
-  | 0x00EF => some 0x00CF
-  | 0x00F1 => some 0x00D1
-  | 0x00F2 => some 0x00D2
-  | 0x00F3 => some 0x00D3
-  | 0x00F4 => some 0x00D4
-  | 0x00F5 => some 0x00D5
-  | 0x00F6 => some 0x00D6
-  | 0x00F9 => some 0x00D9
-  | 0x00FA => some 0x00DA
-  | 0x00FB => some 0x00DB
-  | 0x00FC => some 0x00DC
-  | 0x00FD => some 0x00DD
-  | 0x00FF => some 0x0178
-  | _ => none
+  UnicodeDataTables.simpleUpperNat? n
 
 namespace Scalar
 
@@ -1075,26 +1052,25 @@ def isControl (s : Scalar) : Bool := decide (IsControl s.val)
 /-- Whether the scalar is whitespace. -/
 def isWhitespace (s : Scalar) : Bool := decide (IsWhitespace s.val)
 
-/-- Whether the scalar is an ASCII digit. -/
+/-- Whether the scalar is a Unicode decimal digit. -/
 def isDigit (s : Scalar) : Bool := decide (IsDigit s.val)
 
-/-- Whether the scalar is an ASCII letter. -/
+/-- Whether the scalar belongs to the Unicode broad letter category. -/
 def isAlpha (s : Scalar) : Bool := decide (IsAlpha s.val)
 
-/-- Whether the scalar is printable. -/
+/-- Whether the scalar is printable under its exact Unicode general category. -/
 def isPrintable (s : Scalar) : Bool := decide (IsPrintable s.val)
 
-/-- Whether the scalar is an ASCII uppercase letter. -/
+/-- Whether the scalar is a Unicode uppercase letter. -/
 def isUppercase (s : Scalar) : Bool := decide (IsUppercase s.val)
 
-/-- Whether the scalar is an ASCII lowercase letter. -/
+/-- Whether the scalar is a Unicode lowercase letter. -/
 def isLowercase (s : Scalar) : Bool := decide (IsLowercase s.val)
 
 /-- Simple ASCII uppercase → lowercase mapping. Returns None for non-uppercase. -/
 def toLowerAscii? (s : Scalar) : Option Scalar :=
-  if h : IsUppercase s.val then
+  if h : 0x41 ≤ s.val ∧ s.val ≤ 0x5A then
     some ⟨s.val + 0x20, by
-      unfold IsUppercase at h
       constructor
       · omega
       · intro ⟨hl, hr⟩; omega⟩
@@ -1102,15 +1078,15 @@ def toLowerAscii? (s : Scalar) : Option Scalar :=
 
 /-- Simple ASCII lowercase → uppercase mapping. Returns None for non-lowercase. -/
 def toUpperAscii? (s : Scalar) : Option Scalar :=
-  if h : IsLowercase s.val then
+  if h : 0x61 ≤ s.val ∧ s.val ≤ 0x7A then
     some ⟨s.val - 0x20, by
-      unfold IsLowercase at h
       constructor
       · omega
       · intro ⟨hl, hr⟩; omega⟩
   else none
 
-/-- Supported simple uppercase → lowercase mapping. Returns the original scalar when no mapping is defined. -/
+/-- Full Unicode 17 simple uppercase → lowercase mapping.
+    Returns the original scalar when no simple mapping is defined. -/
 def toLowerSimple (s : Scalar) : Scalar :=
   match simpleLowerNat? s.val with
   | some lower =>
@@ -1119,7 +1095,8 @@ def toLowerSimple (s : Scalar) : Scalar :=
     | none => s
   | none => s
 
-/-- Supported simple lowercase → uppercase mapping. Returns the original scalar when no mapping is defined. -/
+/-- Full Unicode 17 simple lowercase → uppercase mapping.
+    Returns the original scalar when no simple mapping is defined. -/
 def toUpperSimple (s : Scalar) : Scalar :=
   match simpleUpperNat? s.val with
   | some upper =>
@@ -1128,9 +1105,14 @@ def toUpperSimple (s : Scalar) : Scalar :=
     | none => s
   | none => s
 
-/-- Supported simple case folding. This currently follows the lowercase mapping subset. -/
+/-- Full Unicode 17 simple case folding for a single scalar. -/
 def caseFoldSimple (s : Scalar) : Scalar :=
-  toLowerSimple s
+  match CaseFoldingTables.simpleCaseFold? s.val with
+  | some [mapped] =>
+    match ofNat? mapped with
+    | some folded => folded
+    | none => s
+  | _ => s
 
 /-- Successor scalar (next valid scalar, skipping surrogates). -/
 def succ? (s : Scalar) : Option Scalar :=
@@ -1295,7 +1277,7 @@ private def decomposeHangul? (s : Scalar) : Option (List Scalar) :=
   else
     none
 
-/-- One-step canonical decomposition for the supported normalization subset. -/
+/-- One-step canonical decomposition for full vendored Unicode 17 normalization data. -/
 def canonicalDecomposition? (s : Scalar) : Option (List Scalar) :=
   match decomposeHangul? s with
   | some decomposed => some decomposed
@@ -1304,7 +1286,7 @@ def canonicalDecomposition? (s : Scalar) : Option (List Scalar) :=
     | some ns => scalarListFromNats? ns
     | none => none
 
-/-- One-step compatibility decomposition for the supported normalization subset. -/
+/-- One-step compatibility decomposition for full vendored Unicode 17 normalization data. -/
 def compatibilityDecomposition? (s : Scalar) : Option (List Scalar) :=
   match compatibilityDecompositionNats? s.val with
   | some ns => scalarListFromNats? ns
@@ -1347,7 +1329,7 @@ private def composeHangulPair? (starter mark : Scalar) : Option Scalar :=
   else
     none
 
-/-- Canonical composition for the supported normalization subset. -/
+/-- Canonical composition for full vendored Unicode 17 normalization data. -/
 def canonicalComposePair? (starter mark : Scalar) : Option Scalar :=
   match composeHangulPair? starter mark with
   | some composed => some composed
@@ -1611,9 +1593,9 @@ theorem levenshteinDistance_self (xs : List Scalar) : levenshteinDistance xs xs 
 theorem isScalar_c0_control (n : Nat) (h : n ≤ 0x1F) : IsScalar n :=
   ⟨by omega, fun ⟨hl, _⟩ => by omega⟩
 
-/-- Printable ASCII characters are always valid scalars. -/
+/-- Printable Unicode scalars are always valid scalars. -/
 theorem isScalar_printable (n : Nat) (h : IsPrintable n) : IsScalar n :=
-  ⟨by have := h.1; have := h.2; omega, fun ⟨hl, _⟩ => by have := h.2; omega⟩
+  h.1
 
 /-- BMP scalars have a byte count of 1, 2, or 3. -/
 theorem byteCount_bmp (s : Scalar) (h : s.val < 0x10000) :
@@ -1641,16 +1623,6 @@ theorem plane_pos_of_supplementary (s : Scalar) (h : 0x10000 ≤ s.val) :
     0 < Scalar.plane s := by
   unfold Scalar.plane
   omega
-
-/-- Digits are always ASCII. -/
-theorem digit_isAscii (n : Nat) (h : IsDigit n) : IsAscii n := by
-  unfold IsDigit at h; unfold IsAscii; omega
-
-/-- Letters are always ASCII. -/
-theorem alpha_isAscii (n : Nat) (h : IsAlpha n) : IsAscii n := by
-  cases h with
-  | inl hu => unfold IsUppercase at hu; unfold IsAscii; omega
-  | inr hl => unfold IsLowercase at hl; unfold IsAscii; omega
 
 /-- toLower on 'A' gives 'a'. -/
 theorem toLowerAscii_A :
