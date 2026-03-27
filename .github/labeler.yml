@@ -1,37 +1,119 @@
 # Radix PR Labeler Configuration
 
-# Core modules
+# Public import surfaces
+public-surface:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Radix.lean'
+      - 'Radix/Pure.lean'
+      - 'Radix/Trusted.lean'
+
+# Leaf modules
 word:
   - changed-files:
-      - any-glob-to-any-file: 'Radix/Word/**'
+    - any-glob-to-any-file:
+      - 'Radix/Word.lean'
+      - 'Radix/Word/**'
 
 bit:
   - changed-files:
-      - any-glob-to-any-file: 'Radix/Bit/**'
+    - any-glob-to-any-file:
+      - 'Radix/Bit.lean'
+      - 'Radix/Bit/**'
 
 bytes:
   - changed-files:
-      - any-glob-to-any-file: 'Radix/Bytes/**'
+    - any-glob-to-any-file:
+      - 'Radix/Bytes.lean'
+      - 'Radix/Bytes/**'
 
 memory:
   - changed-files:
-      - any-glob-to-any-file: 'Radix/Memory/**'
+    - any-glob-to-any-file:
+      - 'Radix/Memory.lean'
+      - 'Radix/Memory/**'
 
 binary:
   - changed-files:
-      - any-glob-to-any-file: 'Radix/Binary/**'
+    - any-glob-to-any-file:
+      - 'Radix/Binary.lean'
+      - 'Radix/Binary/**'
+
+alignment:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Radix/Alignment.lean'
+      - 'Radix/Alignment/**'
+
+ringbuffer:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Radix/RingBuffer.lean'
+      - 'Radix/RingBuffer/**'
+
+bitmap:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Radix/Bitmap.lean'
+      - 'Radix/Bitmap/**'
+
+crc:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Radix/CRC.lean'
+      - 'Radix/CRC/**'
+
+memorypool:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Radix/MemoryPool.lean'
+      - 'Radix/MemoryPool/**'
+
+utf8:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Radix/UTF8.lean'
+      - 'Radix/UTF8/**'
+
+ecc:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Radix/ECC.lean'
+      - 'Radix/ECC/**'
+
+dma:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Radix/DMA.lean'
+      - 'Radix/DMA/**'
+
+timer:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Radix/Timer.lean'
+      - 'Radix/Timer/**'
 
 system:
   - changed-files:
-      - any-glob-to-any-file: 'Radix/System/**'
+    - any-glob-to-any-file:
+      - 'Radix/System.lean'
+      - 'Radix/System/**'
 
 concurrency:
   - changed-files:
-      - any-glob-to-any-file: 'Radix/Concurrency/**'
+    - any-glob-to-any-file:
+      - 'Radix/Concurrency.lean'
+      - 'Radix/Concurrency/**'
 
 baremetal:
   - changed-files:
-      - any-glob-to-any-file: 'Radix/BareMetal/**'
+    - any-glob-to-any-file:
+      - 'Radix/BareMetal.lean'
+      - 'Radix/BareMetal/**'
+
+proofautomation:
+  - changed-files:
+    - any-glob-to-any-file: 'Radix/ProofAutomation.lean'
 
 # Categories
 documentation:
