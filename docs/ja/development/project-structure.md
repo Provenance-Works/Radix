@@ -8,11 +8,13 @@
 radix/
 ├── lakefile.lean              # Lake ビルド設定
 ├── lean-toolchain             # Lean 4 バージョンピン（v4.29.0-rc4）
-├── Radix.lean                 # ルートインポート（全18モジュールをインポート）
+├── Radix.lean                 # ルートインポート（全18 leaf modules を束ねる grouped surface）
 ├── CHANGELOG.md               # バージョン履歴
 ├── test_helpers.lean          # アドホック証明実験
 │
-├── Radix/                     # ソースモジュール（18モジュール）
+├── Radix/                     # ソースモジュール（18 leaf modules + grouped import surfaces）
+│   ├── Pure.lean              # 14 個の pure leaf modules を束ねる grouped import
+│   ├── Trusted.lean           # 3 個の trusted-boundary leaf modules を束ねる grouped import
 │   ├── Alignment.lean         # Alignment モジュールアグリゲータ
 │   ├── Bitmap.lean            # Bitmap モジュールアグリゲータ
 │   ├── CRC.lean               # CRC モジュールアグリゲータ
@@ -24,6 +26,9 @@ radix/
 │   ├── Timer.lean             # Timer モジュールアグリゲータ
 │   ├── UTF8.lean              # UTF-8 モジュールアグリゲータ
 │   ├── Word.lean              # Word モジュールアグリゲータ
+│   ├── Word/
+│   │   ├── Lemmas.lean        # Word の lemma 群を束ねる aggregate import
+│   │   └── ...
 │   ├── Bit.lean               # Bit モジュールアグリゲータ
 │   ├── Bytes.lean             # Bytes モジュールアグリゲータ
 │   ├── Memory.lean            # Memory モジュールアグリゲータ
@@ -34,7 +39,7 @@ radix/
 │   └── <Module>/              # モジュールごとの Spec / Impl / Lemmas / Assumptions
 │
 ├── tests/
-│   ├── Main.lean              # 実行テスト（全18モジュール）
+│   ├── Main.lean              # 実行テスト（全18 leaf modules）
 │   ├── PropertyTests.lean     # プロパティベーステスト（500イテレーション、LCG PRNG）
 │   ├── ComprehensiveTests.lean # アサーション集計付きの完全回帰テスト
 │   └── ComprehensiveTests/    # モジュール別の包括テスト
@@ -80,9 +85,19 @@ graph TD
 |------|---------|
 | `lakefile.lean` | ビルド設定、依存関係、ターゲット |
 | `lean-toolchain` | ピン留めされたLean 4バージョン |
-| `Radix.lean` | ルートインポート — 全18モジュールアグリゲータをインポート |
+| `Radix.lean` | ルートインポート — 18 leaf modules 全体を束ねる grouped public surface |
 | `tests/ComprehensiveTests.lean` | アサーション集計付きの完全回帰エントリポイント |
 | `CHANGELOG.md` | バージョン履歴 |
+
+## 公開 Import Surface
+
+| Import | 対象 |
+|--------|------|
+| `Radix.<Module>` | `Radix.Word` や `Radix.Binary` のような単一 leaf module |
+| `Radix.Pure` | Layer 2-3 に留まる 14 個の pure leaf modules |
+| `Radix.Trusted` | `System`、`Concurrency`、`BareMetal` の 3 個の trusted-boundary leaf modules |
+| `Radix.ProofAutomation` | メタレベルの tactic macro のみ |
+| `Radix` | 完全な公開 surface |
 
 ## 命名慣習
 
