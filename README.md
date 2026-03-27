@@ -37,7 +37,7 @@ Radix eliminates this trade-off:
 
 | Module | Description | Theorems |
 |--------|-------------|----------|
-| **Word** | 10 integer types (U/Int 8–64, UWord, IWord), 4 arithmetic modes, numeric typeclasses | 350 |
+| **Word** | 10 integer types (U/Int 8-64, UWord, IWord), 4 arithmetic modes, numeric typeclasses | 350 |
 | **Bit** | Boolean algebra, shifts, rotates, scanning, bit fields | 278 |
 | **Bytes** | Endianness, bswap, ByteSlice | 60 |
 | **Memory** | Buffer, Ptr, LayoutDesc, region disjointness and algebra | 60 |
@@ -75,9 +75,10 @@ Radix eliminates this trade-off:
 └─────────────────────────────────────────────────┘
 ```
 
-Seventeen runtime and model modules follow a three-layer design.
-`ProofAutomation` is a meta-level helper module that provides tactic macros
-rather than a runtime surface:
+Radix exposes 18 leaf modules plus grouped public import surfaces
+(`Radix`, `Radix.Pure`, and `Radix.Trusted`). Seventeen leaf runtime and model modules follow a three-layer design, while `ProofAutomation` is a
+meta-level helper module that provides tactic macros rather than a runtime
+surface:
 
 | Layer | Purpose | Example |
 |-------|---------|---------|
@@ -85,7 +86,7 @@ rather than a runtime surface:
 | **Impl** | Computable Lean 4 code with correctness proofs | `Word.UInt`, `Bit.Ops` |
 | **Bridge** | System-level wrappers with named trust assumptions | `System.IO`, `BareMetal.Assumptions` |
 
-Fourteen runtime modules are fully executable and self-contained in pure Lean. `ProofAutomation` is also pure Lean, but it operates at elaboration time as a meta-level helper rather than as an executable runtime module. `System`, `Concurrency`, and `BareMetal` deliberately cross the trusted boundary: they formalize external OS or hardware behavior via named assumptions, and `BareMetal` is a verification model rather than a device-runtime implementation.
+Fourteen leaf modules stay entirely within Layers 2-3. `ProofAutomation` is also pure Lean, but it operates at elaboration time as a meta-level helper rather than as an executable runtime module. `System`, `Concurrency`, and `BareMetal` deliberately cross the trusted boundary: they formalize external OS or hardware behavior via named assumptions, and `BareMetal` is a verification model rather than a device-runtime implementation. The grouped import surfaces mirror this split directly via `Radix.Pure`, `Radix.Trusted`, and `Radix`.
 
 ## Quick Start
 
@@ -120,6 +121,14 @@ import Radix.Bit     -- Bitwise operations
 import Radix.Bytes   -- Byte order
 import Radix.Memory  -- Memory model
 import Radix.Binary  -- Binary format DSL
+```
+
+Or import grouped surfaces that match the architecture note in the docs:
+
+```lean
+import Radix.Pure             -- 14 pure Layer 2-3 modules
+import Radix.Trusted          -- System, Concurrency, BareMetal
+import Radix.ProofAutomation  -- tactic macros only
 ```
 
 Or import everything:
@@ -175,7 +184,7 @@ All proofs are machine-checked by the Lean 4 kernel. The `trust_*` axioms are li
 # Build the library
 lake build
 
-# Run unit tests (all 18 modules)
+# Run unit tests (all 18 leaf modules)
 lake exe test
 
 # Run property-based tests (500 iterations, LCG PRNG)
@@ -207,7 +216,7 @@ lake exe bench
 
 See [ROADMAP.md](ROADMAP.md) for the full roadmap.
 
-- **v0.3.0** (latest release) "Composable" — 1123+ theorems, 18 modules, UTF-8, error correction, DMA, region algebra, timers, proof automation
+- **v0.3.0** (latest release) "Composable" — 1123+ theorems, 18 leaf modules, UTF-8, error correction, DMA, region algebra, timers, proof automation
 - **v0.2.1** "Bedrock" — patch release removing remaining `native_decide` usage from library proofs and CI trust-audit tracking
 
 ## Contributing
