@@ -9,9 +9,4 @@ import Radix.Word.Size
 import Radix.Word.Arith
 import Radix.Word.Conv
 import Radix.Word.Numeric
-import Radix.Word.Lemmas.Ring
-import Radix.Word.Lemmas.Overflow
-import Radix.Word.Lemmas.BitVec
-import Radix.Word.Lemmas.Conv
-import Radix.Word.Lemmas.Generic
-import Radix.Word.Lemmas.Numeric
+import Radix.Word.Lemmas
