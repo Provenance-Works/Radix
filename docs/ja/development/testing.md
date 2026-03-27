@@ -9,7 +9,7 @@ Radixは多層テスト戦略を採用：
 | レイヤー | 種類 | 検証内容 |
 |-------|------|-----------------|
 | **形式証明** | Lean 4 型システム | 数学的正しさ（Lemmasモジュール） |
-| **ユニットテスト** | `tests/Main.lean` | 全18モジュールの具体的な入出力の正しさ |
+| **ユニットテスト** | `tests/Main.lean` | 全18 leaf modules の具体的な入出力の正しさ |
 | **プロパティテスト** | `tests/PropertyTests.lean` | ランダム入力に対する代数的性質 |
 | **包括テスト** | `tests/ComprehensiveTests.lean` | モジュール横断の回帰検証とアサーション集計 |
 | **使用例** | `examples/Main.lean` | アサーション付きの使用例の実行 |
@@ -20,7 +20,7 @@ graph TD
         Proofs["形式証明<br/>(Lemmas モジュール)<br/>Lean 4 カーネルで検証"]
     end
     subgraph "ランタイム（実行テスト）"
-        Unit["ユニットテスト<br/>(tests/Main.lean)<br/>全18モジュール × 具体値"]
+        Unit["ユニットテスト<br/>(tests/Main.lean)<br/>全18 leaf modules × 具体値"]
         Prop["プロパティテスト<br/>(tests/PropertyTests.lean)<br/>500イテレーション × ランダム入力"]
         Comp["包括テスト<br/>(tests/ComprehensiveTests.lean)<br/>完全な回帰カバレッジ"]
         Ex["使用例<br/>(examples/Main.lean)<br/>コア説明 + 21個の実行可能例"]
@@ -38,7 +38,7 @@ graph TD
 ## テストの実行
 
 ```bash
-# ユニットテスト — 全18モジュール
+# ユニットテスト — 全18 leaf modules
 lake exe test
 
 # プロパティベーステスト — ランダム + エッジケース
@@ -54,11 +54,12 @@ lake exe examples
 lake exe test && lake exe proptest && lake exe comptest && lake exe examples
 ```
 
-全コマンドが失敗なしで完了するはずです。
+全コマンドが失敗なしで完了するはずです。`lake build` と `make check` は
+`Radix`、`Radix.Pure`、`Radix.Trusted` の grouped import surface もコンパイル検証します。
 
 ## ユニットテスト（`tests/Main.lean`）
 
-全18モジュールを具体的なテスト値でカバー：
+全18 leaf modules を具体的なテスト値でカバー：
 
 | モジュール | カバレッジ |
 |--------|----------|
