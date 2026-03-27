@@ -42,22 +42,28 @@ If you're unsure where to start, open a [Discussion](https://github.com/provenan
    git checkout -b feat/my-feature
    ```
 3. **Make your changes** following the [Style Guide](#style-guide)
-4. **Build and verify** — all proofs must check:
+4. **Install and enable pre-commit hooks**:
+   ```bash
+   python3 -m pip install pre-commit
+   make pre-commit-install
+   ```
+5. **Run the local verification gate**:
+   ```bash
+   make check
+   ```
+6. **If your change is intentionally scoped, also note the narrowest command you validated with**:
    ```bash
    lake build
-   ```
-5. **Run tests**:
-   ```bash
    lake exe test
    lake exe proptest
    ```
-6. **Commit** using [Conventional Commits](#commit-messages):
+7. **Commit** using [Conventional Commits](#commit-messages):
    ```bash
    git commit -m "feat(word): add UInt128 wrapping arithmetic"
    ```
-7. **Push** and open a Pull Request against `main`
-8. Fill out the PR template completely
-9. Wait for review — maintainers aim to respond within 7 days
+8. **Push** and open a Pull Request against `main`
+9. Fill out the PR template completely
+10. Wait for review — maintainers aim to respond within 7 days
 
 ## Development Setup
 
@@ -76,6 +82,10 @@ cd radix
 # Build (this will fetch Mathlib — first build takes a while)
 lake build
 
+# Install pre-commit hooks for stats/docs hygiene and file validation
+python3 -m pip install pre-commit
+make pre-commit-install
+
 # Run tests
 lake exe test
 
@@ -91,6 +101,9 @@ lake exe examples
 # Run the full local verification gate before opening a PR
 make check
 
+# Run the same local hook suite on demand
+make pre-commit-run
+
 # Run benchmarks
 lake exe bench
 ```
@@ -98,8 +111,10 @@ lake exe bench
 ### Project Structure
 
 ```
-Radix.lean              # Root import (all 18 modules)
+Radix.lean              # Root import (all 18 leaf modules)
 Radix/
+├── Pure.lean           # Grouped import for the 14 pure Layer 2-3 modules
+├── Trusted.lean        # Grouped import for Layer 1 boundary modules
 ├── Alignment.lean      # Alignment utilities
 ├── Bitmap.lean         # Dense bit arrays
 ├── DMA.lean            # DMA descriptor model and simulator
@@ -111,6 +126,9 @@ Radix/
 ├── Timer.lean          # Monotonic clocks and deadlines
 ├── UTF8.lean           # Verified UTF-8 scalar model
 ├── Word.lean           # Fixed-width integers (UInt8–64, Int8–64, UWord, IWord)
+├── Word/
+│   ├── Lemmas.lean     # Aggregate import for Word lemma families
+│   └── ...
 ├── Bit.lean            # Bitwise operations
 ├── Bytes.lean          # Byte order and slices
 ├── Memory.lean         # Memory model (Buffer, Ptr, Layout)
@@ -128,6 +146,20 @@ examples/               # 21 runnable usage examples
 benchmarks/             # Microbenchmarks with C baseline
 docs/                   # English and Japanese documentation
 ```
+
+### Import Surfaces
+
+- `Radix.<Module>` for a single leaf module such as `Radix.Word` or `Radix.Binary`
+- `Radix.Pure` for the 14 pure modules that stay within Layers 2-3
+- `Radix.Trusted` for `System`, `Concurrency`, and `BareMetal`
+- `Radix.ProofAutomation` for tactic macros only
+- `Radix` for the full library surface
+
+### Pre-commit Hooks
+
+- `pre-commit` runs generated stats refreshes before commit via `scripts/update_project_stats.py`
+- It also checks YAML, JSON, merge markers, line endings, and trailing whitespace
+- If hooks rewrite files, review the diff, re-stage, and run the commit again
 
 ### Three-Layer Architecture
 
@@ -175,7 +207,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/en/
 | `ci` | CI/CD changes |
 | `chore` | Maintenance tasks |
 
-**Scopes:** `word`, `bit`, `bytes`, `memory`, `binary`, `system`, `concurrency`, `baremetal`
+**Scopes:** `word`, `bit`, `bytes`, `memory`, `binary`, `alignment`, `ringbuffer`, `bitmap`, `crc`, `memorypool`, `utf8`, `ecc`, `dma`, `timer`, `system`, `concurrency`, `baremetal`, `proofautomation`, `docs`, `ci`, `build`, `release`
 
 **Examples:**
 ```
@@ -217,6 +249,7 @@ release/v<major>.<minor>           # Release stabilization (maintainers only)
 - Use Mathlib `BitVec n` as the canonical specification-level type
 - Name theorems descriptively: `wrappingAdd_eq_bitvec_add`, `bswap_involution`
 - Group related lemmas in `Lemmas.lean` files
+- Prefer updating grouped import surfaces (`Radix.Pure`, `Radix.Trusted`, `Radix.<Module>`) when you add public modules
 - No custom mathematical axioms — only `trust_*` axioms for external-world assumptions
 
 ### Verification Checklist
@@ -225,7 +258,7 @@ Before submitting a PR that adds functionality:
 
 - [ ] Specification defined in `*.Spec.lean`
 - [ ] Implementation proven correct against specification
-- [ ] Zero `sorry` in entire codebase (check with `grep -r "sorry" Radix/`)
+- [ ] Zero `sorry` in library, tests, and examples (check with `rg -n "sorry" Radix tests examples`)
 - [ ] Unit tests added to `tests/`
 - [ ] Property-based tests added (if applicable)
 - [ ] Examples updated (if applicable)
