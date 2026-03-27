@@ -1,15 +1,46 @@
 # Default owners for everything
 * @Aqua-218
 
-# Core modules — require maintainer review
-/Radix/ @Aqua-218
+# Public import surfaces — require maintainer review
+/Radix.lean @Aqua-218
+/Radix/Pure.lean @Aqua-218
+/Radix/Trusted.lean @Aqua-218
+/Radix/ProofAutomation.lean @Aqua-218
+
+# Leaf modules — require maintainer review
+/Radix/Word.lean @Aqua-218
 /Radix/Word/ @Aqua-218
+/Radix/Bit.lean @Aqua-218
 /Radix/Bit/ @Aqua-218
+/Radix/Bytes.lean @Aqua-218
 /Radix/Bytes/ @Aqua-218
+/Radix/Memory.lean @Aqua-218
 /Radix/Memory/ @Aqua-218
+/Radix/Binary.lean @Aqua-218
 /Radix/Binary/ @Aqua-218
+/Radix/Alignment.lean @Aqua-218
+/Radix/Alignment/ @Aqua-218
+/Radix/RingBuffer.lean @Aqua-218
+/Radix/RingBuffer/ @Aqua-218
+/Radix/Bitmap.lean @Aqua-218
+/Radix/Bitmap/ @Aqua-218
+/Radix/CRC.lean @Aqua-218
+/Radix/CRC/ @Aqua-218
+/Radix/MemoryPool.lean @Aqua-218
+/Radix/MemoryPool/ @Aqua-218
+/Radix/UTF8.lean @Aqua-218
+/Radix/UTF8/ @Aqua-218
+/Radix/ECC.lean @Aqua-218
+/Radix/ECC/ @Aqua-218
+/Radix/DMA.lean @Aqua-218
+/Radix/DMA/ @Aqua-218
+/Radix/Timer.lean @Aqua-218
+/Radix/Timer/ @Aqua-218
+/Radix/System.lean @Aqua-218
 /Radix/System/ @Aqua-218
+/Radix/Concurrency.lean @Aqua-218
 /Radix/Concurrency/ @Aqua-218
+/Radix/BareMetal.lean @Aqua-218
 /Radix/BareMetal/ @Aqua-218
 
 # Build system
