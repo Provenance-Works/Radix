@@ -47,15 +47,39 @@ body:
         - Bytes
         - Memory
         - Binary
+        - Alignment
+        - RingBuffer
+        - Bitmap
+        - CRC
+        - MemoryPool
+        - UTF8
+        - ECC
+        - DMA
+        - Timer
         - System
         - Concurrency
         - BareMetal
+        - ProofAutomation
+        - Grouped import surface (`Radix`, `Radix.Pure`, `Radix.Trusted`)
         - New Module
-        - Build / Infrastructure
-        - Documentation
+        - Docs / Examples
+        - Build / CI / Release
         - Other
     validations:
       required: true
+
+  - type: dropdown
+    id: import-surface
+    attributes:
+      label: Public Import Surface
+      description: Which public import path should expose this feature?
+      options:
+        - Radix.<Module>
+        - Radix.Pure
+        - Radix.Trusted
+        - Radix
+        - New grouped import surface
+        - Not sure
 
   - type: dropdown
     id: layer
