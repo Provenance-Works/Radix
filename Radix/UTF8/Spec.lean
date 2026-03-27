@@ -3,6 +3,10 @@ Copyright (c) 2026 Radix Contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Mathlib.Tactic
+import Radix.UTF8.CaseFoldingTables
+import Radix.UTF8.GraphemeTables
+import Radix.UTF8.NormalizationTables
+import Radix.UTF8.UnicodeDataTables
 
 /-!
 # UTF-8 Specification (Layer 3)
@@ -336,6 +340,169 @@ def decodeAllReplacing (bytes : List UInt8) : List Scalar :=
   decodeReplacing bytes.length bytes
 
 -- ════════════════════════════════════════════════════════════════════
+-- Detailed Decoding and Unicode Conformance Helpers
+-- ════════════════════════════════════════════════════════════════════
+
+/-- Classification of the first malformed UTF-8 subsequence. -/
+inductive DecodeErrorKind where
+  | invalidStartByte
+  | unexpectedContinuationByte
+  | invalidContinuationByte
+  | overlongSequence
+  | surrogateSequence
+  | outOfRangeSequence
+  | truncatedSequence
+  deriving DecidableEq, Repr
+
+/-- Information about the first malformed UTF-8 subsequence.
+
+`consumed` is the Unicode maximal subpart length from the current offset, as
+described in Unicode Standard Chapter 3, D93b. -/
+structure DecodeError where
+  kind : DecodeErrorKind
+  expectedLength : Nat
+  consumed : Nat
+  deriving DecidableEq, Repr
+
+/-- Result of decoding the next UTF-8 chunk from a byte stream. -/
+inductive DecodeStep where
+  | scalar (scalar : Scalar) (consumed : Nat)
+  | error (error : DecodeError)
+  deriving DecidableEq, Repr
+
+/-- Construct a detailed decoding error. -/
+private def mkDecodeError (kind : DecodeErrorKind) (expectedLength consumed : Nat) : DecodeError :=
+  { kind := kind, expectedLength := expectedLength, consumed := consumed }
+
+/-- Whether the second byte satisfies the Unicode 17 Table 3-7 bounds for the given lead byte. -/
+private def secondBytePermitted (lead second : Nat) : Bool :=
+  if lead == 0xE0 then 0xA0 ≤ second && second < 0xC0
+  else if lead == 0xED then 0x80 ≤ second && second < 0xA0
+  else if lead == 0xF0 then 0x90 ≤ second && second < 0xC0
+  else if lead == 0xF4 then 0x80 ≤ second && second < 0x90
+  else 0x80 ≤ second && second < 0xC0
+
+/-- Explain why the second byte is not permitted for the given lead byte. -/
+private def secondByteErrorKind (lead second : Nat) : DecodeErrorKind :=
+  if second < 0x80 || 0xC0 ≤ second then .invalidContinuationByte
+  else if lead == 0xE0 && second < 0xA0 then .overlongSequence
+  else if lead == 0xED && 0xA0 ≤ second then .surrogateSequence
+  else if lead == 0xF0 && second < 0x90 then .overlongSequence
+  else if lead == 0xF4 && 0x90 ≤ second then .outOfRangeSequence
+  else .invalidContinuationByte
+
+/-- Classify the first malformed UTF-8 subsequence in a non-empty byte list. -/
+private def classifyDecodeError : List UInt8 → DecodeError
+  | [] => mkDecodeError .truncatedSequence 1 0
+  | b0 :: rest =>
+    let lead := b0.toNat
+    if lead < 0x80 then
+      mkDecodeError .invalidStartByte 1 1
+    else if lead < 0xC0 then
+      mkDecodeError .unexpectedContinuationByte 1 1
+    else if lead < 0xC2 then
+      mkDecodeError .overlongSequence 2 1
+    else if lead < 0xE0 then
+      match rest with
+      | [] => mkDecodeError .truncatedSequence 2 1
+      | _ :: _ =>
+        mkDecodeError .invalidContinuationByte 2 1
+    else if lead < 0xF0 then
+      match rest with
+      | [] => mkDecodeError .truncatedSequence 3 1
+      | [b1] =>
+        if secondBytePermitted lead b1.toNat then
+          mkDecodeError .truncatedSequence 3 2
+        else
+          mkDecodeError (secondByteErrorKind lead b1.toNat) 3 1
+      | b1 :: _ :: _ =>
+        if secondBytePermitted lead b1.toNat then
+          mkDecodeError .invalidContinuationByte 3 2
+        else
+          mkDecodeError (secondByteErrorKind lead b1.toNat) 3 1
+    else if lead < 0xF5 then
+      match rest with
+      | [] => mkDecodeError .truncatedSequence 4 1
+      | [b1] =>
+        if secondBytePermitted lead b1.toNat then
+          mkDecodeError .truncatedSequence 4 2
+        else
+          mkDecodeError (secondByteErrorKind lead b1.toNat) 4 1
+      | [b1, b2] =>
+        if secondBytePermitted lead b1.toNat then
+          if isContinuationByte b2 then
+            mkDecodeError .truncatedSequence 4 3
+          else
+            mkDecodeError .invalidContinuationByte 4 2
+        else
+          mkDecodeError (secondByteErrorKind lead b1.toNat) 4 1
+      | b1 :: b2 :: _ :: _ =>
+        if secondBytePermitted lead b1.toNat then
+          if isContinuationByte b2 then
+            mkDecodeError .invalidContinuationByte 4 3
+          else
+            mkDecodeError .invalidContinuationByte 4 2
+        else
+          mkDecodeError (secondByteErrorKind lead b1.toNat) 4 1
+    else
+      mkDecodeError .invalidStartByte 1 1
+
+/-- Decode the next UTF-8 chunk, returning either a scalar or a detailed error.
+
+On malformed input, the returned error reports the Unicode maximal subpart
+length starting at the current offset. -/
+def decodeNextStep? (bytes : List UInt8) : Option DecodeStep :=
+  match decodeNext? bytes with
+  | some (scalar, consumed) => some (.scalar scalar consumed)
+  | none =>
+    match bytes with
+    | [] => none
+    | _ => some (.error (classifyDecodeError bytes))
+
+/-- Unicode maximal subpart length at the current offset.
+
+Returns `0` for the empty input, the scalar byte width for well-formed input,
+and the maximal subpart length for malformed input. -/
+def maximalSubpartLength (bytes : List UInt8) : Nat :=
+  match decodeNextStep? bytes with
+  | none => 0
+  | some (.scalar _ consumed) => consumed
+  | some (.error err) => err.consumed
+
+/-- Return the first UTF-8 decoding error, if any. -/
+def firstDecodeError? (bytes : List UInt8) : Option DecodeError :=
+  go (bytes.length + 1) bytes
+where
+  go : Nat → List UInt8 → Option DecodeError
+    | 0, _ => none
+    | _ + 1, [] => none
+    | fuel + 1, remaining =>
+      match decodeNextStep? remaining with
+      | none => none
+      | some (.error err) => some err
+      | some (.scalar _ consumed) => go fuel (remaining.drop consumed)
+
+/-- Decode with U+FFFD replacement using Unicode maximal subparts.
+
+This follows the Unicode Standard Chapter 3 replacement guidance instead of the
+legacy one-replacement-per-invalid-byte policy. -/
+def decodeReplacingMaximalSubparts : Nat → List UInt8 → List Scalar
+  | 0, [] => []
+  | 0, _ => []
+  | _ + 1, [] => []
+  | fuel + 1, bytes =>
+    match decodeNextStep? bytes with
+    | none => []
+    | some (.scalar scalar consumed) =>
+      scalar :: decodeReplacingMaximalSubparts fuel (bytes.drop consumed)
+    | some (.error err) =>
+      Scalar.replacement :: decodeReplacingMaximalSubparts fuel (bytes.drop err.consumed)
+
+/-- Decode a byte list with Unicode maximal-subpart replacement semantics. -/
+def decodeAllReplacingMaximalSubparts (bytes : List UInt8) : List Scalar :=
+  decodeReplacingMaximalSubparts bytes.length bytes
+
+-- ════════════════════════════════════════════════════════════════════
 -- Validation Helpers
 -- ════════════════════════════════════════════════════════════════════
 
@@ -593,9 +760,8 @@ theorem high_lead_byte_rejected (b0 : UInt8) (h : 0xF5 ≤ b0.toNat)
 
 /-! ## Unicode Category Classification -/
 
-/-- Unicode general category (simplified). Only the categories needed for
-    binary-level UTF-8 processing. -/
-inductive GeneralCategory where
+/-- Unicode broad general-category families used for derived predicates. -/
+inductive GeneralCategoryFamily where
   | letter
   | mark
   | number
@@ -605,21 +771,104 @@ inductive GeneralCategory where
   | other
   deriving DecidableEq, Repr
 
-/-- Classify a scalar into a general category based on code point range.
-    This is a rough approximation — full UCD data is not included. -/
+/-- Full Unicode general category derived from vendored Unicode 17 data. -/
+inductive GeneralCategory where
+  | uppercaseLetter
+  | lowercaseLetter
+  | titlecaseLetter
+  | modifierLetter
+  | otherLetter
+  | nonspacingMark
+  | spacingMark
+  | enclosingMark
+  | decimalNumber
+  | letterNumber
+  | otherNumber
+  | connectorPunctuation
+  | dashPunctuation
+  | openPunctuation
+  | closePunctuation
+  | initialPunctuation
+  | finalPunctuation
+  | otherPunctuation
+  | mathSymbol
+  | currencySymbol
+  | modifierSymbol
+  | otherSymbol
+  | spaceSeparator
+  | lineSeparator
+  | paragraphSeparator
+  | control
+  | format
+  | surrogate
+  | privateUse
+  | unassigned
+  deriving DecidableEq, Repr
+
+namespace GeneralCategory
+
+/-- Collapse an exact Unicode general category into its broad family. -/
+def family : GeneralCategory → GeneralCategoryFamily
+  | .uppercaseLetter | .lowercaseLetter | .titlecaseLetter | .modifierLetter | .otherLetter => .letter
+  | .nonspacingMark | .spacingMark | .enclosingMark => .mark
+  | .decimalNumber | .letterNumber | .otherNumber => .number
+  | .connectorPunctuation | .dashPunctuation | .openPunctuation | .closePunctuation
+  | .initialPunctuation | .finalPunctuation | .otherPunctuation => .punctuation
+  | .mathSymbol | .currencySymbol | .modifierSymbol | .otherSymbol => .symbol
+  | .spaceSeparator | .lineSeparator | .paragraphSeparator => .separator
+  | .control | .format | .surrogate | .privateUse | .unassigned => .other
+
+/-- Whether a scalar in this exact Unicode category should be treated as printable. -/
+def isPrintable : GeneralCategory → Bool
+  | .control | .format | .surrogate | .privateUse | .unassigned => false
+  | _ => true
+
+end GeneralCategory
+
+/-- Classify a code point into its exact Unicode 17 general category. -/
+private def classifyCategoryNat (v : Nat) : GeneralCategory :=
+  if UnicodeDataTables.isUppercaseLetter v then .uppercaseLetter
+  else if UnicodeDataTables.isLowercaseLetter v then .lowercaseLetter
+  else if UnicodeDataTables.isTitlecaseLetter v then .titlecaseLetter
+  else if UnicodeDataTables.isModifierLetter v then .modifierLetter
+  else if UnicodeDataTables.isOtherLetter v then .otherLetter
+  else if UnicodeDataTables.isNonspacingMark v then .nonspacingMark
+  else if UnicodeDataTables.isSpacingMark v then .spacingMark
+  else if UnicodeDataTables.isEnclosingMark v then .enclosingMark
+  else if UnicodeDataTables.isDecimalNumber v then .decimalNumber
+  else if UnicodeDataTables.isLetterNumber v then .letterNumber
+  else if UnicodeDataTables.isOtherNumber v then .otherNumber
+  else if UnicodeDataTables.isConnectorPunctuation v then .connectorPunctuation
+  else if UnicodeDataTables.isDashPunctuation v then .dashPunctuation
+  else if UnicodeDataTables.isOpenPunctuation v then .openPunctuation
+  else if UnicodeDataTables.isClosePunctuation v then .closePunctuation
+  else if UnicodeDataTables.isInitialPunctuation v then .initialPunctuation
+  else if UnicodeDataTables.isFinalPunctuation v then .finalPunctuation
+  else if UnicodeDataTables.isOtherPunctuation v then .otherPunctuation
+  else if UnicodeDataTables.isMathSymbol v then .mathSymbol
+  else if UnicodeDataTables.isCurrencySymbol v then .currencySymbol
+  else if UnicodeDataTables.isModifierSymbol v then .modifierSymbol
+  else if UnicodeDataTables.isOtherSymbol v then .otherSymbol
+  else if UnicodeDataTables.isSpaceSeparator v then .spaceSeparator
+  else if UnicodeDataTables.isLineSeparator v then .lineSeparator
+  else if UnicodeDataTables.isParagraphSeparator v then .paragraphSeparator
+  else if UnicodeDataTables.isControl v then .control
+  else if UnicodeDataTables.isFormat v then .format
+  else if UnicodeDataTables.isSurrogate v then .surrogate
+  else if UnicodeDataTables.isPrivateUse v then .privateUse
+  else .unassigned
+
+/-- Classify a code point into its broad Unicode general-category family. -/
+private def classifyCategoryFamilyNat (v : Nat) : GeneralCategoryFamily :=
+  (classifyCategoryNat v).family
+
+/-- Classify a scalar into its exact Unicode general category. -/
 def classifyCategory (s : Scalar) : GeneralCategory :=
-  let v := s.val
-  if v < 0x20 then .other          -- C0 controls
-  else if v < 0x7F then
-    if v ≥ 0x41 && v ≤ 0x5A then .letter      -- A-Z
-    else if v ≥ 0x61 && v ≤ 0x7A then .letter  -- a-z
-    else if v ≥ 0x30 && v ≤ 0x39 then .number  -- 0-9
-    else if v == 0x20 then .separator
-    else .punctuation
-  else if v < 0xA0 then .other     -- C1 controls + DEL
-  else if v < 0x0300 then .letter  -- Latin Extended etc.
-  else if v < 0x0370 then .mark    -- Combining diacriticals
-  else .letter                     -- Simplified: treat rest as letter
+  classifyCategoryNat s.val
+
+/-- Classify a scalar into its broad Unicode general-category family. -/
+def classifyCategoryFamily (s : Scalar) : GeneralCategoryFamily :=
+  classifyCategoryFamilyNat s.val
 
 /-! ## UTF-8 Validation State Machine
 
@@ -728,41 +977,43 @@ def IsWhitespace (n : Nat) : Prop :=
 instance (n : Nat) : Decidable (IsWhitespace n) :=
   inferInstanceAs (Decidable (_ ∨ _))
 
-/-- Whether a code point is an ASCII digit 0-9. -/
-def IsDigit (n : Nat) : Prop := 0x30 ≤ n ∧ n ≤ 0x39
+/-- Whether a code point is a Unicode decimal digit (General_Category = Nd). -/
+def IsDigit (n : Nat) : Prop := UnicodeDataTables.isDecimalDigit n = true
 
 instance (n : Nat) : Decidable (IsDigit n) :=
-  inferInstanceAs (Decidable (_ ∧ _))
+  inferInstanceAs (Decidable (_ = true))
 
-/-- Whether a code point is an ASCII uppercase letter. -/
-def IsUppercase (n : Nat) : Prop := 0x41 ≤ n ∧ n ≤ 0x5A
+/-- Whether a code point is a Unicode uppercase letter (General_Category = Lu). -/
+def IsUppercase (n : Nat) : Prop := UnicodeDataTables.isUppercase n = true
 
 instance (n : Nat) : Decidable (IsUppercase n) :=
-  inferInstanceAs (Decidable (_ ∧ _))
+  inferInstanceAs (Decidable (_ = true))
 
-/-- Whether a code point is an ASCII lowercase letter. -/
-def IsLowercase (n : Nat) : Prop := 0x61 ≤ n ∧ n ≤ 0x7A
+/-- Whether a code point is a Unicode lowercase letter (General_Category = Ll). -/
+def IsLowercase (n : Nat) : Prop := UnicodeDataTables.isLowercase n = true
 
 instance (n : Nat) : Decidable (IsLowercase n) :=
-  inferInstanceAs (Decidable (_ ∧ _))
+  inferInstanceAs (Decidable (_ = true))
 
-/-- Whether a code point is an ASCII letter (uppercase or lowercase). -/
-def IsAlpha (n : Nat) : Prop := IsUppercase n ∨ IsLowercase n
+/-- Whether a code point belongs to the Unicode broad letter category (General_Category = L*). -/
+def IsAlpha (n : Nat) : Prop := UnicodeDataTables.isLetter n = true
 
 instance (n : Nat) : Decidable (IsAlpha n) :=
-  inferInstanceAs (Decidable (_ ∨ _))
+  inferInstanceAs (Decidable (_ = true))
 
-/-- Whether a code point is an ASCII alphanumeric character. -/
+/-- Whether a code point is a Unicode alphanumeric character. -/
 def IsAlphanumeric (n : Nat) : Prop := IsAlpha n ∨ IsDigit n
 
 instance (n : Nat) : Decidable (IsAlphanumeric n) :=
   inferInstanceAs (Decidable (_ ∨ _))
 
-/-- Whether a code point is a printable ASCII character (0x20..0x7E). -/
-def IsPrintable (n : Nat) : Prop := 0x20 ≤ n ∧ n ≤ 0x7E
+/-- Whether a code point is a printable Unicode scalar under its exact Unicode
+    general-category classification. -/
+def IsPrintable (n : Nat) : Prop :=
+  IsScalar n ∧ GeneralCategory.isPrintable (classifyCategoryNat n) = true
 
 instance (n : Nat) : Decidable (IsPrintable n) :=
-  inferInstanceAs (Decidable (_ ∧ _))
+  inferInstanceAs (Decidable (_ ∧ _ = true))
 
 /-- Whether a code point is a C0 control (0x00..0x1F). -/
 def IsC0Control (n : Nat) : Prop := n ≤ 0x1F
@@ -776,6 +1027,14 @@ def IsC1Control (n : Nat) : Prop := 0x80 ≤ n ∧ n ≤ 0x9F
 instance (n : Nat) : Decidable (IsC1Control n) :=
   inferInstanceAs (Decidable (_ ∧ _))
 
+/-- Full Unicode 17 simple uppercase-to-lowercase mapping derived from vendored UnicodeData. -/
+def simpleLowerNat? (n : Nat) : Option Nat :=
+  UnicodeDataTables.simpleLowerNat? n
+
+/-- Full Unicode 17 simple lowercase-to-uppercase mapping derived from vendored UnicodeData. -/
+def simpleUpperNat? (n : Nat) : Option Nat :=
+  UnicodeDataTables.simpleUpperNat? n
+
 namespace Scalar
 
 /-- Whether the scalar is a control character. -/
@@ -784,20 +1043,25 @@ def isControl (s : Scalar) : Bool := decide (IsControl s.val)
 /-- Whether the scalar is whitespace. -/
 def isWhitespace (s : Scalar) : Bool := decide (IsWhitespace s.val)
 
-/-- Whether the scalar is an ASCII digit. -/
+/-- Whether the scalar is a Unicode decimal digit. -/
 def isDigit (s : Scalar) : Bool := decide (IsDigit s.val)
 
-/-- Whether the scalar is an ASCII letter. -/
+/-- Whether the scalar belongs to the Unicode broad letter category. -/
 def isAlpha (s : Scalar) : Bool := decide (IsAlpha s.val)
 
-/-- Whether the scalar is printable. -/
+/-- Whether the scalar is printable under its exact Unicode general category. -/
 def isPrintable (s : Scalar) : Bool := decide (IsPrintable s.val)
+
+/-- Whether the scalar is a Unicode uppercase letter. -/
+def isUppercase (s : Scalar) : Bool := decide (IsUppercase s.val)
+
+/-- Whether the scalar is a Unicode lowercase letter. -/
+def isLowercase (s : Scalar) : Bool := decide (IsLowercase s.val)
 
 /-- Simple ASCII uppercase → lowercase mapping. Returns None for non-uppercase. -/
 def toLowerAscii? (s : Scalar) : Option Scalar :=
-  if h : IsUppercase s.val then
+  if h : 0x41 ≤ s.val ∧ s.val ≤ 0x5A then
     some ⟨s.val + 0x20, by
-      unfold IsUppercase at h
       constructor
       · omega
       · intro ⟨hl, hr⟩; omega⟩
@@ -805,13 +1069,41 @@ def toLowerAscii? (s : Scalar) : Option Scalar :=
 
 /-- Simple ASCII lowercase → uppercase mapping. Returns None for non-lowercase. -/
 def toUpperAscii? (s : Scalar) : Option Scalar :=
-  if h : IsLowercase s.val then
+  if h : 0x61 ≤ s.val ∧ s.val ≤ 0x7A then
     some ⟨s.val - 0x20, by
-      unfold IsLowercase at h
       constructor
       · omega
       · intro ⟨hl, hr⟩; omega⟩
   else none
+
+/-- Full Unicode 17 simple uppercase → lowercase mapping.
+    Returns the original scalar when no simple mapping is defined. -/
+def toLowerSimple (s : Scalar) : Scalar :=
+  match simpleLowerNat? s.val with
+  | some lower =>
+    match ofNat? lower with
+    | some lowered => lowered
+    | none => s
+  | none => s
+
+/-- Full Unicode 17 simple lowercase → uppercase mapping.
+    Returns the original scalar when no simple mapping is defined. -/
+def toUpperSimple (s : Scalar) : Scalar :=
+  match simpleUpperNat? s.val with
+  | some upper =>
+    match ofNat? upper with
+    | some uppered => uppered
+    | none => s
+  | none => s
+
+/-- Full Unicode 17 simple case folding for a single scalar. -/
+def caseFoldSimple (s : Scalar) : Scalar :=
+  match CaseFoldingTables.simpleCaseFold? s.val with
+  | some [mapped] =>
+    match ofNat? mapped with
+    | some folded => folded
+    | none => s
+  | _ => s
 
 /-- Successor scalar (next valid scalar, skipping surrogates). -/
 def succ? (s : Scalar) : Option Scalar :=
@@ -888,23 +1180,305 @@ def isStarter (ccc : CombiningClass) : Bool := ccc == 0
 /-- Whether a scalar is a combining mark (CCC > 0). -/
 def isCombining (ccc : CombiningClass) : Bool := ccc > 0
 
+/-- Canonical combining class derived from the vendored Unicode 17 normalization data. -/
+def canonicalCombiningClass (s : Scalar) : CombiningClass :=
+  NormalizationTables.canonicalCombiningClass s.val
+
+/-- Insert a combining-mark entry into a stable ascending CCC order. -/
+private def insertByCombiningClass (entry : Scalar × CombiningClass) :
+    List (Scalar × CombiningClass) → List (Scalar × CombiningClass)
+  | [] => [entry]
+  | head :: tail =>
+    if entry.2 < head.2 then
+      entry :: head :: tail
+    else
+      head :: insertByCombiningClass entry tail
+
+/-- Flush one canonical-order segment into the accumulated output. -/
+private def flushCanonicalSegment
+    (starter? : Option (Scalar × CombiningClass))
+    (marks : List (Scalar × CombiningClass)) : List (Scalar × CombiningClass) :=
+  match starter? with
+  | some starter => starter :: marks
+  | none => marks
+
 /-- Canonical ordering: reorder combining marks by their CCC values.
     This is a specification-level sort by CCC for the Canonical Ordering Algorithm. -/
 def canonicalOrder (chars : List (Scalar × CombiningClass)) : List (Scalar × CombiningClass) :=
-  -- Stable sort by CCC among consecutive combining marks
-  -- Starters (CCC=0) act as barriers
-  chars.mergeSort (fun a b => a.2 ≤ b.2)
+  go chars none []
+where
+  go (remaining : List (Scalar × CombiningClass))
+      (starter? : Option (Scalar × CombiningClass))
+      (marks : List (Scalar × CombiningClass)) : List (Scalar × CombiningClass) :=
+    match remaining with
+    | [] => flushCanonicalSegment starter? marks
+    | char :: rest =>
+      if isStarter char.2 then
+        flushCanonicalSegment starter? marks ++ go rest (some char) []
+      else
+        go rest starter? (insertByCombiningClass char marks)
+
+/-- Whether a normalization form is currently implemented by the executable model. -/
+def supportsNormalizationForm (form : NormalizationForm) : Bool :=
+  match form with
+  | .nfd | .nfc | .nfkd | .nfkc => true
+
+/-- Convert a Nat list to scalars, failing if any element is not a valid scalar. -/
+private def scalarListFromNats? (ns : List Nat) : Option (List Scalar) :=
+  ns.mapM Scalar.ofNat?
+
+/-- Canonical decomposition mappings derived from the vendored Unicode 17 data. -/
+private def canonicalDecompositionNats? (n : Nat) : Option (List Nat) :=
+  NormalizationTables.canonicalDecomposition? n
+
+/-- Compatibility decomposition mappings derived from the vendored Unicode 17 data. -/
+private def compatibilityDecompositionNats? (n : Nat) : Option (List Nat) :=
+  NormalizationTables.compatibilityDecomposition? n
+
+/-- Canonical composition mappings derived from the vendored Unicode 17 data. -/
+private def canonicalCompositionNat? (starter mark : Nat) : Option Nat :=
+  NormalizationTables.canonicalComposition? starter mark
+
+private def hangulSBase : Nat := 0xAC00
+private def hangulLBase : Nat := 0x1100
+private def hangulVBase : Nat := 0x1161
+private def hangulTBase : Nat := 0x11A7
+private def hangulLCount : Nat := 19
+private def hangulVCount : Nat := 21
+private def hangulTCount : Nat := 28
+private def hangulNCount : Nat := hangulVCount * hangulTCount
+private def hangulSCount : Nat := hangulLCount * hangulNCount
+
+/-- Algorithmic canonical decomposition for Hangul syllables. -/
+private def decomposeHangul? (s : Scalar) : Option (List Scalar) :=
+  if hangulSBase ≤ s.val && s.val < hangulSBase + hangulSCount then
+    let sIndex := s.val - hangulSBase
+    let lIndex := sIndex / hangulNCount
+    let vIndex := (sIndex % hangulNCount) / hangulTCount
+    let tIndex := sIndex % hangulTCount
+    match Scalar.ofNat? (hangulLBase + lIndex), Scalar.ofNat? (hangulVBase + vIndex) with
+    | some l, some v =>
+      if tIndex == 0 then
+        some [l, v]
+      else
+        match Scalar.ofNat? (hangulTBase + tIndex) with
+        | some t => some [l, v, t]
+        | none => none
+    | _, _ => none
+  else
+    none
+
+/-- One-step canonical decomposition for full vendored Unicode 17 normalization data. -/
+def canonicalDecomposition? (s : Scalar) : Option (List Scalar) :=
+  match decomposeHangul? s with
+  | some decomposed => some decomposed
+  | none =>
+    match canonicalDecompositionNats? s.val with
+    | some ns => scalarListFromNats? ns
+    | none => none
+
+/-- One-step compatibility decomposition for full vendored Unicode 17 normalization data. -/
+def compatibilityDecomposition? (s : Scalar) : Option (List Scalar) :=
+  match compatibilityDecompositionNats? s.val with
+  | some ns => scalarListFromNats? ns
+  | none => none
+
+/-- Vendored Unicode 17 normalization data has a bounded recursive decomposition depth. -/
+private def normalizationDecompositionFuel : Nat :=
+  NormalizationTables.maxCompatibilityDecompositionDepth
+
+/-- Recursively decompose one scalar under the selected normalization regime. -/
+private def decomposeScalarRecursive (compatibility : Bool) (fuel : Nat) (s : Scalar) : List Scalar :=
+  match fuel with
+  | 0 => [s]
+  | fuel + 1 =>
+    let step? :=
+      if compatibility then
+        match compatibilityDecomposition? s with
+        | some decomposed => some decomposed
+        | none => canonicalDecomposition? s
+      else
+        canonicalDecomposition? s
+    match step? with
+    | some decomposed =>
+      decomposed.foldr
+        (fun scalar acc => decomposeScalarRecursive compatibility fuel scalar ++ acc)
+        []
+    | none => [s]
+
+/-- Algorithmic Hangul composition for L+V and LV+T pairs. -/
+private def composeHangulPair? (starter mark : Scalar) : Option Scalar :=
+  if hangulLBase ≤ starter.val && starter.val < hangulLBase + hangulLCount &&
+      hangulVBase ≤ mark.val && mark.val < hangulVBase + hangulVCount then
+    let lIndex := starter.val - hangulLBase
+    let vIndex := mark.val - hangulVBase
+    Scalar.ofNat? (hangulSBase + (lIndex * hangulVCount + vIndex) * hangulTCount)
+  else if hangulSBase ≤ starter.val && starter.val < hangulSBase + hangulSCount &&
+      (starter.val - hangulSBase) % hangulTCount == 0 &&
+      hangulTBase < mark.val && mark.val < hangulTBase + hangulTCount then
+    Scalar.ofNat? (starter.val + (mark.val - hangulTBase))
+  else
+    none
+
+/-- Canonical composition for full vendored Unicode 17 normalization data. -/
+def canonicalComposePair? (starter mark : Scalar) : Option Scalar :=
+  match composeHangulPair? starter mark with
+  | some composed => some composed
+  | none =>
+    match canonicalCompositionNat? starter.val mark.val with
+    | some n => Scalar.ofNat? n
+    | none => none
+
+/-- Full canonical decomposition without canonical ordering. -/
+def canonicalDecomposeScalars (scalars : List Scalar) : List Scalar :=
+  scalars.foldr
+    (fun scalar acc => decomposeScalarRecursive false normalizationDecompositionFuel scalar ++ acc)
+    []
+
+/-- Full compatibility decomposition without canonical ordering. -/
+def compatibilityDecomposeScalars (scalars : List Scalar) : List Scalar :=
+  scalars.foldr
+    (fun scalar acc => decomposeScalarRecursive true normalizationDecompositionFuel scalar ++ acc)
+    []
+
+/-- Canonical decomposition followed by canonical ordering (NFD). -/
+def normalizeScalarsNFD (scalars : List Scalar) : List Scalar :=
+  let decomposed := canonicalDecomposeScalars scalars
+  let annotated := decomposed.map (fun scalar => (scalar, canonicalCombiningClass scalar))
+  (canonicalOrder annotated).map Prod.fst
+
+/-- Compatibility decomposition followed by canonical ordering (NFKD). -/
+def normalizeScalarsNFKD (scalars : List Scalar) : List Scalar :=
+  let decomposed := compatibilityDecomposeScalars scalars
+  let annotated := decomposed.map (fun scalar => (scalar, canonicalCombiningClass scalar))
+  (canonicalOrder annotated).map Prod.fst
+
+/-- Compose one canonically ordered scalar list segment. -/
+private def composeCanonicalOrdered (scalars : List Scalar) : List Scalar :=
+  go scalars none [] 0
+where
+  flush (starter? : Option Scalar) (marksRev : List Scalar) : List Scalar :=
+    match starter? with
+    | some starter => starter :: marksRev.reverse
+    | none => marksRev.reverse
+
+  go (remaining : List Scalar) (starter? : Option Scalar) (marksRev : List Scalar)
+      (lastCCC : CombiningClass) : List Scalar :=
+    match remaining with
+    | [] => flush starter? marksRev
+    | scalar :: rest =>
+      let ccc := canonicalCombiningClass scalar
+      if ccc == 0 then
+        match starter? with
+        | some starter =>
+          if marksRev.isEmpty then
+            match canonicalComposePair? starter scalar with
+            | some composed => go rest (some composed) [] 0
+            | none => flush starter? marksRev ++ go rest (some scalar) [] 0
+          else
+            flush starter? marksRev ++ go rest (some scalar) [] 0
+        | none =>
+          flush starter? marksRev ++ go rest (some scalar) [] 0
+      else
+        match starter? with
+        | some starter =>
+          if lastCCC < ccc then
+            match canonicalComposePair? starter scalar with
+            | some composed => go rest (some composed) marksRev lastCCC
+            | none => go rest starter? (scalar :: marksRev) ccc
+          else
+            go rest starter? (scalar :: marksRev) ccc
+        | none =>
+          go rest none (scalar :: marksRev) ccc
+
+/-- Canonical decomposition, canonical ordering, and canonical composition (NFC). -/
+def normalizeScalarsNFC (scalars : List Scalar) : List Scalar :=
+  composeCanonicalOrdered (normalizeScalarsNFD scalars)
+
+/-- Compatibility decomposition, canonical ordering, and canonical composition (NFKC). -/
+def normalizeScalarsNFKC (scalars : List Scalar) : List Scalar :=
+  composeCanonicalOrdered (normalizeScalarsNFKD scalars)
+
+/-- Normalize a scalar list when the requested form is currently supported. -/
+def normalizeScalars? (form : NormalizationForm) (scalars : List Scalar) : Option (List Scalar) :=
+  match form with
+  | .nfd => some (normalizeScalarsNFD scalars)
+  | .nfc => some (normalizeScalarsNFC scalars)
+  | .nfkd => some (normalizeScalarsNFKD scalars)
+  | .nfkc => some (normalizeScalarsNFKC scalars)
+
+/-- Whether a scalar list is already in NFD. -/
+def isNormalizedNFD (scalars : List Scalar) : Bool :=
+  normalizeScalarsNFD scalars == scalars
+
+/-- Whether a scalar list is already in NFC. -/
+def isNormalizedNFC (scalars : List Scalar) : Bool :=
+  normalizeScalarsNFC scalars == scalars
+
+/-- Whether a scalar list is already in NFKD. -/
+def isNormalizedNFKD (scalars : List Scalar) : Bool :=
+  normalizeScalarsNFKD scalars == scalars
+
+/-- Whether a scalar list is already in NFKC. -/
+def isNormalizedNFKC (scalars : List Scalar) : Bool :=
+  normalizeScalarsNFKC scalars == scalars
+
+/-- Whether two scalar lists are canonically equivalent under NFD. -/
+def canonicallyEquivalent (left right : List Scalar) : Bool :=
+  normalizeScalarsNFD left == normalizeScalarsNFD right
+
+/-- Apply supported simple lowercase mapping to a scalar list. -/
+def lowercaseScalarsSimple (scalars : List Scalar) : List Scalar :=
+  scalars.map Scalar.toLowerSimple
+
+/-- Apply supported simple uppercase mapping to a scalar list. -/
+def uppercaseScalarsSimple (scalars : List Scalar) : List Scalar :=
+  scalars.map Scalar.toUpperSimple
+
+/-- Decode a case-fold table row, falling back to the original scalar if the generated
+    Unicode data ever contained an invalid scalar. -/
+private def caseFoldTableScalar (lookup : Nat → Option (List Nat)) (s : Scalar) : List Scalar :=
+  match lookup s.val with
+  | some mapping =>
+    match scalarListFromNats? mapping with
+    | some scalars => scalars
+    | none => [s]
+  | none => [s]
+
+/-- Apply Unicode simple case folding and canonical decomposition to a scalar list. -/
+def caseFoldScalarsSimple (scalars : List Scalar) : List Scalar :=
+  let decomposed := normalizeScalarsNFD scalars
+  let folded := decomposed.foldr
+    (fun scalar acc => caseFoldTableScalar CaseFoldingTables.simpleCaseFold? scalar ++ acc)
+    []
+  normalizeScalarsNFD folded
+
+/-- Whether two scalar lists are equal under Unicode simple case folding. -/
+def caselessEquivalentSimple (left right : List Scalar) : Bool :=
+  caseFoldScalarsSimple left == caseFoldScalarsSimple right
+
+/-- Apply compatibility decomposition plus Unicode full case folding to a scalar list. -/
+def caseFoldScalarsCompatibility (scalars : List Scalar) : List Scalar :=
+  let compatibilityDecomposed := normalizeScalarsNFKD scalars
+  let folded := compatibilityDecomposed.foldr
+    (fun scalar acc => caseFoldTableScalar CaseFoldingTables.fullCaseFold? scalar ++ acc)
+    []
+  normalizeScalarsNFKD folded
+
+/-- Whether two scalar lists are equal under Unicode compatibility-aware case folding. -/
+def caselessEquivalentCompatibility (left right : List Scalar) : Bool :=
+  caseFoldScalarsCompatibility left == caseFoldScalarsCompatibility right
 
 -- ════════════════════════════════════════════════════════════════════
 -- Grapheme Cluster Break Properties
 -- ════════════════════════════════════════════════════════════════════
 
-/-- Grapheme cluster break property (simplified UAX #29). -/
+/-- Grapheme cluster break property for Unicode default extended grapheme segmentation. -/
 inductive GraphemeBreakProperty where
   | cr             -- Carriage return
   | lf             -- Line feed
   | control        -- Control characters
-  | extend         -- Combining marks, zero-width joiner
+  | extend         -- Combining marks, variation selectors, emoji modifiers
   | zwj            -- Zero-width joiner U+200D
   | regionalIndicator -- Regional indicator symbols
   | prepend        -- Prepend characters
@@ -914,25 +1488,47 @@ inductive GraphemeBreakProperty where
   | hangulT        -- Hangul trailing jamo
   | hangulLV       -- Hangul LV syllable
   | hangulLVT      -- Hangul LVT syllable
+  | extendedPictographic -- Emoji and pictographic bases used by GB11
   | other          -- Everything else (usually a grapheme base)
   deriving DecidableEq, Repr
 
-/-- Classify a scalar into its grapheme break property (simplified). -/
+/-- Indic_Conjunct_Break property values needed by GB9c. -/
+inductive IndicConjunctBreakProperty where
+  | consonant
+  | extend
+  | linker
+  | other
+  deriving DecidableEq, Repr
+
+/-- Classify a scalar into its grapheme break property using Unicode 17 tables. -/
 def classifyGraphemeBreak (s : Scalar) : GraphemeBreakProperty :=
   let v := s.val
   if v == 0x000D then .cr
   else if v == 0x000A then .lf
-  else if v ≤ 0x001F || (0x007F ≤ v && v ≤ 0x009F) then .control
+  else if GraphemeTables.isControl v then .control
   else if v == 0x200D then .zwj
-  else if 0x0300 ≤ v && v ≤ 0x036F then .extend       -- Combining Diacriticals
+  else if GraphemeTables.isExtend v then .extend
   else if 0x1F1E6 ≤ v && v ≤ 0x1F1FF then .regionalIndicator
-  else if 0x1100 ≤ v && v ≤ 0x115F then .hangulL      -- Hangul Jamo leading
-  else if 0x1160 ≤ v && v ≤ 0x11A7 then .hangulV      -- Hangul Jamo vowel
-  else if 0x11A8 ≤ v && v ≤ 0x11FF then .hangulT      -- Hangul Jamo trailing
+  else if GraphemeTables.isPrepend v then .prepend
+  else if GraphemeTables.isSpacingMark v then .spacingMark
+  else if (0x1100 ≤ v && v ≤ 0x115F) || (0xA960 ≤ v && v ≤ 0xA97C) then .hangulL
+  else if (0x1160 ≤ v && v ≤ 0x11A7) || (0xD7B0 ≤ v && v ≤ 0xD7C6) then .hangulV
+  else if (0x11A8 ≤ v && v ≤ 0x11FF) || (0xD7CB ≤ v && v ≤ 0xD7FB) then .hangulT
+  else if 0xAC00 ≤ v && v ≤ 0xD7A3 then
+    if (v - 0xAC00) % 28 == 0 then .hangulLV else .hangulLVT
+  else if GraphemeTables.isExtendedPictographic v then .extendedPictographic
+  else .other
+
+/-- Classify a scalar into the Indic_Conjunct_Break property values used by GB9c. -/
+def classifyIndicConjunctBreak (s : Scalar) : IndicConjunctBreakProperty :=
+  let v := s.val
+  if GraphemeTables.isIndicConsonant v then .consonant
+  else if GraphemeTables.isIndicLinker v then .linker
+  else if GraphemeTables.isIndicExtend v then .extend
   else .other
 
 /-- Whether a grapheme cluster boundary exists between two adjacent scalars
-    (simplified UAX #29 rules). -/
+  under the pairwise Unicode default extended grapheme rules. -/
 def isGraphemeBreak (left right : GraphemeBreakProperty) : Bool :=
   match left, right with
   | .cr, .lf => false                       -- GB3: Do not break between CR and LF
@@ -988,9 +1584,9 @@ theorem levenshteinDistance_self (xs : List Scalar) : levenshteinDistance xs xs 
 theorem isScalar_c0_control (n : Nat) (h : n ≤ 0x1F) : IsScalar n :=
   ⟨by omega, fun ⟨hl, _⟩ => by omega⟩
 
-/-- Printable ASCII characters are always valid scalars. -/
+/-- Printable Unicode scalars are always valid scalars. -/
 theorem isScalar_printable (n : Nat) (h : IsPrintable n) : IsScalar n :=
-  ⟨by have := h.1; have := h.2; omega, fun ⟨hl, _⟩ => by have := h.2; omega⟩
+  h.1
 
 /-- BMP scalars have a byte count of 1, 2, or 3. -/
 theorem byteCount_bmp (s : Scalar) (h : s.val < 0x10000) :
@@ -1018,16 +1614,6 @@ theorem plane_pos_of_supplementary (s : Scalar) (h : 0x10000 ≤ s.val) :
     0 < Scalar.plane s := by
   unfold Scalar.plane
   omega
-
-/-- Digits are always ASCII. -/
-theorem digit_isAscii (n : Nat) (h : IsDigit n) : IsAscii n := by
-  unfold IsDigit at h; unfold IsAscii; omega
-
-/-- Letters are always ASCII. -/
-theorem alpha_isAscii (n : Nat) (h : IsAlpha n) : IsAscii n := by
-  cases h with
-  | inl hu => unfold IsUppercase at hu; unfold IsAscii; omega
-  | inr hl => unfold IsLowercase at hl; unfold IsAscii; omega
 
 /-- toLower on 'A' gives 'a'. -/
 theorem toLowerAscii_A :

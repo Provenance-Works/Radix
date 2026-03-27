@@ -26,8 +26,32 @@ def continuationPayload (b : UInt8) : Nat
 def encode (s : Scalar) : List UInt8
 def encodeAll : List Scalar → List UInt8
 def decodeNext? : List UInt8 → Option (Scalar × Nat)
+def decodeNextStep? : List UInt8 → Option DecodeStep
 def decodeAll? (bytes : List UInt8) : Option (List Scalar)
+def decodeAllReplacingMaximalSubparts (bytes : List UInt8) : List Scalar
+def maximalSubpartLength (bytes : List UInt8) : Nat
+def firstDecodeError? (bytes : List UInt8) : Option DecodeError
 def WellFormed (bytes : List UInt8) : Prop
+```
+
+```lean
+inductive DecodeErrorKind
+  | invalidStartByte
+  | unexpectedContinuationByte
+  | invalidContinuationByte
+  | overlongSequence
+  | surrogateSequence
+  | outOfRangeSequence
+  | truncatedSequence
+
+structure DecodeError where
+  kind : DecodeErrorKind
+  expectedLength : Nat
+  consumed : Nat
+
+inductive DecodeStep where
+  | scalar (scalar : Scalar) (consumed : Nat)
+  | error (error : DecodeError)
 ```
 
 ### 意味論
@@ -35,6 +59,8 @@ def WellFormed (bytes : List UInt8) : Prop
 - `Scalar.ofNat?` はサロゲート領域と Unicode 範囲外の値を拒否します。
 - `decodeNext?` は overlong encoding と不正な continuation byte を拒否します。
 - `decodeAll?` は入力全体が正しい UTF-8 のときだけ成功します。
+- `decodeNextStep?` は不正入力を分類し、現在オフセットでの Unicode maximal subpart 長を返します。
+- `decodeAllReplacingMaximalSubparts` は Unicode 17 Chapter 3 の maximal-subpart 置換例（Table 3-8 から 3-11）に従います。
 
 ## 操作 (`UTF8.Ops`)
 
@@ -46,11 +72,328 @@ abbrev Scalar := Spec.Scalar
 def encodeScalar (s : Scalar) : ByteArray
 def encodeScalars (scalars : List Scalar) : ByteArray
 def decodeNextBytes? (bytes : ByteArray) : Option (Scalar × Nat)
+def decodeNextBytesStep? (bytes : ByteArray) : Option DecodeStep
 def decodeBytes? (bytes : ByteArray) : Option (List Scalar)
+def decodeBytesReplacing (bytes : ByteArray) : List Scalar
+def decodeBytesReplacingMaximalSubparts (bytes : ByteArray) : List Scalar
 def isWellFormed (bytes : ByteArray) : Bool
 def encodedLength (s : Scalar) : Nat
 def scalarCount? (bytes : ByteArray) : Option Nat
+def firstDecodeErrorBytes? (bytes : ByteArray) : Option DecodeError
 ```
+
+### UTF-16 API
+
+```lean
+abbrev UTF16CodeUnit := UInt16
+
+def utf16ArrayToList (units : Array UTF16CodeUnit) : List UTF16CodeUnit
+def listToUTF16Array (units : List UTF16CodeUnit) : Array UTF16CodeUnit
+
+inductive UTF16DecodeErrorKind
+  | unexpectedLowSurrogate
+  | invalidLowSurrogate
+  | truncatedHighSurrogate
+
+structure UTF16DecodeError where
+  kind : UTF16DecodeErrorKind
+  expectedLength : Nat
+  consumed : Nat
+
+inductive UTF16DecodeStep where
+  | scalar (scalar : Scalar) (consumed : Nat)
+  | error (error : UTF16DecodeError)
+
+def encodeScalarToUTF16List (s : Scalar) : List UTF16CodeUnit
+def encodeScalarToUTF16 (s : Scalar) : Array UTF16CodeUnit
+def encodeScalarsToUTF16List (scalars : List Scalar) : List UTF16CodeUnit
+def encodeScalarsToUTF16 (scalars : List Scalar) : Array UTF16CodeUnit
+
+def decodeNextUTF16ListStep? (units : List UTF16CodeUnit) : Option UTF16DecodeStep
+def decodeNextUTF16Step? (units : Array UTF16CodeUnit) : Option UTF16DecodeStep
+def decodeUTF16List? (units : List UTF16CodeUnit) : Option (List Scalar)
+def decodeUTF16? (units : Array UTF16CodeUnit) : Option (List Scalar)
+def decodeUTF16ListReplacing (units : List UTF16CodeUnit) : List Scalar
+def decodeUTF16Replacing (units : Array UTF16CodeUnit) : List Scalar
+def firstUTF16DecodeErrorList? (units : List UTF16CodeUnit) : Option UTF16DecodeError
+def firstUTF16DecodeError? (units : Array UTF16CodeUnit) : Option UTF16DecodeError
+def utf16ScalarCount? (units : Array UTF16CodeUnit) : Option Nat
+
+def transcodeUTF16ToUTF8? (units : Array UTF16CodeUnit) : Option ByteArray
+def transcodeUTF16ToUTF8Replacing (units : Array UTF16CodeUnit) : ByteArray
+def transcodeUTF8ToUTF16? (bytes : ByteArray) : Option (Array UTF16CodeUnit)
+def transcodeUTF8ToUTF16Replacing (mode : ReplacementMode) (bytes : ByteArray)
+  : Array UTF16CodeUnit
+```
+
+### Streaming API
+
+```lean
+inductive ReplacementMode
+  | perByte
+  | maximalSubpart
+
+structure StreamDecoder where
+  pending : List UInt8
+
+structure StreamChunk where
+  scalars : List Scalar
+  decoder : StreamDecoder
+
+structure StreamError where
+  scalars : List Scalar
+  error : DecodeError
+  offset : Nat
+
+def StreamDecoder.init : StreamDecoder
+def StreamDecoder.feed? (decoder : StreamDecoder) (chunk : ByteArray)
+  : Except StreamError StreamChunk
+def StreamDecoder.feedReplacing (decoder : StreamDecoder) (mode : ReplacementMode)
+  (chunk : ByteArray) : StreamChunk
+def StreamDecoder.finish? (decoder : StreamDecoder) : Except StreamError (List Scalar)
+def StreamDecoder.finishReplacing (decoder : StreamDecoder) (mode : ReplacementMode)
+  : List Scalar
+
+def decodeChunks? (chunks : List ByteArray) : Except StreamError (List Scalar)
+def decodeChunksReplacing (mode : ReplacementMode) (chunks : List ByteArray)
+  : List Scalar
+```
+
+### Cursor API
+
+```lean
+structure Cursor where
+  bytes : ByteArray
+  offset : Nat
+
+def Cursor.init (bytes : ByteArray) : Cursor
+def Cursor.atOffset? (bytes : ByteArray) (offset : Nat) : Option Cursor
+def Cursor.byteOffset (cursor : Cursor) : Nat
+def Cursor.remainingByteCount (cursor : Cursor) : Nat
+def Cursor.isAtEnd (cursor : Cursor) : Bool
+def Cursor.currentStep? (cursor : Cursor) : Option DecodeStep
+def Cursor.current? (cursor : Cursor) : Option Scalar
+def Cursor.currentError? (cursor : Cursor) : Option DecodeError
+def Cursor.advance? (cursor : Cursor) : Option (Scalar × Cursor)
+def Cursor.advanceReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : Option (Scalar × Cursor)
+def Cursor.decodeRemaining? (cursor : Cursor) : Option (List Scalar)
+def Cursor.decodeRemainingReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : List Scalar
+
+def decodeWithCursor? (bytes : ByteArray) : Option (List Scalar)
+def decodeWithCursorReplacing (mode : ReplacementMode) (bytes : ByteArray)
+  : List Scalar
+```
+
+### Grapheme API
+
+```lean
+structure Grapheme where
+  scalars : List Scalar
+  startOffset : Nat
+  endOffset : Nat
+
+def Grapheme.byteLength (grapheme : Grapheme) : Nat
+def Grapheme.scalarCount (grapheme : Grapheme) : Nat
+def Grapheme.isEmpty (grapheme : Grapheme) : Bool
+
+def Cursor.advanceGrapheme? (cursor : Cursor) : Option (Grapheme × Cursor)
+def Cursor.advanceGraphemeReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : Option (Grapheme × Cursor)
+def Cursor.currentGrapheme? (cursor : Cursor) : Option Grapheme
+def Cursor.currentGraphemeReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : Option Grapheme
+def Cursor.decodeRemainingGraphemes? (cursor : Cursor) : Option (List Grapheme)
+def Cursor.decodeRemainingGraphemesReplacing (mode : ReplacementMode) (cursor : Cursor)
+  : List Grapheme
+
+def decodeGraphemes? (bytes : ByteArray) : Option (List Grapheme)
+def decodeGraphemesReplacing (mode : ReplacementMode) (bytes : ByteArray)
+  : List Grapheme
+def graphemeCount? (bytes : ByteArray) : Option Nat
+```
+
+### Normalization API
+
+```lean
+abbrev CombiningClass := Nat
+
+structure DecompositionEntry where
+  source : Nat
+  target : List Nat
+
+inductive NormalizationForm where
+  | nfd
+  | nfc
+  | nfkd
+  | nfkc
+
+def isStarter (ccc : CombiningClass) : Bool
+def isCombining (ccc : CombiningClass) : Bool
+def canonicalCombiningClass (s : Scalar) : CombiningClass
+def supportsNormalizationForm (form : NormalizationForm) : Bool
+
+def canonicalDecomposition? (s : Scalar) : Option (List Scalar)
+def compatibilityDecomposition? (s : Scalar) : Option (List Scalar)
+def canonicalComposePair? (starter mark : Scalar) : Option Scalar
+
+def normalizeScalarsNFD (scalars : List Scalar) : List Scalar
+def normalizeScalarsNFC (scalars : List Scalar) : List Scalar
+def normalizeScalarsNFKD (scalars : List Scalar) : List Scalar
+def normalizeScalarsNFKC (scalars : List Scalar) : List Scalar
+def normalizeScalars? (form : NormalizationForm) (scalars : List Scalar)
+  : Option (List Scalar)
+
+def isNormalizedNFD (scalars : List Scalar) : Bool
+def isNormalizedNFC (scalars : List Scalar) : Bool
+def isNormalizedNFKD (scalars : List Scalar) : Bool
+def isNormalizedNFKC (scalars : List Scalar) : Bool
+def canonicallyEquivalent (left right : List Scalar) : Bool
+
+def normalizeBytesNFD? (bytes : ByteArray) : Option ByteArray
+def normalizeBytesNFC? (bytes : ByteArray) : Option ByteArray
+def normalizeBytesNFKD? (bytes : ByteArray) : Option ByteArray
+def normalizeBytesNFKC? (bytes : ByteArray) : Option ByteArray
+def normalizeListNFD? (bytes : List UInt8) : Option (List UInt8)
+def normalizeListNFC? (bytes : List UInt8) : Option (List UInt8)
+def normalizeListNFKD? (bytes : List UInt8) : Option (List UInt8)
+def normalizeListNFKC? (bytes : List UInt8) : Option (List UInt8)
+def normalizeBytes? (form : NormalizationForm) (bytes : ByteArray) : Option ByteArray
+def normalizeList? (form : NormalizationForm) (bytes : List UInt8) : Option (List UInt8)
+def isNormalizedBytesNFD? (bytes : ByteArray) : Option Bool
+def isNormalizedBytesNFC? (bytes : ByteArray) : Option Bool
+def isNormalizedBytesNFKD? (bytes : ByteArray) : Option Bool
+def isNormalizedBytesNFKC? (bytes : ByteArray) : Option Bool
+def canonicallyEquivalentBytes? (left right : ByteArray) : Bool
+```
+
+### Case Mapping API
+
+```lean
+inductive GeneralCategoryFamily
+inductive GeneralCategory
+
+def classifyCategory (s : Scalar) : GeneralCategory
+def classifyCategoryFamily (s : Scalar) : GeneralCategoryFamily
+
+def simpleLowerNat? (n : Nat) : Option Nat
+def simpleUpperNat? (n : Nat) : Option Nat
+
+def Scalar.isDigit (s : Scalar) : Bool
+def Scalar.isAlpha (s : Scalar) : Bool
+def Scalar.isPrintable (s : Scalar) : Bool
+def Scalar.isUppercase (s : Scalar) : Bool
+def Scalar.isLowercase (s : Scalar) : Bool
+def Scalar.toLowerAscii? (s : Scalar) : Option Scalar
+def Scalar.toUpperAscii? (s : Scalar) : Option Scalar
+def Scalar.toLowerSimple (s : Scalar) : Scalar
+def Scalar.toUpperSimple (s : Scalar) : Scalar
+def Scalar.caseFoldSimple (s : Scalar) : Scalar
+
+def lowercaseScalarsSimple (scalars : List Scalar) : List Scalar
+def uppercaseScalarsSimple (scalars : List Scalar) : List Scalar
+def caseFoldScalarsSimple (scalars : List Scalar) : List Scalar
+def caseFoldScalarsCompatibility (scalars : List Scalar) : List Scalar
+def caselessEquivalentSimple (left right : List Scalar) : Bool
+def caselessEquivalentCompatibility (left right : List Scalar) : Bool
+
+def lowercaseBytesSimple? (bytes : ByteArray) : Option ByteArray
+def uppercaseBytesSimple? (bytes : ByteArray) : Option ByteArray
+def caseFoldBytesSimple? (bytes : ByteArray) : Option ByteArray
+def caseFoldBytesCompatibility? (bytes : ByteArray) : Option ByteArray
+def lowercaseListSimple? (bytes : List UInt8) : Option (List UInt8)
+def uppercaseListSimple? (bytes : List UInt8) : Option (List UInt8)
+def caseFoldListSimple? (bytes : List UInt8) : Option (List UInt8)
+def caseFoldListCompatibility? (bytes : List UInt8) : Option (List UInt8)
+def equalsCaseFoldSimpleBytes? (left right : ByteArray) : Bool
+def equalsCaseFoldCompatibilityBytes? (left right : ByteArray) : Bool
+```
+
+### Text Operations API
+
+```lean
+def scalarBoundaryOffsets? (bytes : ByteArray) : Option (List Nat)
+def graphemeBoundaryOffsets? (bytes : ByteArray) : Option (List Nat)
+
+def byteOffsetOfScalarIndex? (bytes : ByteArray) (index : Nat) : Option Nat
+def byteOffsetOfGraphemeIndex? (bytes : ByteArray) (index : Nat) : Option Nat
+
+def scalarAtIndex? (bytes : ByteArray) (index : Nat) : Option Scalar
+def graphemeAtIndex? (bytes : ByteArray) (index : Nat) : Option Grapheme
+
+def sliceBytes? (bytes : ByteArray) (startOffset endOffset : Nat) : Option ByteArray
+def sliceScalars? (bytes : ByteArray) (startIndex endIndex : Nat) : Option ByteArray
+def sliceGraphemes? (bytes : ByteArray) (startIndex endIndex : Nat) : Option ByteArray
+
+def startsWithScalars (bytes : ByteArray) (prefixBytes : ByteArray) : Bool
+def endsWithScalars (bytes : ByteArray) (suffixBytes : ByteArray) : Bool
+def findScalars? (bytes : ByteArray) (needleBytes : ByteArray) : Option Nat
+def containsScalars (bytes : ByteArray) (needleBytes : ByteArray) : Bool
+
+def startsWithGraphemes (bytes : ByteArray) (prefixBytes : ByteArray) : Bool
+def endsWithGraphemes (bytes : ByteArray) (suffixBytes : ByteArray) : Bool
+def findGraphemes? (bytes : ByteArray) (needleBytes : ByteArray) : Option Nat
+def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
+```
+
+### Replacement Mode
+
+- `decodeBytesReplacing` は既存の「不正バイト 1 個につき U+FFFD 1 個」の互換挙動を維持します。
+- `decodeBytesReplacingMaximalSubparts` は Unicode maximal subpart に従って不正 prefix をまとめて置換しつつ、隣接する well-formed subsequence を誤って消費しません。
+- `StreamDecoder.feed?` は incomplete な UTF-8 prefix を chunk 境界で保留し、不正列として早まって確定しません。
+- `StreamDecoder.finish?` は残った pending prefix を end-of-stream の truncated-sequence error として確定します。
+- `StreamDecoder.feedReplacing` と `decodeChunksReplacing` は chunked byte stream に同じ recovery policy を適用します。
+- `Cursor.atOffset?` は scalar 境界のみを受理し、continuation byte の途中オフセットを拒否します。
+- `Cursor.advance?` は正しい UTF-8 バッファをバイトオフセット付きで 1 scalar ずつ前進させます。
+- `Cursor.advanceReplacing` は不正なバッファでも置換モード付きで同じ走査を提供します。
+- `decodeGraphemes?` は well-formed UTF-8 を、リポジトリ内で実装した Unicode default extended grapheme モデルに従って grapheme cluster へ分割します。
+- `decodeGraphemesReplacing` は不正 prefix を置換した後も同じ cluster segmentation を適用します。
+- regional indicator は grapheme 走査時に 2 個ずつペアリングし、flag 風の cluster を保ちます。
+- `normalizeScalarsNFD` は、Unicode 17 全体の canonical decomposition と canonical combining class ordering を適用します。
+- `normalizeScalarsNFC` は NFD の上に Unicode 17 全体の canonical composition を適用し、algorithmic Hangul composition と vendored composition-exclusion rule も反映します。
+- `normalizeScalars?` と `normalizeBytes?` は、repo に同梱した Unicode 17 の canonical / compatibility decomposition table 全体に対して 4 つの normalization form をサポートします。
+- `canonicallyEquivalent` と `canonicallyEquivalentBytes?` は canonical decomposition を通して比較するため、precomposed 形と decomposed 形を等価とみなせます。
+- `classifyCategory` は各 scalar の exact な Unicode 17 general category を返し、`classifyCategoryFamily` はそこから導いた broad な L/M/N/P/S/Z/C family を返します。
+- `Scalar.isAlpha`、`Scalar.isDigit`、`Scalar.isPrintable`、`Scalar.isUppercase`、`Scalar.isLowercase` は、ASCII 固定の境界判定ではなく vendor 済み Unicode 17 category data を使います。
+- `toLowerSimple` と `toUpperSimple` は、1-scalar casing API として vendor 済み Unicode 17 `UnicodeData.txt` 全体の simple uppercase/lowercase mapping を使います。
+- `caseFoldSimple` は、1-scalar case folding として vendor 済み official Unicode 17 simple CaseFolding mapping を使います。
+- `caseFoldScalarsSimple` と `caseFoldBytesSimple?` は、official Unicode 17 simple CaseFolding mapping の前後で Unicode 17 全体の NFD を通すため、canonically equivalent な precomposed/decomposed 形を一貫して比較できます。
+- `caseFoldScalarsCompatibility` と `caseFoldBytesCompatibility?` は、Unicode 17 全体の NFKD を適用したうえで official Unicode 17 full CaseFolding mapping を使うため、実装がモデル化している normalization + folding data に対して Unicode default caseless matching を提供します。
+- `scalarBoundaryOffsets?` と `graphemeBoundaryOffsets?` はバイト単位の安全な切断点を返し、常に `0` と入力末尾オフセットを含みます。
+- `sliceBytes?` は UTF-8 scalar 境界にそろっていないオフセットを拒否します。
+- `sliceScalars?` と `sliceGraphemes?` は scalar または grapheme の index 範囲を、再利用しやすい well-formed UTF-8 部分列へ戻します。
+- `findScalars?` と `findGraphemes?` は最初の整列済み一致位置をバイトオフセットで返すため、cursor や slice API へそのまま渡せます。
+- `startsWithScalars`、`endsWithScalars`、`containsScalars` と grapheme 版は、比較対象が対応するテキスト境界にそろっている場合だけ成功します。
+
+### UTF-16 Notes
+
+- strict UTF-16 decode は BMP scalar をそのまま受理し、supplementary scalar は妥当な surrogate pair から復元します。
+- malformed surrogate usage は `unexpectedLowSurrogate`、`invalidLowSurrogate`、`truncatedHighSurrogate` に分類されます。
+- UTF-16 replacement decode は malformed code unit を 1 個ずつ消費するので、次の妥当な code unit で再同期できます。
+- `transcodeUTF16ToUTF8Replacing` は置換後に UTF-8 へ再エンコードするため、常に well-formed UTF-8 を返します。
+
+### Grapheme Notes
+
+- grapheme segmentation は、`UTF8.Spec` 側で Unicode 17 の `Control`、`Extend`、`SpacingMark`、`Prepend`、`Extended_Pictographic` property table と Hangul 規則を使って分類します。
+- 実行層では、その pairwise 規則の上に regional-indicator pairing、GB11 emoji ZWJ bridging、GB9c Indic conjunct handling を追加しています。
+- precomposed Hangul LV/LVT syllable、Jamo 列、spacing-mark vowel sign、prepend 文字、emoji modifier sequence、variation-selector emoji presentation、Indic virama conjunct は、default extended grapheme cluster として 1 cluster に保たれます。
+- UTF-8 の comprehensive test では、repo に固定した Unicode 17 の `GraphemeBreakTest.txt` を実際に実行するため、grapheme 挙動は手書き例だけでなく標準 test corpus に対しても検証されます。
+- これは Unicode の default extended grapheme cluster algorithm に合わせた挙動であり、locale/application 固有の tailoring は引き続き対象外です。
+
+### Normalization Notes
+
+- canonical normalization は、repo に vendor した Unicode 17 `UnicodeData.txt` と `CompositionExclusions.txt` から導出した full composition exclusion rule をもとに生成しています。
+- canonical ordering は starter ごとの segment 内で安定に並べ替えるため、starter 境界をまたがずに combining mark 順序だけを正規化します。
+- compatibility normalization (`nfkd` / `nfkc`) は、vendor 済み Unicode 17 compatibility decomposition table 全体を使います。
+- UTF-8 の comprehensive test では official Unicode 17 `NormalizationTest.txt` も vendor して実行し、normalization 挙動を手書き例だけでなく標準の conformance corpus に対して検証します。
+
+### Case Mapping Notes
+
+- direct scalar casing helper (`toLowerSimple`、`toUpperSimple`、`caseFoldSimple`) は、意図的に simple で locale-tailored ではありませんが、以前の手書き subset ではなく vendor 済み Unicode 17 全体の simple mapping を使います。
+- `caseFoldScalarsSimple`、`caseFoldBytesSimple?`、`equalsCaseFoldSimpleBytes?`、`caseFoldScalarsCompatibility`、`caseFoldBytesCompatibility?`、`equalsCaseFoldCompatibilityBytes?` は、repo に vendor した official Unicode 17 CaseFolding data を使います。
+- UTF-8 の comprehensive test では official Unicode 17 `CaseFolding.txt` と `UnicodeData.txt` を vendor し、生成済み simple/full folding table だけでなく direct simple upper/lower mapping もその標準 data と直接照合します。正規化込みの caseless matching については別の実行テストで regression も固定化しています。
+- `SpecialCasing.txt` にある locale-specific tailoring はまだ対象外で、実装は language-tailored casing ではなく Unicode default case folding data を使います。
 
 ### 再公開される構築子
 
@@ -72,6 +415,21 @@ def Scalar.byteCount (s : Scalar) : Nat
 - `isWellFormed_encodeScalar`: 操作層エンコードは常にデコーダに受理される
 - `isWellFormed_encodeScalars`: 操作層の scalar sequence 全体も常にデコーダに受理される
 
+## Conformance Coverage
+
+- Unicode 17 Chapter 3 Table 3-7 の well-formed boundary 行を execution test で検証します。
+- Unicode 17 Chapter 3 Table 3-8 から 3-11 を official maximal-subpart replacement vector として実装しています。
+- U+0000 から U+10FFFF までの全 Unicode scalar 値（サロゲート除く）を exhaustive に round-trip 検証します。
+- Property test と comprehensive test で chunked strict decode、chunked replacement decode、end-of-stream truncation を検証します。
+- Property test と comprehensive test で cursor traversal、正しい境界シーク、cursor replacement semantics も検証します。
+- Property test と comprehensive test で combining mark、CRLF、Hangul sequence、regional indicator、emoji modifier sequence、emoji ZWJ sequence、replacement-aware malformed input の grapheme clustering も検証します。
+- Property test と comprehensive test で UTF-16 surrogate pair encoding、strict/replacement UTF-16 decode、UTF-8/UTF-16 transcoding も検証します。
+- Comprehensive test では official Unicode 17 `NormalizationTest.txt` を vendor し、NFC / NFD / NFKC / NFKD の invariant を標準 corpus に対して検証します。
+- Property test と comprehensive test で、canonical ordering、Hangul normalization、canonical equivalence、そして以前の Latin-only subset 外にある regression case も検証します。
+- Property test と comprehensive test で、サポート対象の simple lower/upper mapping、case-fold の idempotence、byte/scalar API 一致、precomposed/decomposed 間の caseless compare も検証します。
+- Comprehensive test では official Unicode 17 `CaseFolding.txt` を vendor し、生成済み simple/full folding table の両方を標準 data と照合します。
+- Property test と comprehensive test で scalar 境界列挙、scalar 単位の slice、scalar subsequence の byte-offset 検索も検証します。
+
 ## 使用例
 
 ```lean
@@ -87,6 +445,76 @@ def demo : IO Unit := do
   let bytes := Radix.UTF8.encodeScalar scalar
   IO.println s!"encoded: {bytes.toList}"
   IO.println s!"well formed: {Radix.UTF8.isWellFormed bytes}"
+
+def streamingDemo : IO Unit := do
+  let chunk1 := ByteArray.mk #[0xF0, 0x9F]
+  let chunk2 := ByteArray.mk #[0x99, 0x82, 0x21]
+  match Radix.UTF8.StreamDecoder.feed? Radix.UTF8.StreamDecoder.init chunk1 with
+  | Except.ok step1 =>
+    match Radix.UTF8.StreamDecoder.feed? step1.decoder chunk2 with
+    | Except.ok step2 =>
+      IO.println s!"decoded: {step2.scalars.map (·.val)}"
+    | Except.error err =>
+      IO.println s!"streaming error: {reprStr err}"
+  | Except.error err =>
+    IO.println s!"streaming error: {reprStr err}"
+
+def cursorDemo : IO Unit := do
+  let bytes := ByteArray.mk #[0x41, 0xE2, 0x82, 0xAC]
+  let cursor := Radix.UTF8.Cursor.init bytes
+  match Radix.UTF8.Cursor.advance? cursor with
+  | some (scalar, nextCursor) =>
+    IO.println s!"first scalar: {scalar.val}, next offset: {nextCursor.byteOffset}"
+  | none =>
+    IO.println "cursor error"
+
+def graphemeDemo : IO Unit := do
+  let bytes := ByteArray.mk #[0x41, 0xCC, 0x81, 0x42]
+  match Radix.UTF8.decodeGraphemes? bytes with
+  | some graphemes =>
+    IO.println s!"graphemes: {graphemes.map (fun grapheme => grapheme.scalars.map (·.val))}"
+  | none =>
+    IO.println "grapheme decode error"
+
+def utf16Demo : IO Unit := do
+  let units := Radix.UTF8.encodeScalarsToUTF16 [⟨0x41, by decide⟩, ⟨0x1F642, by decide⟩]
+  IO.println s!"utf16 units: {units.toList.map UInt16.toNat}"
+  match Radix.UTF8.decodeUTF16? units with
+  | some scalars =>
+    IO.println s!"decoded scalars: {scalars.map (·.val)}"
+  | none =>
+    IO.println "utf16 decode error"
+
+def textOpDemo : IO Unit := do
+  let bytes := ByteArray.mk #[0x41, 0xCC, 0x81, 0x42, 0xE2, 0x82, 0xAC]
+  IO.println s!"scalar boundaries: {Radix.UTF8.scalarBoundaryOffsets? bytes}"
+  IO.println s!"grapheme boundaries: {Radix.UTF8.graphemeBoundaryOffsets? bytes}"
+  IO.println s!"slice scalars [1, 3): {Radix.UTF8.sliceScalars? bytes 1 3 |>.map ByteArray.toList}"
+  IO.println s!"find scalar subsequence: {Radix.UTF8.findScalars? bytes (ByteArray.mk #[0x42, 0xE2, 0x82, 0xAC])}"
+
+def normalizationDemo : IO Unit := do
+  let composed := ByteArray.mk #[0xC3, 0x81]
+  let decomposed := ByteArray.mk #[0x41, 0xCC, 0x81]
+  let compatibility := ByteArray.mk #[0xC2, 0xA0, 0xEF, 0xBC, 0xA1, 0xE2, 0x84, 0xAB]
+  IO.println s!"nfd(composed): {Radix.UTF8.normalizeBytesNFD? composed |>.map ByteArray.toList}"
+  IO.println s!"nfc(decomposed): {Radix.UTF8.normalizeBytesNFC? decomposed |>.map ByteArray.toList}"
+  IO.println s!"nfkd(compatibility): {Radix.UTF8.normalizeBytesNFKD? compatibility |>.map ByteArray.toList}"
+  IO.println s!"nfkc(compatibility): {Radix.UTF8.normalizeBytesNFKC? compatibility |>.map ByteArray.toList}"
+  IO.println s!"canonically equivalent: {Radix.UTF8.canonicallyEquivalentBytes? composed decomposed}"
+
+def caseMappingDemo : IO Unit := do
+  let upper := ByteArray.mk #[0xC3, 0x81, 0xC3, 0x87]
+  let lowerDecomposed := ByteArray.mk #[0x61, 0xCC, 0x81, 0x63, 0xCC, 0xA7]
+  let compatibilityUpper := ByteArray.mk #[0xEF, 0xBC, 0xA1, 0xEF, 0xAC, 0x83, 0xE2, 0x84, 0xAA]
+  let compatibilityLower := ByteArray.mk #[0x61, 0x66, 0x66, 0x69, 0x6B]
+  let sharpSUpper := ByteArray.mk #[0xE1, 0xBA, 0x9E]
+  let sharpSLower := ByteArray.mk #[0x73, 0x73]
+  IO.println s!"lowercase(simple): {Radix.UTF8.lowercaseBytesSimple? upper |>.map ByteArray.toList}"
+  IO.println s!"casefold(simple): {Radix.UTF8.caseFoldBytesSimple? upper |>.map ByteArray.toList}"
+  IO.println s!"casefold(compatibility): {Radix.UTF8.caseFoldBytesCompatibility? compatibilityUpper |>.map ByteArray.toList}"
+  IO.println s!"caseless equal: {Radix.UTF8.equalsCaseFoldSimpleBytes? upper lowerDecomposed}"
+  IO.println s!"compatibility caseless equal: {Radix.UTF8.equalsCaseFoldCompatibilityBytes? compatibilityUpper compatibilityLower}"
+  IO.println s!"sharp-s compatibility equal: {Radix.UTF8.equalsCaseFoldCompatibilityBytes? sharpSUpper sharpSLower}"
 ```
 
 ## 関連ドキュメント

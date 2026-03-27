@@ -376,7 +376,7 @@ theorem allAscii_encode_of_ascii (s : Scalar) (h : s.val < 0x80) :
 
 /-! ## Unicode Consortium Test Vectors
 
-Known encoding/decoding pairs from the Unicode standard (Unicode 15.1). -/
+Known encoding/decoding pairs from the Unicode standard (Unicode 17). -/
 
 /-- U+0000 NULL encodes to 0x00. -/
 theorem encode_U0000 : Spec.encode ⟨0x0000, by decide⟩ = [0x00] := by decide

@@ -117,6 +117,35 @@ private def assertUTF8ReplacementResync (bad : UInt8) : IO Unit := do
   assert (Radix.UTF8.scalarsToNats decoded == [Radix.UTF8.replacement.val, 0x22])
     s!"UTF8 replacement resync after invalid byte: {bad.toNat}"
 
+private def nextUTF8ScalarNat (rng : PRNG) : PRNG × Nat :=
+  let (rng0, bucket) := rng.nextNat 5
+  let (rng1, offset) :=
+    match bucket with
+    | 0 => rng0.nextNat 0x80
+    | 1 => rng0.nextNat (0x800 - 0x80)
+    | 2 => rng0.nextNat (0xD800 - 0x800)
+    | 3 => rng0.nextNat (0x10000 - 0xE000)
+    | _ => rng0.nextNat (0x110000 - 0x10000)
+  let scalarNat :=
+    match bucket with
+    | 0 => offset
+    | 1 => 0x80 + offset
+    | 2 => 0x800 + offset
+    | 3 => 0xE000 + offset
+    | _ => 0x10000 + offset
+  (rng1, scalarNat)
+
+private def nextUTF16UnitList (rng : PRNG) (maxLen : Nat) : PRNG × List UInt16 :=
+  Id.run do
+    let (rng0, len) := rng.nextNat (maxLen + 1)
+    let mut state := rng0
+    let mut units : List UInt16 := []
+    for _ in [:len] do
+      let (nextState, unit) := state.nextUInt16
+      state := nextState
+      units := unit :: units
+    return (state, units.reverse)
+
 /-! ================================================================ -/
 /-! ## UInt8 Property Tests                                          -/
 /-! ================================================================ -/
@@ -1856,6 +1885,24 @@ private def testNumericTypeclassProperties : IO Unit := do
 
 private def testUTF8Properties : IO Unit := do
   IO.println "  UTF8 properties..."
+  let rec expectedFirstDecodeError (fuel : Nat) (remaining : List UInt8) : Option Radix.UTF8.DecodeError :=
+    match fuel with
+    | 0 => none
+    | fuel + 1 =>
+      match Radix.UTF8.decodeNextListStep? remaining with
+      | none => none
+      | some (.error err) => some err
+      | some (.scalar _ consumed) => expectedFirstDecodeError fuel (remaining.drop consumed)
+  let rec expectedFirstUTF16Error
+      (fuel : Nat)
+      (remaining : List Radix.UTF8.UTF16CodeUnit) : Option Radix.UTF8.UTF16DecodeError :=
+    match fuel with
+    | 0 => none
+    | fuel + 1 =>
+      match Radix.UTF8.decodeNextUTF16ListStep? remaining with
+      | none => none
+      | some (.error err) => some err
+      | some (.scalar _ consumed) => expectedFirstUTF16Error fuel (remaining.drop consumed)
   let boundaryVals := [0x00, 0x24, 0x41, 0x7F, 0x80, 0x7FF, 0x800, 0xD7FF, 0xE000, 0xFFFF, 0x10000, 0x10FFFF]
   for n in boundaryVals do
     assertUTF8RoundTrip n
@@ -1897,15 +1944,554 @@ private def testUTF8Properties : IO Unit := do
       s!"UTF8 validateUTF8 matches isWellFormedList: {bytes}"
 
     let replacing := Radix.UTF8.decodeListReplacing bytes
+    let strictReplacing := Radix.UTF8.decodeListReplacingMaximalSubparts bytes
+    let expectedFirstError := expectedFirstDecodeError (bytes.length + 1) bytes
     assert (replacing.length ≤ bytes.length)
       s!"UTF8 replacement decode length bounded by input length: {bytes}"
+    assert (strictReplacing.length ≤ replacing.length)
+      s!"UTF8 maximal-subpart replacement never exceeds per-byte replacement: {bytes}"
+    assert (Radix.UTF8.firstDecodeErrorList? bytes == expectedFirstError)
+      s!"UTF8 firstDecodeErrorList? returns the first error anywhere in the input: {bytes}"
+
+    match Radix.UTF8.decodeNextListStep? bytes with
+    | some (Radix.UTF8.Spec.DecodeStep.scalar _ consumed) =>
+      assert (1 ≤ consumed && consumed ≤ 4)
+        s!"UTF8 detailed step scalar width range: {bytes}"
+      assert (Radix.UTF8.maximalSubpartLength bytes == consumed)
+        s!"UTF8 maximalSubpartLength matches scalar width: {bytes}"
+    | some (Radix.UTF8.Spec.DecodeStep.error err) =>
+      assert (1 ≤ err.consumed && err.consumed ≤ Nat.min 4 bytes.length)
+        s!"UTF8 detailed step error width range: {bytes}"
+      assert (Radix.UTF8.maximalSubpartLength bytes == err.consumed)
+        s!"UTF8 maximalSubpartLength matches error width: {bytes}"
+      assert (Radix.UTF8.firstDecodeErrorList? bytes == some err)
+        s!"UTF8 firstDecodeErrorList? matches detailed step: {bytes}"
+    | none =>
+      assert (bytes == []) "UTF8 detailed step returns none only for empty input"
 
     match Radix.UTF8.decodeList? bytes with
     | some decoded =>
       assert (replacing == decoded)
         s!"UTF8 replacement decode agrees on well-formed input: {bytes}"
+      assert (strictReplacing == decoded)
+        s!"UTF8 maximal-subpart replacement agrees on well-formed input: {bytes}"
     | none =>
       pure ()
+
+  let mut rngStreamingValid := PRNG.new 602
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngStreamingValid.nextNat 6
+    rngStreamingValid := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarNats : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngStreamingValid
+      rngStreamingValid := nextRng
+      scalarNats := scalarNat :: scalarNats
+    let scalarNatList := scalarNats.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let encoded := Radix.UTF8.encodeAllToList scalars
+      let (rng', splitA) := rngStreamingValid.nextNat (encoded.length + 1)
+      rngStreamingValid := rng'
+      let (rng', splitB) := rngStreamingValid.nextNat (encoded.length + 1)
+      rngStreamingValid := rng'
+      let splitLo := Nat.min splitA splitB
+      let splitHi := Nat.max splitA splitB
+      let chunks :=
+        [ Radix.UTF8.listToByteArray (encoded.take splitLo)
+        , Radix.UTF8.listToByteArray ((encoded.drop splitLo).take (splitHi - splitLo))
+        , Radix.UTF8.listToByteArray (encoded.drop splitHi)
+        ]
+      match Radix.UTF8.decodeChunks? chunks with
+      | Except.ok decoded =>
+        assert (decoded == scalars)
+          s!"UTF8 streaming strict decode matches one-shot valid decode: {scalarNatList}"
+      | Except.error err =>
+        assert false s!"UTF8 streaming strict decode unexpectedly failed on valid data: {reprStr err}"
+    | none =>
+      assert false s!"UTF8 random scalar generation produced invalid scalar list: {scalarNatList}"
+
+  let mut rngStreamingBytes := PRNG.new 603
+  for _ in [:numIter] do
+    let (rng', bytes) := rngStreamingBytes.nextByteList 16
+    rngStreamingBytes := rng'
+    let (rng', splitA) := rngStreamingBytes.nextNat (bytes.length + 1)
+    rngStreamingBytes := rng'
+    let (rng', splitB) := rngStreamingBytes.nextNat (bytes.length + 1)
+    rngStreamingBytes := rng'
+    let splitLo := Nat.min splitA splitB
+    let splitHi := Nat.max splitA splitB
+    let chunks :=
+      [ Radix.UTF8.listToByteArray (bytes.take splitLo)
+      , Radix.UTF8.listToByteArray ((bytes.drop splitLo).take (splitHi - splitLo))
+      , Radix.UTF8.listToByteArray (bytes.drop splitHi)
+      ]
+    assert (Radix.UTF8.decodeChunksReplacing .perByte chunks == Radix.UTF8.decodeListReplacing bytes)
+      s!"UTF8 streaming per-byte replacement matches one-shot decode: {bytes}"
+    assert (Radix.UTF8.decodeChunksReplacing .maximalSubpart chunks ==
+      Radix.UTF8.decodeListReplacingMaximalSubparts bytes)
+      s!"UTF8 streaming maximal-subpart replacement matches one-shot decode: {bytes}"
+    let streamingStrict :=
+      match Radix.UTF8.decodeChunks? chunks with
+      | Except.ok decoded => some decoded
+      | Except.error _ => none
+    assert (streamingStrict == Radix.UTF8.decodeList? bytes)
+      s!"UTF8 streaming strict success/failure matches one-shot decode: {bytes}"
+
+  let mut rngCursorValid := PRNG.new 604
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngCursorValid.nextNat 6
+    rngCursorValid := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarsAcc : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngCursorValid
+      rngCursorValid := nextRng
+      scalarsAcc := scalarNat :: scalarsAcc
+    let scalarNatList := scalarsAcc.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let encoded := Radix.UTF8.encodeScalars scalars
+      assert (Radix.UTF8.decodeWithCursor? encoded == some scalars)
+        s!"UTF8 cursor strict decode matches encode/decode on valid data: {scalarNatList}"
+
+      let byteList := Radix.UTF8.byteArrayToList encoded
+      let mut boundary := 0
+      for scalar in scalars do
+        match Radix.UTF8.Cursor.atOffset? encoded boundary with
+        | some cursor =>
+          assert (Radix.UTF8.Cursor.current? cursor == some scalar)
+            s!"UTF8 cursor boundary lookup returns expected scalar at offset {boundary}"
+        | none =>
+          assert false s!"UTF8 cursor boundary lookup rejected valid offset {boundary}"
+        boundary := boundary + scalar.byteCount
+      match Radix.UTF8.Cursor.atOffset? encoded boundary with
+      | some cursor =>
+        assert (Radix.UTF8.Cursor.byteOffset cursor == boundary)
+          "UTF8 cursor boundary lookup accepts final offset"
+      | none =>
+        assert false "UTF8 cursor boundary lookup rejected final offset"
+      for idx in List.range byteList.length do
+        let byte := byteList[idx]!
+        if Radix.UTF8.isContinuationByte byte then
+          assert (Radix.UTF8.Cursor.atOffset? encoded idx == none)
+            s!"UTF8 cursor boundary lookup rejects continuation-byte offset {idx}"
+    | none =>
+      assert false s!"UTF8 random cursor scalar generation produced invalid scalar list: {scalarNatList}"
+
+  let mut rngCursorBytes := PRNG.new 605
+  for _ in [:numIter] do
+    let (rng', bytes) := rngCursorBytes.nextByteList 16
+    rngCursorBytes := rng'
+    let byteArray := Radix.UTF8.listToByteArray bytes
+    let cursorStrict := Radix.UTF8.decodeWithCursor? byteArray
+    assert (cursorStrict == Radix.UTF8.decodeList? bytes)
+      s!"UTF8 cursor strict decode matches one-shot decode: {bytes}"
+    assert (Radix.UTF8.decodeWithCursorReplacing .perByte byteArray == Radix.UTF8.decodeListReplacing bytes)
+      s!"UTF8 cursor per-byte replacement matches one-shot decode: {bytes}"
+    assert (Radix.UTF8.decodeWithCursorReplacing .maximalSubpart byteArray ==
+      Radix.UTF8.decodeListReplacingMaximalSubparts bytes)
+      s!"UTF8 cursor maximal-subpart replacement matches one-shot decode: {bytes}"
+
+  let mut rngGraphemeValid := PRNG.new 606
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngGraphemeValid.nextNat 6
+    rngGraphemeValid := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarsAcc : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngGraphemeValid
+      rngGraphemeValid := nextRng
+      scalarsAcc := scalarNat :: scalarsAcc
+    let scalarNatList := scalarsAcc.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let encoded := Radix.UTF8.encodeScalars scalars
+      match Radix.UTF8.decodeGraphemes? encoded with
+      | some graphemes =>
+        let flattened := graphemes.foldr (fun grapheme acc => grapheme.scalars ++ acc) []
+        let totalBytes := graphemes.foldl (fun acc grapheme => acc + grapheme.byteLength) 0
+        assert (flattened == scalars)
+          s!"UTF8 grapheme decode flattens back to original scalars: {scalarNatList}"
+        assert (totalBytes == encoded.size)
+          s!"UTF8 grapheme byte coverage matches encoded length: {scalarNatList}"
+        assert (Radix.UTF8.graphemeCount? encoded == some graphemes.length)
+          s!"UTF8 graphemeCount? matches decoded grapheme list: {scalarNatList}"
+      | none =>
+        assert false s!"UTF8 grapheme decode unexpectedly failed on valid input: {scalarNatList}"
+    | none =>
+      assert false s!"UTF8 random grapheme scalar generation produced invalid scalar list: {scalarNatList}"
+
+  let mut rngGraphemeBytes := PRNG.new 607
+  for _ in [:numIter] do
+    let (rng', bytes) := rngGraphemeBytes.nextByteList 16
+    rngGraphemeBytes := rng'
+    let byteArray := Radix.UTF8.listToByteArray bytes
+    let strictFlattened :=
+      match Radix.UTF8.decodeGraphemes? byteArray with
+      | some graphemes => some (graphemes.foldr (fun grapheme acc => grapheme.scalars ++ acc) [])
+      | none => none
+    assert (strictFlattened == Radix.UTF8.decodeWithCursor? byteArray)
+      s!"UTF8 grapheme strict decode matches strict cursor flattening: {bytes}"
+    let replacementFlattened :=
+      (Radix.UTF8.decodeGraphemesReplacing .maximalSubpart byteArray).foldr
+        (fun grapheme acc => grapheme.scalars ++ acc) []
+    assert (replacementFlattened == Radix.UTF8.decodeWithCursorReplacing .maximalSubpart byteArray)
+      s!"UTF8 grapheme maximal-subpart replacement matches cursor replacement flattening: {bytes}"
+
+  let emojiSequences : List (List Nat × Nat) :=
+    [ ([0x1F44D, 0x1F3FD], 1)
+    , ([0x1F468, 0x200D, 0x1F469, 0x200D, 0x1F467, 0x200D, 0x1F466], 1)
+    , ([0x2764, 0xFE0F, 0x200D, 0x1F525], 1)
+    , ([0x1F44D, 0x1F3FD, 0x41], 2)
+    ]
+  for (emojiNats, expectedCount) in emojiSequences do
+    match Radix.UTF8.natsToScalars? emojiNats with
+    | some emojiScalars =>
+      let encoded := Radix.UTF8.encodeScalars emojiScalars
+      match Radix.UTF8.decodeGraphemes? encoded with
+      | some graphemes =>
+        let flattened := graphemes.foldr (fun grapheme acc => grapheme.scalars ++ acc) []
+        assert (flattened == emojiScalars)
+          s!"UTF8 emoji grapheme sequences flatten back to their source scalars: {emojiNats}"
+        assert (graphemes.length == expectedCount)
+          s!"UTF8 emoji grapheme sequences get expected grapheme count: {emojiNats}"
+      | none =>
+        assert false s!"UTF8 emoji grapheme decode unexpectedly failed: {emojiNats}"
+    | none =>
+      assert false s!"UTF8 emoji grapheme sample generation produced invalid scalars: {emojiNats}"
+
+  let mut rngUTF16Valid := PRNG.new 608
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngUTF16Valid.nextNat 6
+    rngUTF16Valid := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarsAcc : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngUTF16Valid
+      rngUTF16Valid := nextRng
+      scalarsAcc := scalarNat :: scalarsAcc
+    let scalarNatList := scalarsAcc.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let utf16Units := Radix.UTF8.encodeScalarsToUTF16 scalars
+      assert (Radix.UTF8.decodeUTF16? utf16Units == some scalars)
+        s!"UTF16 strict decode round-trips encoded scalars: {scalarNatList}"
+      assert (Radix.UTF8.utf16ScalarCount? utf16Units == some scalars.length)
+        s!"UTF16 scalar count matches scalar list length: {scalarNatList}"
+      match Radix.UTF8.transcodeUTF16ToUTF8? utf16Units with
+      | some utf8Bytes =>
+        assert (Radix.UTF8.decodeBytes? utf8Bytes == some scalars)
+          s!"UTF16 to UTF8 transcoding round-trips valid scalars: {scalarNatList}"
+      | none =>
+        assert false s!"UTF16 to UTF8 transcoding failed on valid scalars: {scalarNatList}"
+    | none =>
+      assert false s!"UTF16 random scalar generation produced invalid scalar list: {scalarNatList}"
+
+  let mut rngUTF16Units := PRNG.new 609
+  for _ in [:numIter] do
+    let (rng', units) := nextUTF16UnitList rngUTF16Units 16
+    rngUTF16Units := rng'
+    let utf16Array := Radix.UTF8.listToUTF16Array units
+    let strictUTF16 := Radix.UTF8.decodeUTF16? utf16Array
+    let replacingUTF16 := Radix.UTF8.decodeUTF16Replacing utf16Array
+    match strictUTF16 with
+    | some scalars =>
+      assert (replacingUTF16 == scalars)
+        s!"UTF16 replacement decode agrees on well-formed input: {units.map UInt16.toNat}"
+    | none =>
+      pure ()
+    let replacementUTF8 := Radix.UTF8.transcodeUTF16ToUTF8Replacing utf16Array
+    assert (Radix.UTF8.decodeBytes? replacementUTF8 == some replacingUTF16)
+      s!"UTF16 replacement transcoding emits decodable UTF8: {units.map UInt16.toNat}"
+    let firstError := Radix.UTF8.firstUTF16DecodeErrorList? units
+    let expectedFirstError := expectedFirstUTF16Error (units.length + 1) units
+    assert (firstError == expectedFirstError)
+      s!"UTF16 first error returns the first error anywhere in the input: {units.map UInt16.toNat}"
+    match Radix.UTF8.decodeNextUTF16ListStep? units with
+    | some (.error err) =>
+      assert (firstError == some err)
+        s!"UTF16 first error matches detailed step: {units.map UInt16.toNat}"
+    | _ =>
+      pure ()
+
+  let mut rngTextOps := PRNG.new 610
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngTextOps.nextNat 6
+    rngTextOps := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarsAcc : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngTextOps
+      rngTextOps := nextRng
+      scalarsAcc := scalarNat :: scalarsAcc
+    let scalarNatList := scalarsAcc.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let encoded := Radix.UTF8.encodeScalars scalars
+      match Radix.UTF8.scalarBoundaryOffsets? encoded with
+      | some scalarOffsets =>
+        assert (scalarOffsets.head? == some 0)
+          s!"UTF8 scalar boundaries start at zero: {scalarNatList}"
+        assert (scalarOffsets.getLast? == some encoded.size)
+          s!"UTF8 scalar boundaries end at byte size: {scalarNatList}"
+        assert (scalarOffsets.length == scalars.length + 1)
+          s!"UTF8 scalar boundary count matches scalar count: {scalarNatList}"
+        let (rng', i0) := rngTextOps.nextNat (scalars.length + 1)
+        rngTextOps := rng'
+        let (rng', j0) := rngTextOps.nextNat (scalars.length + 1)
+        rngTextOps := rng'
+        let startIndex := Nat.min i0 j0
+        let endIndex := Nat.max i0 j0
+        match Radix.UTF8.sliceScalars? encoded startIndex endIndex with
+        | some sliced =>
+          let expected := scalars.drop startIndex |>.take (endIndex - startIndex)
+          assert (Radix.UTF8.decodeBytes? sliced == some expected)
+            s!"UTF8 scalar slicing matches decoded subset: {scalarNatList}"
+        | none =>
+          assert false s!"UTF8 scalar slicing rejected valid scalar bounds: {scalarNatList}"
+      | none =>
+        assert false s!"UTF8 scalar boundaries failed on valid input: {scalarNatList}"
+    | none =>
+      assert false s!"UTF8 random text-op scalar generation produced invalid scalars: {scalarNatList}"
+
+  let mut rngFindScalars := PRNG.new 611
+  for _ in [:numIter] do
+    let (rng', prefixCount0) := rngFindScalars.nextNat 4
+    rngFindScalars := rng'
+    let (rng', needleCount0) := rngFindScalars.nextNat 4
+    rngFindScalars := rng'
+    let (rng', suffixCount0) := rngFindScalars.nextNat 4
+    rngFindScalars := rng'
+    let prefixCount := prefixCount0 + 1
+    let needleCount := needleCount0 + 1
+    let suffixCount := suffixCount0 + 1
+    let mut prefixAcc : List Nat := []
+    let mut needleAcc : List Nat := []
+    let mut suffixAcc : List Nat := []
+    for _ in [:prefixCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngFindScalars
+      rngFindScalars := nextRng
+      prefixAcc := scalarNat :: prefixAcc
+    for _ in [:needleCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngFindScalars
+      rngFindScalars := nextRng
+      needleAcc := scalarNat :: needleAcc
+    for _ in [:suffixCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngFindScalars
+      rngFindScalars := nextRng
+      suffixAcc := scalarNat :: suffixAcc
+    let prefixNats := prefixAcc.reverse
+    let needleNats := needleAcc.reverse
+    let suffixNats := suffixAcc.reverse
+    match Radix.UTF8.natsToScalars? prefixNats, Radix.UTF8.natsToScalars? needleNats, Radix.UTF8.natsToScalars? suffixNats with
+    | some prefixScalars, some needleScalars, some suffixScalars =>
+      let haystackScalars := prefixScalars ++ needleScalars ++ suffixScalars
+      let haystack := Radix.UTF8.encodeScalars haystackScalars
+      let needle := Radix.UTF8.encodeScalars needleScalars
+      let expectedOffset := (Radix.UTF8.encodeScalars prefixScalars).size
+      assert (Radix.UTF8.findScalars? haystack needle == some expectedOffset)
+        s!"UTF8 scalar search finds the inserted needle: prefix={prefixNats} needle={needleNats} suffix={suffixNats}"
+      assert (Radix.UTF8.containsScalars haystack needle)
+        s!"UTF8 scalar containment reports the inserted needle: prefix={prefixNats} needle={needleNats} suffix={suffixNats}"
+      assert (Radix.UTF8.startsWithScalars haystack (Radix.UTF8.encodeScalars prefixScalars) == true)
+        s!"UTF8 scalar prefix check accepts valid prefix: {prefixNats}"
+      assert (Radix.UTF8.endsWithScalars haystack (Radix.UTF8.encodeScalars suffixScalars) == true)
+        s!"UTF8 scalar suffix check accepts valid suffix: {suffixNats}"
+    | _, _, _ =>
+      assert false "UTF8 scalar search property generated invalid scalar sequence"
+
+  let normalizationSamplePool : Array Nat :=
+    #[0x41, 0x43, 0x45, 0x4E, 0x4F, 0x55, 0x59,
+      0x61, 0x63, 0x65, 0x6E, 0x6F, 0x75, 0x79,
+      0x0300, 0x0301, 0x0302, 0x0303, 0x0308, 0x030A, 0x0327,
+      0x00C1, 0x00C7, 0x00D1, 0x00D6, 0x00DC,
+      0x00E1, 0x00E7, 0x00F1, 0x00F6, 0x00FC,
+      0x0178, 0x00FF,
+      0x00A0, 0x00A8, 0x00AA, 0x00AF, 0x00B2, 0x00B3, 0x00B4, 0x00B5,
+      0x00B8, 0x00B9, 0x00BA, 0x00BC, 0x00BD, 0x00BE,
+      0x2126, 0x212A, 0x212B,
+      0x3000, 0xFB00, 0xFB01, 0xFB02, 0xFB03, 0xFB04, 0xFB05, 0xFB06,
+      0xFF01, 0xFF21, 0xFF3A, 0xFF5A,
+      0x1100, 0x1161, 0x11A8, 0xAC00, 0xAC01]
+
+  let mut rngNormalizationSamples := PRNG.new 612
+  for _ in [:numIter] do
+    let (rng', sampleCount0) := rngNormalizationSamples.nextNat 8
+    rngNormalizationSamples := rng'
+    let sampleCount := sampleCount0 + 1
+    let mut sampleAcc : List Nat := []
+    for _ in [:sampleCount] do
+      let (nextRng, sampleIndex) := rngNormalizationSamples.nextNat normalizationSamplePool.size
+      rngNormalizationSamples := nextRng
+      sampleAcc := normalizationSamplePool[sampleIndex]! :: sampleAcc
+    let sampleNats := sampleAcc.reverse
+    match Radix.UTF8.natsToScalars? sampleNats with
+    | some scalars =>
+      let nfd := Radix.UTF8.normalizeScalarsNFD scalars
+      let nfc := Radix.UTF8.normalizeScalarsNFC scalars
+      let nfkd := Radix.UTF8.normalizeScalarsNFKD scalars
+      let nfkc := Radix.UTF8.normalizeScalarsNFKC scalars
+      assert (Radix.UTF8.normalizeScalarsNFD nfd == nfd)
+        s!"UTF8 NFD is idempotent on normalization sample sequences: {sampleNats}"
+      assert (Radix.UTF8.normalizeScalarsNFC nfc == nfc)
+        s!"UTF8 NFC is idempotent on normalization sample sequences: {sampleNats}"
+      assert (Radix.UTF8.normalizeScalarsNFKD nfkd == nfkd)
+        s!"UTF8 NFKD is idempotent on normalization sample sequences: {sampleNats}"
+      assert (Radix.UTF8.normalizeScalarsNFKC nfkc == nfkc)
+        s!"UTF8 NFKC is idempotent on normalization sample sequences: {sampleNats}"
+      assert (Radix.UTF8.normalizeScalarsNFKC nfkd == nfkc)
+        s!"UTF8 NFKC composed from NFKD matches direct NFKC: {sampleNats}"
+      assert (Radix.UTF8.normalizeScalarsNFKD nfkc == nfkd)
+        s!"UTF8 NFKD of NFKC matches direct NFKD: {sampleNats}"
+      assert (Radix.UTF8.canonicallyEquivalent scalars nfd)
+        s!"UTF8 canonical equivalence accepts original vs NFD: {sampleNats}"
+      assert (Radix.UTF8.canonicallyEquivalent scalars nfc)
+        s!"UTF8 canonical equivalence accepts original vs NFC: {sampleNats}"
+      let encoded := Radix.UTF8.encodeScalars scalars
+      assert (Radix.UTF8.normalizeBytesNFD? encoded == some (Radix.UTF8.encodeScalars nfd))
+        s!"UTF8 byte-level NFD matches scalar-level NFD: {sampleNats}"
+      assert (Radix.UTF8.normalizeBytesNFC? encoded == some (Radix.UTF8.encodeScalars nfc))
+        s!"UTF8 byte-level NFC matches scalar-level NFC: {sampleNats}"
+      assert (Radix.UTF8.normalizeBytesNFKD? encoded == some (Radix.UTF8.encodeScalars nfkd))
+        s!"UTF8 byte-level NFKD matches scalar-level NFKD: {sampleNats}"
+      assert (Radix.UTF8.normalizeBytesNFKC? encoded == some (Radix.UTF8.encodeScalars nfkc))
+        s!"UTF8 byte-level NFKC matches scalar-level NFKC: {sampleNats}"
+      assert (Radix.UTF8.normalizeBytes? .nfkd encoded == some (Radix.UTF8.encodeScalars nfkd))
+        s!"UTF8 generic normalization dispatches NFKD correctly: {sampleNats}"
+      assert (Radix.UTF8.normalizeBytes? .nfkc encoded == some (Radix.UTF8.encodeScalars nfkc))
+        s!"UTF8 generic normalization dispatches NFKC correctly: {sampleNats}"
+    | none =>
+      assert false s!"UTF8 normalization sample generation produced invalid scalars: {sampleNats}"
+
+  let mut rngNormalizationAny := PRNG.new 613
+  for _ in [:numIter] do
+    let (rng', scalarCount0) := rngNormalizationAny.nextNat 6
+    rngNormalizationAny := rng'
+    let scalarCount := scalarCount0 + 1
+    let mut scalarsAcc : List Nat := []
+    for _ in [:scalarCount] do
+      let (nextRng, scalarNat) := nextUTF8ScalarNat rngNormalizationAny
+      rngNormalizationAny := nextRng
+      scalarsAcc := scalarNat :: scalarsAcc
+    let scalarNatList := scalarsAcc.reverse
+    match Radix.UTF8.natsToScalars? scalarNatList with
+    | some scalars =>
+      let nfd := Radix.UTF8.normalizeScalarsNFD scalars
+      let nfc := Radix.UTF8.normalizeScalarsNFC scalars
+      let nfkd := Radix.UTF8.normalizeScalarsNFKD scalars
+      let nfkc := Radix.UTF8.normalizeScalarsNFKC scalars
+      assert (Radix.UTF8.normalizeScalarsNFD nfd == nfd)
+        s!"UTF8 NFD is idempotent on arbitrary scalar sequences: {scalarNatList}"
+      assert (Radix.UTF8.normalizeScalarsNFC nfc == nfc)
+        s!"UTF8 NFC is idempotent on arbitrary scalar sequences: {scalarNatList}"
+      assert (Radix.UTF8.normalizeScalarsNFKD nfkd == nfkd)
+        s!"UTF8 NFKD is idempotent on arbitrary scalar sequences: {scalarNatList}"
+      assert (Radix.UTF8.normalizeScalarsNFKC nfkc == nfkc)
+        s!"UTF8 NFKC is idempotent on arbitrary scalar sequences: {scalarNatList}"
+      assert (Radix.UTF8.normalizeScalarsNFKC nfkd == nfkc)
+        s!"UTF8 NFKC composed from arbitrary NFKD matches direct NFKC: {scalarNatList}"
+      assert (Radix.UTF8.canonicallyEquivalent nfd nfc)
+        s!"UTF8 NFD and NFC remain canonically equivalent: {scalarNatList}"
+    | none =>
+      assert false s!"UTF8 arbitrary normalization scalar generation produced invalid scalars: {scalarNatList}"
+
+  let caseSamplePool : Array Nat :=
+    #[0x41, 0x43, 0x45, 0x4E, 0x4F, 0x55, 0x59,
+      0x61, 0x63, 0x65, 0x6E, 0x6F, 0x75, 0x79,
+      0x00C1, 0x00C7, 0x00D1, 0x00D6, 0x00DC, 0x00DD, 0x0178,
+      0x00E1, 0x00E7, 0x00F1, 0x00F6, 0x00FC, 0x00FD, 0x00FF,
+      0x00DF, 0x0130, 0x017F, 0x0386, 0x0391, 0x03A3, 0x03C2, 0x1E9E,
+      0x212A, 0x212B, 0xFB00, 0xFB01, 0xFB02, 0xFB03, 0xFB04, 0xFB05, 0xFB06,
+      0xFF21, 0xFF23, 0xFF25, 0xFF2E, 0xFF2F, 0xFF35, 0xFF39,
+      0x0301, 0x0327, 0x1F642]
+
+  let mut rngCaseSamples := PRNG.new 614
+  for _ in [:numIter] do
+    let (rng', sampleCount0) := rngCaseSamples.nextNat 8
+    rngCaseSamples := rng'
+    let sampleCount := sampleCount0 + 1
+    let mut sampleAcc : List Nat := []
+    for _ in [:sampleCount] do
+      let (nextRng, sampleIndex) := rngCaseSamples.nextNat caseSamplePool.size
+      rngCaseSamples := nextRng
+      sampleAcc := caseSamplePool[sampleIndex]! :: sampleAcc
+    let sampleNats := sampleAcc.reverse
+    match Radix.UTF8.natsToScalars? sampleNats with
+    | some scalars =>
+      let lower := Radix.UTF8.lowercaseScalarsSimple scalars
+      let upper := Radix.UTF8.uppercaseScalarsSimple scalars
+      let folded := Radix.UTF8.caseFoldScalarsSimple scalars
+      let compatibilityFolded := Radix.UTF8.caseFoldScalarsCompatibility scalars
+      assert (Radix.UTF8.lowercaseScalarsSimple lower == lower)
+        s!"UTF8 simple lowercase is idempotent on supported case samples: {sampleNats}"
+      assert (Radix.UTF8.uppercaseScalarsSimple upper == upper)
+        s!"UTF8 simple uppercase is idempotent on supported case samples: {sampleNats}"
+      assert (Radix.UTF8.caseFoldScalarsSimple folded == folded)
+        s!"UTF8 simple case fold is idempotent on supported case samples: {sampleNats}"
+      assert (Radix.UTF8.caseFoldScalarsCompatibility compatibilityFolded == compatibilityFolded)
+        s!"UTF8 compatibility case fold is idempotent on practical case samples: {sampleNats}"
+      let encoded := Radix.UTF8.encodeScalars scalars
+      assert (Radix.UTF8.lowercaseBytesSimple? encoded == some (Radix.UTF8.encodeScalars lower))
+        s!"UTF8 lowercaseBytesSimple? matches scalar mapping: {sampleNats}"
+      assert (Radix.UTF8.uppercaseBytesSimple? encoded == some (Radix.UTF8.encodeScalars upper))
+        s!"UTF8 uppercaseBytesSimple? matches scalar mapping: {sampleNats}"
+      assert (Radix.UTF8.caseFoldBytesSimple? encoded == some (Radix.UTF8.encodeScalars folded))
+        s!"UTF8 caseFoldBytesSimple? matches scalar folding: {sampleNats}"
+      assert (Radix.UTF8.caseFoldBytesCompatibility? encoded == some (Radix.UTF8.encodeScalars compatibilityFolded))
+        s!"UTF8 caseFoldBytesCompatibility? matches scalar compatibility folding: {sampleNats}"
+      assert (Radix.UTF8.equalsCaseFoldSimpleBytes? encoded (Radix.UTF8.encodeScalars upper))
+        s!"UTF8 case-fold equality matches lowercase vs uppercase variants: {sampleNats}"
+      assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? encoded (Radix.UTF8.encodeScalars compatibilityFolded))
+        s!"UTF8 compatibility case-fold equality matches folded form: {sampleNats}"
+    | none =>
+      assert false s!"UTF8 case sample generation produced invalid scalars: {sampleNats}"
+
+  let mut rngCaseEquivalent := PRNG.new 615
+  let uppercasePool : Array Nat := #[0x41, 0x43, 0x45, 0x4E, 0x4F, 0x55, 0x59, 0x00C1, 0x00C7, 0x00D1, 0x00D6, 0x00DC, 0x00DD, 0x0178]
+  for _ in [:numIter] do
+    let (rng', baseIndex) := rngCaseEquivalent.nextNat uppercasePool.size
+    rngCaseEquivalent := rng'
+    let baseNat := uppercasePool[baseIndex]!
+    match Radix.UTF8.ofNat? baseNat with
+    | some baseScalar =>
+      let acuteScalar? := Radix.UTF8.ofNat? 0x0301
+      match acuteScalar? with
+      | some acute =>
+        let rightSource := Radix.UTF8.normalizeScalarsNFD [Radix.UTF8.caseFoldSimple baseScalar]
+        assert (Radix.UTF8.caselessEquivalentSimple [baseScalar] rightSource)
+          s!"UTF8 scalar caseless equivalence matches folded normalized form: {baseNat}"
+        assert (Radix.UTF8.equalsCaseFoldSimpleBytes? (Radix.UTF8.encodeScalars [baseScalar]) (Radix.UTF8.encodeScalars rightSource))
+          s!"UTF8 byte caseless equivalence matches folded normalized form: {baseNat}"
+        assert (Radix.UTF8.caseFoldScalarsSimple [baseScalar, acute] == Radix.UTF8.normalizeScalarsNFD [Radix.UTF8.caseFoldSimple baseScalar, acute])
+          s!"UTF8 case fold preserves canonical ordering after combining marks: {baseNat}"
+      | none =>
+        assert false "UTF8 case-fold test failed to construct acute accent"
+    | none =>
+      assert false s!"UTF8 case-fold sample base scalar invalid: {baseNat}"
+
+  let compatibilityPairs : List (List Nat × List Nat) :=
+    [ ([0xFF21], [0x61])
+    , ([0xFB03], [0x66, 0x66, 0x69])
+    , ([0x212A], [0x6B])
+    , ([0x212B], [0x61, 0x030A])
+    , ([0x00DF], [0x73, 0x73])
+    , ([0x1E9E], [0x73, 0x73])
+    , ([0x0130], [0x69, 0x0307])
+    , ([0x017F], [0x73])
+    , ([0x03A3], [0x03C3])
+    , ([0x03C2], [0x03C3])
+    , ([0xFF21, 0x212A], [0x61, 0x6B]) ]
+  for (leftNats, rightNats) in compatibilityPairs do
+    match Radix.UTF8.natsToScalars? leftNats, Radix.UTF8.natsToScalars? rightNats with
+    | some leftScalars, some rightScalars =>
+      assert (Radix.UTF8.caselessEquivalentCompatibility leftScalars rightScalars)
+        s!"UTF8 compatibility caseless equivalence matches curated pair: {leftNats} vs {rightNats}"
+      assert (Radix.UTF8.equalsCaseFoldCompatibilityBytes? (Radix.UTF8.encodeScalars leftScalars) (Radix.UTF8.encodeScalars rightScalars))
+        s!"UTF8 compatibility byte equality matches curated pair: {leftNats} vs {rightNats}"
+    | _, _ =>
+      assert false s!"UTF8 compatibility pair generation failed: {leftNats} vs {rightNats}"
 
 private def testECCProperties : IO Unit := do
   IO.println "  ECC properties..."
