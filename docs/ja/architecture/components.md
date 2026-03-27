@@ -4,25 +4,25 @@
 
 ## コンポーネント概要
 
-Radix は 18 個のトップレベルモジュールを公開しており、それぞれがシステムプログラミングのプリミティブを提供します。17 個の実行時・モデルモジュールは 3 層アーキテクチャ（仕様 → 実装 → ブリッジ）に従い、`ProofAutomation` は再利用可能なタクティクマクロを提供するメタレベル補助モジュールです。v0.3.0 では v0.2.0 の基盤に加えて、UTF-8 検証、誤り訂正、DMA 推論、タイマ補助、領域代数サポートが追加されました。
+Radix は 18 個の leaf modules と grouped public import surfaces（`Radix`、`Radix.Pure`、`Radix.Trusted`）を公開しており、それぞれがシステムプログラミングのプリミティブを提供します。17 個の leaf runtime/model modules は 3 層アーキテクチャ（仕様 → 実装 → ブリッジ）に従い、`ProofAutomation` は再利用可能なタクティクマクロを提供するメタレベル補助モジュールです。v0.3.0 では v0.2.0 の基盤に加えて、UTF-8 検証、誤り訂正、DMA 推論、タイマ補助、領域代数サポートが追加されました。
 
 ```mermaid
 graph TD
-    subgraph "コア純粋モジュール"
+    subgraph "基盤 pure modules"
         Word["Word<br/>10整数型<br/>5算術モード + Numeric"]
         Bit["Bit<br/>ビット演算<br/>走査 + フィールド"]
         Bytes["Bytes<br/>バイトオーダー<br/>ByteSlice"]
         Memory["Memory<br/>抽象メモリ<br/>Buffer、Ptr、Layout、領域代数"]
         Binary["Binary<br/>フォーマットDSL<br/>パーサー、シリアライザー、LEB128"]
     end
-    subgraph "v0.2.0 純粋モジュール"
+    subgraph "pure data-structure modules"
         Alignment["Alignment<br/>アライメント計算<br/>2の冪高速パス"]
         RingBuffer["RingBuffer<br/>固定容量FIFO<br/>Bufferベース"]
         Bitmap["Bitmap<br/>高密度ビット集合<br/>ワード単位演算"]
         CRC["CRC<br/>CRC-32 / CRC-16<br/>ストリーミング API"]
         MemoryPool["MemoryPool<br/>bump + slab アロケータ<br/>純粋モデル"]
     end
-    subgraph "v0.3.0 純粋モジュール"
+    subgraph "composable pure modules"
         UTF8["UTF8<br/>Unicode スカラモデル<br/>エンコード + デコード"]
         ECC["ECC<br/>Hamming(7,4)<br/>シンドローム + 訂正"]
         DMA["DMA<br/>ディスクリプタモデル<br/>検査付きコピーシミュレータ"]
@@ -79,6 +79,16 @@ graph TD
     style BareMetal fill:#8D6E63,color:white
     style ProofAutomation fill:#5C6BC0,color:white
 ```
+
+## 公開 Import Surface
+
+| Import | 対象 | 役割 |
+|--------|------|------|
+| `Radix.<Module>` | 単一 leaf module | 最小の公開 import 単位 |
+| `Radix.Pure` | 14 個の pure leaf modules | Layer 2-3 のみの surface |
+| `Radix.Trusted` | `System`、`Concurrency`、`BareMetal` | trusted-boundary surface |
+| `Radix.ProofAutomation` | `ProofAutomation` のみ | メタレベル tactic macros |
+| `Radix` | 全18 leaf modules | 完全な公開 surface |
 
 ## モジュール詳細
 
