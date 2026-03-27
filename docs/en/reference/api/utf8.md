@@ -271,9 +271,18 @@ def canonicallyEquivalentBytes? (left right : ByteArray) : Bool
 ### Case Mapping API
 
 ```lean
+inductive GeneralCategoryFamily
+inductive GeneralCategory
+
+def classifyCategory (s : Scalar) : GeneralCategory
+def classifyCategoryFamily (s : Scalar) : GeneralCategoryFamily
+
 def simpleLowerNat? (n : Nat) : Option Nat
 def simpleUpperNat? (n : Nat) : Option Nat
 
+def Scalar.isDigit (s : Scalar) : Bool
+def Scalar.isAlpha (s : Scalar) : Bool
+def Scalar.isPrintable (s : Scalar) : Bool
 def Scalar.isUppercase (s : Scalar) : Bool
 def Scalar.isLowercase (s : Scalar) : Bool
 def Scalar.toLowerAscii? (s : Scalar) : Option Scalar
@@ -345,7 +354,10 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - `normalizeScalarsNFC` adds full Unicode 17 canonical composition on top of NFD, including algorithmic Hangul composition and the vendored composition-exclusion rules.
 - `normalizeScalars?` and `normalizeBytes?` support all four normalization forms across the vendored Unicode 17 canonical and compatibility decomposition tables.
 - `canonicallyEquivalent` and `canonicallyEquivalentBytes?` compare inputs through canonical decomposition, so precomposed and decomposed forms match.
-- `toLowerSimple`, `toUpperSimple`, and `caseFoldSimple` still expose the repository's direct simple-mapping subset for one-scalar casing APIs.
+- `classifyCategory` now returns the exact Unicode 17 general category for each scalar, while `classifyCategoryFamily` exposes the derived broad L/M/N/P/S/Z/C family projection.
+- `Scalar.isAlpha`, `Scalar.isDigit`, `Scalar.isPrintable`, `Scalar.isUppercase`, and `Scalar.isLowercase` are now backed by vendored Unicode 17 category data instead of ASCII-only bounds.
+- `toLowerSimple` and `toUpperSimple` now use the full vendored Unicode 17 simple uppercase/lowercase mappings from `UnicodeData.txt` for one-scalar casing APIs.
+- `caseFoldSimple` now uses the official vendored Unicode 17 simple CaseFolding mapping for one-scalar case folding.
 - `caseFoldScalarsSimple` and `caseFoldBytesSimple?` normalize through full Unicode 17 NFD before and after applying the official Unicode 17 simple CaseFolding mappings, so canonically equivalent precomposed/decomposed forms compare consistently.
 - `caseFoldScalarsCompatibility` and `caseFoldBytesCompatibility?` add full Unicode 17 NFKD before applying the official Unicode 17 full CaseFolding mappings, providing Unicode default caseless matching for the modeled normalization and folding data.
 - `scalarBoundaryOffsets?` and `graphemeBoundaryOffsets?` expose byte-accurate cut points and always include both `0` and the total byte length.
@@ -378,9 +390,9 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 
 ### Case Mapping Notes
 
-- Direct scalar casing helpers (`toLowerSimple`, `toUpperSimple`, `caseFoldSimple`) remain intentionally simple and non-locale-tailored.
+- Direct scalar casing helpers (`toLowerSimple`, `toUpperSimple`, `caseFoldSimple`) remain intentionally simple and non-locale-tailored, but they now cover the full vendored Unicode 17 simple mappings rather than the previous hand-maintained subset.
 - `caseFoldScalarsSimple`, `caseFoldBytesSimple?`, `equalsCaseFoldSimpleBytes?`, `caseFoldScalarsCompatibility`, `caseFoldBytesCompatibility?`, and `equalsCaseFoldCompatibilityBytes?` use the official Unicode 17 CaseFolding data vendored in the repository.
-- The comprehensive UTF-8 test suite vendors the official Unicode 17 `CaseFolding.txt` corpus and checks the generated simple/full folding tables against it, while separate execution tests cover normalization-integrated caseless matching regressions.
+- The comprehensive UTF-8 test suite vendors the official Unicode 17 `CaseFolding.txt` and `UnicodeData.txt` corpora and checks both the generated simple/full folding tables and the direct simple upper/lower mappings against them, while separate execution tests cover normalization-integrated caseless matching regressions.
 - Locale-specific tailorings from `SpecialCasing.txt` are still out of scope; the implementation follows Unicode default case folding data rather than language-specific casing rules.
 
 ### Exported Constructors

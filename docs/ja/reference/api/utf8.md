@@ -271,9 +271,18 @@ def canonicallyEquivalentBytes? (left right : ByteArray) : Bool
 ### Case Mapping API
 
 ```lean
+inductive GeneralCategoryFamily
+inductive GeneralCategory
+
+def classifyCategory (s : Scalar) : GeneralCategory
+def classifyCategoryFamily (s : Scalar) : GeneralCategoryFamily
+
 def simpleLowerNat? (n : Nat) : Option Nat
 def simpleUpperNat? (n : Nat) : Option Nat
 
+def Scalar.isDigit (s : Scalar) : Bool
+def Scalar.isAlpha (s : Scalar) : Bool
+def Scalar.isPrintable (s : Scalar) : Bool
 def Scalar.isUppercase (s : Scalar) : Bool
 def Scalar.isLowercase (s : Scalar) : Bool
 def Scalar.toLowerAscii? (s : Scalar) : Option Scalar
@@ -345,7 +354,10 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 - `normalizeScalarsNFC` は NFD の上に Unicode 17 全体の canonical composition を適用し、algorithmic Hangul composition と vendored composition-exclusion rule も反映します。
 - `normalizeScalars?` と `normalizeBytes?` は、repo に同梱した Unicode 17 の canonical / compatibility decomposition table 全体に対して 4 つの normalization form をサポートします。
 - `canonicallyEquivalent` と `canonicallyEquivalentBytes?` は canonical decomposition を通して比較するため、precomposed 形と decomposed 形を等価とみなせます。
-- `toLowerSimple`、`toUpperSimple`、`caseFoldSimple` は、引き続き repository 内の direct simple-mapping subset を使う 1-scalar casing API です。
+- `classifyCategory` は各 scalar の exact な Unicode 17 general category を返し、`classifyCategoryFamily` はそこから導いた broad な L/M/N/P/S/Z/C family を返します。
+- `Scalar.isAlpha`、`Scalar.isDigit`、`Scalar.isPrintable`、`Scalar.isUppercase`、`Scalar.isLowercase` は、ASCII 固定の境界判定ではなく vendor 済み Unicode 17 category data を使います。
+- `toLowerSimple` と `toUpperSimple` は、1-scalar casing API として vendor 済み Unicode 17 `UnicodeData.txt` 全体の simple uppercase/lowercase mapping を使います。
+- `caseFoldSimple` は、1-scalar case folding として vendor 済み official Unicode 17 simple CaseFolding mapping を使います。
 - `caseFoldScalarsSimple` と `caseFoldBytesSimple?` は、official Unicode 17 simple CaseFolding mapping の前後で Unicode 17 全体の NFD を通すため、canonically equivalent な precomposed/decomposed 形を一貫して比較できます。
 - `caseFoldScalarsCompatibility` と `caseFoldBytesCompatibility?` は、Unicode 17 全体の NFKD を適用したうえで official Unicode 17 full CaseFolding mapping を使うため、実装がモデル化している normalization + folding data に対して Unicode default caseless matching を提供します。
 - `scalarBoundaryOffsets?` と `graphemeBoundaryOffsets?` はバイト単位の安全な切断点を返し、常に `0` と入力末尾オフセットを含みます。
@@ -378,9 +390,9 @@ def containsGraphemes (bytes : ByteArray) (needleBytes : ByteArray) : Bool
 
 ### Case Mapping Notes
 
-- direct scalar casing helper (`toLowerSimple`、`toUpperSimple`、`caseFoldSimple`) は、意図的に simple で locale-tailored ではありません。
+- direct scalar casing helper (`toLowerSimple`、`toUpperSimple`、`caseFoldSimple`) は、意図的に simple で locale-tailored ではありませんが、以前の手書き subset ではなく vendor 済み Unicode 17 全体の simple mapping を使います。
 - `caseFoldScalarsSimple`、`caseFoldBytesSimple?`、`equalsCaseFoldSimpleBytes?`、`caseFoldScalarsCompatibility`、`caseFoldBytesCompatibility?`、`equalsCaseFoldCompatibilityBytes?` は、repo に vendor した official Unicode 17 CaseFolding data を使います。
-- UTF-8 の comprehensive test では official Unicode 17 `CaseFolding.txt` を vendor し、生成済み simple/full folding table をその標準 data と直接照合します。正規化込みの caseless matching については別の実行テストで regression も固定化しています。
+- UTF-8 の comprehensive test では official Unicode 17 `CaseFolding.txt` と `UnicodeData.txt` を vendor し、生成済み simple/full folding table だけでなく direct simple upper/lower mapping もその標準 data と直接照合します。正規化込みの caseless matching については別の実行テストで regression も固定化しています。
 - `SpecialCasing.txt` にある locale-specific tailoring はまだ対象外で、実装は language-tailored casing ではなく Unicode default case folding data を使います。
 
 ### 再公開される構築子
