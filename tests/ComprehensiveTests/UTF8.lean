@@ -134,6 +134,82 @@ private def parseOfficialCaseFoldingLine
       pure (some (source, statusField, mapping))
     | _ => throw s!"invalid case folding record at line {lineNumber}"
 
+private def parseGeneralCategory?
+    (lineNumber : Nat)
+    (field : String) : Except String Radix.UTF8.Spec.GeneralCategory := do
+  match field.trimAscii.toString with
+  | "Lu" => pure .uppercaseLetter
+  | "Ll" => pure .lowercaseLetter
+  | "Lt" => pure .titlecaseLetter
+  | "Lm" => pure .modifierLetter
+  | "Lo" => pure .otherLetter
+  | "Mn" => pure .nonspacingMark
+  | "Mc" => pure .spacingMark
+  | "Me" => pure .enclosingMark
+  | "Nd" => pure .decimalNumber
+  | "Nl" => pure .letterNumber
+  | "No" => pure .otherNumber
+  | "Pc" => pure .connectorPunctuation
+  | "Pd" => pure .dashPunctuation
+  | "Ps" => pure .openPunctuation
+  | "Pe" => pure .closePunctuation
+  | "Pi" => pure .initialPunctuation
+  | "Pf" => pure .finalPunctuation
+  | "Po" => pure .otherPunctuation
+  | "Sm" => pure .mathSymbol
+  | "Sc" => pure .currencySymbol
+  | "Sk" => pure .modifierSymbol
+  | "So" => pure .otherSymbol
+  | "Zs" => pure .spaceSeparator
+  | "Zl" => pure .lineSeparator
+  | "Zp" => pure .paragraphSeparator
+  | "Cc" => pure .control
+  | "Cf" => pure .format
+  | "Cs" => pure .surrogate
+  | "Co" => pure .privateUse
+  | "Cn" => pure .unassigned
+  | other => throw s!"invalid Unicode general category '{other}' at line {lineNumber}"
+
+private def generalCategoryFamily
+    (category : Radix.UTF8.Spec.GeneralCategory) : Radix.UTF8.Spec.GeneralCategoryFamily :=
+  Radix.UTF8.Spec.GeneralCategory.family category
+
+private def isPrintableGeneralCategory
+    (category : Radix.UTF8.Spec.GeneralCategory) : Bool :=
+  Radix.UTF8.Spec.GeneralCategory.isPrintable category
+
+private def parseOptionalHexNat
+    (lineNumber : Nat)
+    (fieldName : String)
+    (field : String) : Except String (Option Nat) := do
+  let token := field.trimAscii.toString
+  if token == "" then
+    pure none
+  else
+    match parseHexNat? token with
+    | some value => pure (some value)
+    | none => throw s!"invalid {fieldName} '{field}' at line {lineNumber}"
+
+private def parseOfficialUnicodeDataLine
+    (lineNumber : Nat)
+    (line : String)
+  : Except String (Option (Nat × String × Radix.UTF8.Spec.GeneralCategory × Option Nat × Option Nat)) := do
+  let body := line.trimAscii.toString
+  if body == "" then
+    pure none
+  else
+    let fields := ((body.splitOn ";").map (fun part => part.trimAscii.toString)).toArray
+    if fields.size < 14 then
+      throw s!"invalid UnicodeData record at line {lineNumber}"
+    let codePoint ←
+      match parseHexNat? fields[0]! with
+      | some value => pure value
+      | none => throw s!"invalid UnicodeData code point '{fields[0]!}' at line {lineNumber}"
+    let category ← parseGeneralCategory? lineNumber fields[2]!
+    let uppercaseMapping ← parseOptionalHexNat lineNumber "uppercase mapping" fields[12]!
+    let lowercaseMapping ← parseOptionalHexNat lineNumber "lowercase mapping" fields[13]!
+    pure (some (codePoint, fields[1]!, category, uppercaseMapping, lowercaseMapping))
+
   private def parseOfficialNormalizationLine
       (lineNumber : Nat)
       (line : String)
@@ -226,6 +302,15 @@ private def runOfficialCaseFoldingTests
           let actualSimple := Radix.UTF8.CaseFoldingTables.simpleCaseFold? source
           assert (actualSimple == some mapping)
             s!"Unicode CaseFolding simple table mismatch at line {lineNumber} for U+{Nat.toDigits 16 source |> String.ofList}: expected {mapping}, got {actualSimple}"
+          match Radix.UTF8.ofNat? source, mapping with
+          | some sourceScalar, [mappedValue] =>
+            match Radix.UTF8.ofNat? mappedValue with
+            | some mappedScalar =>
+              assert (Radix.UTF8.caseFoldSimple sourceScalar == mappedScalar)
+                s!"Unicode CaseFolding direct simple fold mismatch at line {lineNumber} for U+{Nat.toDigits 16 source |> String.ofList}"
+            | none =>
+              assert false s!"invalid direct simple fold target at line {lineNumber}: {mapping}"
+          | _, _ => pure ()
         if status == "C" || status == "F" then
           let actualFull := Radix.UTF8.CaseFoldingTables.fullCaseFold? source
           assert (actualFull == some mapping)
@@ -234,6 +319,129 @@ private def runOfficialCaseFoldingTests
   let (simpleCount, fullCount) ← go lines 1 0 0
   assert (simpleCount == 1512) s!"official simple case folding count changed: {simpleCount}"
   assert (fullCount == 1585) s!"official full case folding count changed: {fullCount}"
+
+private def runOfficialUnicodeDataTests
+    (assert : Bool → String → IO Unit) : IO Unit := do
+  let path := "tests/data/unicode/17.0.0/UnicodeData.txt"
+  let content ← IO.FS.readFile path
+  let lines := content.splitOn "\n"
+
+  let verifyCategoryRange
+      (startValue endValue : Nat)
+      (expectedCategory : Radix.UTF8.Spec.GeneralCategory)
+      (lineNumber : Nat) : IO Unit := do
+    let rec loop (fuel current : Nat) : IO Unit := do
+      match fuel with
+      | 0 => pure ()
+      | fuel + 1 => do
+        match Radix.UTF8.ofNat? current with
+        | some scalar =>
+          assert (Radix.UTF8.Spec.classifyCategory scalar == expectedCategory)
+            s!"UnicodeData broad-category mismatch in range at line {lineNumber} for U+{Nat.toDigits 16 current |> String.ofList}"
+        | none => pure ()
+        loop fuel (current + 1)
+    loop (endValue + 1 - startValue) startValue
+
+  let rec go
+      (remaining : List String)
+      (lineNumber : Nat)
+      (pendingRange : Option (Nat × Radix.UTF8.Spec.GeneralCategory))
+      (lowercaseCount uppercaseCount : Nat) : IO (Nat × Nat) := do
+    match remaining with
+    | [] =>
+      match pendingRange with
+      | some _ =>
+        assert false "UnicodeData range start without matching end"
+        pure (lowercaseCount, uppercaseCount)
+      | none => pure (lowercaseCount, uppercaseCount)
+    | line :: rest =>
+      match parseOfficialUnicodeDataLine lineNumber line with
+      | .error err =>
+        assert false s!"official UnicodeData parse failed: {err}"
+        go rest (lineNumber + 1) pendingRange lowercaseCount uppercaseCount
+      | .ok none =>
+        go rest (lineNumber + 1) pendingRange lowercaseCount uppercaseCount
+      | .ok (some (codePoint, name, category, uppercaseMapping, lowercaseMapping)) =>
+        if name.endsWith ", First>" then
+          match pendingRange with
+          | some _ =>
+            assert false s!"nested UnicodeData range start at line {lineNumber}"
+            go rest (lineNumber + 1) pendingRange lowercaseCount uppercaseCount
+          | none =>
+            go rest (lineNumber + 1) (some (codePoint, category)) lowercaseCount uppercaseCount
+        else if name.endsWith ", Last>" then
+          match pendingRange with
+          | some (startValue, startCategory) =>
+            assert (startCategory == category)
+              s!"UnicodeData broad-category range mismatch at line {lineNumber}"
+            verifyCategoryRange startValue codePoint category lineNumber
+            go rest (lineNumber + 1) none lowercaseCount uppercaseCount
+          | none =>
+            assert false s!"UnicodeData range end without start at line {lineNumber}"
+            go rest (lineNumber + 1) none lowercaseCount uppercaseCount
+        else
+          match pendingRange with
+          | some _ =>
+            assert false s!"UnicodeData range start not closed before line {lineNumber}"
+            go rest (lineNumber + 1) none lowercaseCount uppercaseCount
+          | none =>
+            let nextLowercaseCount := if lowercaseMapping.isSome then lowercaseCount + 1 else lowercaseCount
+            let nextUppercaseCount := if uppercaseMapping.isSome then uppercaseCount + 1 else uppercaseCount
+            match Radix.UTF8.ofNat? codePoint with
+            | some scalar =>
+              assert (Radix.UTF8.Spec.classifyCategory scalar == category)
+                s!"UnicodeData general-category mismatch at line {lineNumber} for U+{Nat.toDigits 16 codePoint |> String.ofList}"
+              let expectedFamily := UTF8Test.generalCategoryFamily category
+              assert (Radix.UTF8.Spec.classifyCategoryFamily scalar == expectedFamily)
+                s!"UnicodeData general-category family mismatch at line {lineNumber} for U+{Nat.toDigits 16 codePoint |> String.ofList}"
+              let expectsUppercase := category == .uppercaseLetter
+              let expectsLowercase := category == .lowercaseLetter
+              let expectsDigit := category == .decimalNumber
+              assert (Radix.UTF8.Spec.Scalar.isUppercase scalar == expectsUppercase)
+                s!"UnicodeData uppercase predicate mismatch at line {lineNumber} for U+{Nat.toDigits 16 codePoint |> String.ofList}"
+              assert (Radix.UTF8.Spec.Scalar.isLowercase scalar == expectsLowercase)
+                s!"UnicodeData lowercase predicate mismatch at line {lineNumber} for U+{Nat.toDigits 16 codePoint |> String.ofList}"
+              assert (Radix.UTF8.Spec.Scalar.isDigit scalar == expectsDigit)
+                s!"UnicodeData decimal-digit predicate mismatch at line {lineNumber} for U+{Nat.toDigits 16 codePoint |> String.ofList}"
+              assert (Radix.UTF8.Spec.Scalar.isAlpha scalar == (expectedFamily == .letter))
+                s!"UnicodeData alpha predicate mismatch at line {lineNumber} for U+{Nat.toDigits 16 codePoint |> String.ofList}"
+              assert (Radix.UTF8.Spec.Scalar.isPrintable scalar == UTF8Test.isPrintableGeneralCategory category)
+                s!"UnicodeData printable predicate mismatch at line {lineNumber} for U+{Nat.toDigits 16 codePoint |> String.ofList}"
+              match lowercaseMapping with
+              | some mappedValue =>
+                match Radix.UTF8.ofNat? mappedValue with
+                | some mappedScalar =>
+                  assert (Radix.UTF8.toLowerSimple scalar == mappedScalar)
+                    s!"UnicodeData simple lowercase mismatch at line {lineNumber} for U+{Nat.toDigits 16 codePoint |> String.ofList}"
+                | none =>
+                  assert false s!"invalid UnicodeData lowercase mapping at line {lineNumber}: U+{Nat.toDigits 16 mappedValue |> String.ofList}"
+              | none =>
+                assert (Radix.UTF8.toLowerSimple scalar == scalar)
+                  s!"UnicodeData lowercase identity mismatch at line {lineNumber} for U+{Nat.toDigits 16 codePoint |> String.ofList}"
+              match uppercaseMapping with
+              | some mappedValue =>
+                match Radix.UTF8.ofNat? mappedValue with
+                | some mappedScalar =>
+                  assert (Radix.UTF8.toUpperSimple scalar == mappedScalar)
+                    s!"UnicodeData simple uppercase mismatch at line {lineNumber} for U+{Nat.toDigits 16 codePoint |> String.ofList}"
+                | none =>
+                  assert false s!"invalid UnicodeData uppercase mapping at line {lineNumber}: U+{Nat.toDigits 16 mappedValue |> String.ofList}"
+              | none =>
+                assert (Radix.UTF8.toUpperSimple scalar == scalar)
+                  s!"UnicodeData uppercase identity mismatch at line {lineNumber} for U+{Nat.toDigits 16 codePoint |> String.ofList}"
+            | none => pure ()
+            go rest (lineNumber + 1) none nextLowercaseCount nextUppercaseCount
+
+  let (lowercaseCount, uppercaseCount) ← go lines 1 none 0 0
+  assert (lowercaseCount == 1488) s!"official UnicodeData lowercase mapping count changed: {lowercaseCount}"
+  assert (uppercaseCount == 1505) s!"official UnicodeData uppercase mapping count changed: {uppercaseCount}"
+
+  for sample in [0x0378, 0x0380, 0x0381] do
+    match Radix.UTF8.ofNat? sample with
+    | some scalar =>
+      assert (Radix.UTF8.Spec.classifyCategory scalar == .unassigned)
+        s!"UnicodeData gap sample should classify as unassigned: U+{Nat.toDigits 16 sample |> String.ofList}"
+    | none => pure ()
 
 private def runOfficialNormalizationTests
     (assert : Bool → String → IO Unit) : IO Unit := do
@@ -841,6 +1049,7 @@ private def runUTF8CaseMappingTests
   let greekCapitalSigma ← UTF8Test.scalar 0x03A3
   let greekSigma ← UTF8Test.scalar 0x03C3
   let greekFinalSigma ← UTF8Test.scalar 0x03C2
+  let arabicIndicOne ← UTF8Test.scalar 0x0661
   let smile ← UTF8Test.scalar 0x1F642
 
   assert (Radix.UTF8.toLowerSimple asciiA == asciiLowerA)
@@ -848,11 +1057,29 @@ private def runUTF8CaseMappingTests
   assert (Radix.UTF8.toUpperSimple asciiLowerA == asciiA)
     "toUpperSimple uppercases ASCII"
   assert (Radix.UTF8.toLowerSimple upperAAcute == lowerAAcute)
-    "toLowerSimple lowercases supported precomposed Latin letters"
+    "toLowerSimple applies Unicode simple lowercase mappings to precomposed Latin letters"
   assert (Radix.UTF8.toUpperSimple lowerCCedilla == upperCCedilla)
-    "toUpperSimple uppercases supported precomposed Latin letters"
+    "toUpperSimple applies Unicode simple uppercase mappings to precomposed Latin letters"
   assert (Radix.UTF8.caseFoldSimple upperAAcute == lowerAAcute)
-    "caseFoldSimple follows lowercase mapping on supported letters"
+    "caseFoldSimple applies Unicode simple case folding to precomposed Latin letters"
+  assert (Radix.UTF8.toLowerSimple greekCapitalSigma == greekSigma)
+    "toLowerSimple lowercases Greek sigma via Unicode simple mappings"
+  assert (Radix.UTF8.toUpperSimple greekSigma == greekCapitalSigma)
+    "toUpperSimple uppercases Greek sigma via Unicode simple mappings"
+  assert (Radix.UTF8.caseFoldSimple capitalSharpS == sharpS)
+    "caseFoldSimple folds capital sharp s with the official simple case-fold mapping"
+  assert (Radix.UTF8.caseFoldSimple greekFinalSigma == greekSigma)
+    "caseFoldSimple normalizes Greek final sigma to sigma"
+  assert (Radix.UTF8.Spec.Scalar.isUppercase greekCapitalSigma)
+    "isUppercase recognizes Unicode uppercase letters"
+  assert (Radix.UTF8.Spec.Scalar.isLowercase greekSigma)
+    "isLowercase recognizes Unicode lowercase letters"
+  assert (Radix.UTF8.Spec.Scalar.isAlpha greekCapitalSigma && Radix.UTF8.Spec.Scalar.isAlpha greekSigma)
+    "isAlpha recognizes Unicode letters beyond ASCII"
+  assert (Radix.UTF8.Spec.Scalar.isDigit arabicIndicOne)
+    "isDigit recognizes Unicode decimal digits beyond ASCII"
+  assert (Radix.UTF8.Spec.Scalar.isPrintable smile)
+    "isPrintable recognizes non-ASCII Unicode scalars in printable categories"
   assert (Radix.UTF8.toLowerSimple smile == smile)
     "toLowerSimple leaves unsupported scalars unchanged"
 
@@ -1038,6 +1265,7 @@ private def runUTF8StreamingAndInteropTail
   UTF8Test.runUTF8NormalizationTests assert
   UTF8Test.runOfficialNormalizationTests assert
   UTF8Test.runUTF8CaseMappingTests assert
+  UTF8Test.runOfficialUnicodeDataTests assert
   UTF8Test.runOfficialCaseFoldingTests assert
   UTF8Test.runUTF8TextOpTests assert ascii twoByte threeByte fourByte
 
