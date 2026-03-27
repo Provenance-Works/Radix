@@ -444,18 +444,14 @@ jobs:
 
       - name: "Validate YAML syntax"
         run: |
-          ERRORS=0
-          find .github -name '*.yml' -o -name '*.yaml' | while read f; do
-            if ! python3 -c "import yaml; yaml.safe_load(open('$f'))" 2>&1; then
-              echo "::error file=$f::Invalid YAML syntax"
-              ERRORS=$((ERRORS + 1))
-            fi
-          done
-          if [ -f .gitlab-ci.yml ]; then
-            python3 -c "import yaml; yaml.safe_load(open('.gitlab-ci.yml'))" || {
-              echo "::error file=.gitlab-ci.yml::Invalid YAML syntax"
-            }
+          mapfile -t YAML_FILES < <(find .github -name '*.yml' -o -name '*.yaml' | sort)
+          if [ -f .pre-commit-config.yaml ]; then
+            YAML_FILES+=(.pre-commit-config.yaml)
           fi
+          if [ -f .gitlab-ci.yml ]; then
+            YAML_FILES+=(.gitlab-ci.yml)
+          fi
+          python3 scripts/validate_yaml.py "${YAML_FILES[@]}"
 
       - name: "Validate lake-manifest.json"
         run: python3 -c "import json; json.load(open('lake-manifest.json'))" && echo "OK"
@@ -508,6 +504,9 @@ jobs:
           if [ "$MISSING" -gt 0 ]; then
             exit 1
           fi
+
+      - name: "Validate generated project stats"
+        run: python3 scripts/update_project_stats.py --check
 
   # ===========================================================================
   # Phase 2 (parallel): Security Scan — No build dependency (instant start)
