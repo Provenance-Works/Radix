@@ -60,14 +60,39 @@ body:
         - Bytes
         - Memory
         - Binary
+        - Alignment
+        - RingBuffer
+        - Bitmap
+        - CRC
+        - MemoryPool
+        - UTF8
+        - ECC
+        - DMA
+        - Timer
         - System
         - Concurrency
         - BareMetal
-        - Build / Infrastructure
+        - ProofAutomation
+        - Grouped import surface (`Radix`, `Radix.Pure`, `Radix.Trusted`)
+        - Docs / Examples
+        - Build / CI / Release
         - Documentation
         - Other
     validations:
       required: true
+
+  - type: dropdown
+    id: import-surface
+    attributes:
+      label: Import Surface
+      description: Which import path exposed the bug?
+      options:
+        - Radix
+        - Radix.Pure
+        - Radix.Trusted
+        - Radix.ProofAutomation
+        - Radix.<Module>
+        - Not sure
 
   - type: input
     id: lean-version
@@ -83,7 +108,7 @@ body:
     attributes:
       label: Radix Version
       description: "Version or git commit SHA"
-      placeholder: "v0.2.0"
+      placeholder: "v0.3.0 or main @ <commit>"
     validations:
       required: true
 
