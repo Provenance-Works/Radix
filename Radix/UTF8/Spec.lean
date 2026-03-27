@@ -405,11 +405,8 @@ private def classifyDecodeError : List UInt8 → DecodeError
     else if lead < 0xE0 then
       match rest with
       | [] => mkDecodeError .truncatedSequence 2 1
-      | b1 :: _ =>
-        if isContinuationByte b1 then
-          mkDecodeError .invalidStartByte 2 1
-        else
-          mkDecodeError .invalidContinuationByte 2 1
+      | _ :: _ =>
+        mkDecodeError .invalidContinuationByte 2 1
     else if lead < 0xF0 then
       match rest with
       | [] => mkDecodeError .truncatedSequence 3 1
@@ -418,12 +415,9 @@ private def classifyDecodeError : List UInt8 → DecodeError
           mkDecodeError .truncatedSequence 3 2
         else
           mkDecodeError (secondByteErrorKind lead b1.toNat) 3 1
-      | b1 :: b2 :: _ =>
+      | b1 :: _ :: _ =>
         if secondBytePermitted lead b1.toNat then
-          if isContinuationByte b2 then
-            mkDecodeError .invalidStartByte 3 2
-          else
-            mkDecodeError .invalidContinuationByte 3 2
+          mkDecodeError .invalidContinuationByte 3 2
         else
           mkDecodeError (secondByteErrorKind lead b1.toNat) 3 1
     else if lead < 0xF5 then
@@ -442,13 +436,10 @@ private def classifyDecodeError : List UInt8 → DecodeError
             mkDecodeError .invalidContinuationByte 4 2
         else
           mkDecodeError (secondByteErrorKind lead b1.toNat) 4 1
-      | b1 :: b2 :: b3 :: _ =>
+      | b1 :: b2 :: _ :: _ =>
         if secondBytePermitted lead b1.toNat then
           if isContinuationByte b2 then
-            if isContinuationByte b3 then
-              mkDecodeError .invalidStartByte 4 3
-            else
-              mkDecodeError .invalidContinuationByte 4 3
+            mkDecodeError .invalidContinuationByte 4 3
           else
             mkDecodeError .invalidContinuationByte 4 2
         else

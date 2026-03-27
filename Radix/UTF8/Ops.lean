@@ -99,6 +99,19 @@ def decodeNextBytesStep? (bytes : ByteArray) : Option Spec.DecodeStep :=
 def decodeNextListStep? (bytes : List UInt8) : Option Spec.DecodeStep :=
   Spec.decodeNextStep? bytes
 
+/-- Read at most `width` bytes starting at `offset` without materializing the full suffix. -/
+private def byteWindowAt (bytes : ByteArray) (offset width : Nat) : List UInt8 :=
+  go offset width
+where
+  go (index remaining : Nat) : List UInt8 :=
+    match remaining with
+    | 0 => []
+    | remaining + 1 =>
+      if h : index < bytes.size then
+        bytes.get index h :: go (index + 1) remaining
+      else
+        []
+
 /-- Decode a byte array with Unicode maximal-subpart replacement semantics. -/
 def decodeBytesReplacingMaximalSubparts (bytes : ByteArray) : List Scalar :=
   Spec.decodeAllReplacingMaximalSubparts (byteArrayToList bytes)
@@ -486,7 +499,7 @@ def Cursor.isAtEnd (cursor : Cursor) : Bool :=
 
 /-- Remaining suffix starting at the cursor position. -/
 def Cursor.remainingBytes (cursor : Cursor) : ByteArray :=
-  listToByteArray ((byteArrayToList cursor.bytes).drop cursor.offset)
+  cursor.bytes.extract cursor.offset cursor.bytes.size
 
 /-- Construct a cursor only if the requested offset is a well-formed scalar boundary. -/
 def Cursor.atOffset? (bytes : ByteArray) (offset : Nat) : Option Cursor :=
@@ -502,7 +515,7 @@ def Cursor.atOffset? (bytes : ByteArray) (offset : Nat) : Option Cursor :=
 /-- Detailed decode step at the current cursor position. -/
 def Cursor.currentStep? (cursor : Cursor) : Option Spec.DecodeStep :=
   if cursor.offset ≤ cursor.bytes.size then
-    decodeNextBytesStep? cursor.remainingBytes
+    Spec.decodeNextStep? (byteWindowAt cursor.bytes cursor.offset 4)
   else
     none
 
@@ -1030,7 +1043,7 @@ def sliceBytes? (bytes : ByteArray) (startOffset endOffset : Nat) : Option ByteA
   if startOffset ≤ endOffset then
     match Cursor.atOffset? bytes startOffset, Cursor.atOffset? bytes endOffset with
     | some _, some _ =>
-      some <| listToByteArray (((byteArrayToList bytes).drop startOffset).take (endOffset - startOffset))
+      some (bytes.extract startOffset endOffset)
     | _, _ => none
   else
     none
